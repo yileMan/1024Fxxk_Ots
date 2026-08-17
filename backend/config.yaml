@@ -1,0 +1,2 @@
+database:
+  url: "mysql+pymysql://root:mylmyl@localhost:3306/ots_test?charset=utf8mb4"
