@@ -19,9 +19,10 @@ const router = useRouter()
 async function signOut(): Promise<void> {
   try {
     await logout()
-  } finally {
     clearAuthentication()
     await router.replace('/login')
+  } catch {
+    authentication.feedback = '退出失败，请重试'
   }
 }
 </script>

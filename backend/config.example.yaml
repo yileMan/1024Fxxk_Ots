@@ -2,6 +2,8 @@
 database:
   url: "mysql+pymysql://root:your-password@localhost:3306/ots_test?charset=utf8mb4"
 
-# 生产环境必须通过环境变量设置 OTS_AUTH_SECRET（至少 32 个字符），不得提交真实值。
-# OTS_ALLOWED_ORIGIN=http://localhost:5173
-# OTS_COOKIE_SECURE=false
+authentication:
+  # 使用至少 32 个字符的随机值；真实 config.yaml 不应提交到仓库。
+  secret: "replace-with-a-random-secret-of-at-least-32-characters"
+  allowed_origin: "http://localhost:5173"
+  cookie_secure: false

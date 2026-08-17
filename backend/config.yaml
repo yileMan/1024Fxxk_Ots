@@ -1,2 +1,7 @@
 database:
   url: "mysql+pymysql://root:mylmyl@localhost:3306/ots_test?charset=utf8mb4"
+
+authentication:
+  secret: "KqYZWoIho3+DM2+KV36kXDtuxC+MZ/FMcJJRFZQGNudqnfXdxEjHiclDNHQ9A5Ak"
+  allowed_origin: "http://localhost:5173"
+  cookie_secure: false

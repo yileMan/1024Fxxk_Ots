@@ -39,7 +39,7 @@ class PublicUser:
 
 
 class AuthenticationService:
-    def __init__(self, session_factory: sessionmaker, secret: str = "test-secret-that-is-long-enough-for-authentication") -> None:
+    def __init__(self, session_factory: sessionmaker, secret: str) -> None:
         self._session_factory = session_factory
         self._repository = UserRepository()
         self._password_hasher = PasswordHasher()

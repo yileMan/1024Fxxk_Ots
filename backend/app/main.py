@@ -23,7 +23,7 @@ def create_app() -> FastAPI:
     if application.state.database.session_factory is not None:
         application.state.authentication_service = AuthenticationService(
             application.state.database.session_factory,
-            settings.auth_secret or "development-only-auth-secret-change-me",
+            settings.auth_secret,
         )
 
     @application.middleware("http")

@@ -8,6 +8,7 @@ import uvicorn
 
 from sqlalchemy import create_engine
 
+from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.main import app
 from app.migrations import apply_migrations
@@ -37,7 +38,7 @@ if __name__ == "__main__":
             raise SystemExit("数据库未配置")
         user = AuthenticationService(
             database.session_factory,
-            settings.auth_secret or "development-only-auth-secret-change-me",
+            settings.auth_secret,
         ).initialize_admin(sys.argv[2], sys.argv[3], password)
         print("管理员已存在" if user is None else f"管理员已初始化：{user.login_name}")
         raise SystemExit(0)

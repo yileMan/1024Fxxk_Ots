@@ -141,7 +141,7 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M1：身份、授权与主数据
 
-#### [ ] OTS-01 `ots-01-local-authentication`（复杂度：L，依赖：OTS-00）
+#### [~] OTS-01 `ots-01-local-authentication`（复杂度：L，已于 2026-08-18 归档；按确认保留 9 项未完成验收/文档任务）
 
 **目标**：完成本地账号登录、退出和当前用户会话。
 
