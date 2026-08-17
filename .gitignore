@@ -1,0 +1,14 @@
+# Local assistant settings
+.claude/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
