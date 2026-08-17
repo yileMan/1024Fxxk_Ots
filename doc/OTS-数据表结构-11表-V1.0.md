@@ -32,7 +32,7 @@
 | 删除 OTS 情报分析员 | 表 1 删除 `intel_analyst` 固定角色；表 5 删除 `assigned_analyst_id`、外键和索引，OTS 只保留四项核心业务信息。 |
 | CVE 与 OTS 关联 | 表 8 不增加单一 OTS ID。一个 CVE 可影响多个 OTS，一个 OTS 也可对应多个 CVE，多对多关联由表 9 保存。 |
 | AI 建议 | 表 8 增加 `ai_analysis_suggestion`，仅保存通用辅助建议，不作为来源事实或正式结论。 |
-| 表 9 候选匹配 | 表名由 `vulnerability_ots_analysis` 调整为 `vulnerability_ots_match`，仅保存外部采集形成的 OTS/CVE 候选匹配、依据和来源批次，不再保存人工分析状态、分析内容或提交人。 |
+| 表 9 候选匹配 | 表名由 `vulnerability_ots_analysis` 调整为 `vulnerability_ots_match`，仅保存外部数据服务输入的 OTS/CVE 候选匹配、依据和来源批次，不再保存人工分析状态、分析内容或提交人。 |
 | 表 10 人员字段 | 删除重复的 `author_id`。`owner_id` 表示当前责任人，`submitted_by` 表示实际执行提交动作的人。 |
 | 表 11 审计范围 | 删除 `client_ip` 和恒定成功的 `result`，只记录已提交成功的数据库新增、更新、删除和批量写入。 |
 | 导入后直接评估 | 导入表 9 候选匹配后，系统按表 6 为相关产品版本直接创建表 10 待评估任务，并从表 4 取得 `owner_id`；不新增通知表，工作台按责任人和状态查询。 |
@@ -127,7 +127,7 @@
 | `product_id` | BIGINT UNSIGNED | 是 | 所属产品 ID |
 | `version_no` | VARCHAR(100) | 是 | 产品版本号 |
 | `description` | TEXT | 否 | 版本说明 |
-| `primary_cvss_version` | VARCHAR(8) | 是 | `3.1` 或 `4.0` |
+| `primary_cvss_version` | VARCHAR(8) | 是 | 预留字段，允许 `3.1` 或 `4.0`；V1 应用只使用 `3.1` |
 | `owner_id` | BIGINT UNSIGNED | 是 | 该产品版本当前指定产品负责人 ID |
 | `reviewer_id` | BIGINT UNSIGNED | 是 | 该产品版本当前指定审核人 ID |
 | `status` | VARCHAR(32) | 是 | `active`、`disabled` |
@@ -143,7 +143,7 @@
 - 外键：`reviewer_id` → 第 1 张表 `id`；
 - 唯一键：`uk_product_version(product_id, version_no)`；
 - 普通索引：`idx_product_version_status(product_id, status)`、`idx_product_version_owner(owner_id, status)`、`idx_product_version_reviewer(reviewer_id, status)`；
-- `primary_cvss_version` 只允许 `3.1` 或 `4.0`；
+- `primary_cvss_version` 只允许 `3.1` 或 `4.0`；V1 应用固定使用 `3.1`，保留 `4.0` 仅为后续演进预留；
 - `owner_id` 指向的用户必须处于 `active` 状态并具有 `product_owner` 角色；
 - `reviewer_id` 指向的用户必须处于 `active` 状态并具有 `reviewer` 角色；
 - 表 9 导入新候选匹配后，表 10 新任务的 `owner_id` 取本表当前 `owner_id`；更换负责人时，未提交和已退回的当前任务同步转交，新任务使用新负责人，已提交或已完成修订不改写；
@@ -261,10 +261,10 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 | `cvss31_severity` | VARCHAR(16) | 否 | CVSS v3.1 严重度 |
 | `cvss31_vector` | VARCHAR(500) | 否 | CVSS v3.1 向量 |
 | `cvss31_source` | VARCHAR(200) | 否 | CVSS v3.1 评分来源 |
-| `cvss40_score` | DECIMAL(3,1) | 否 | CVSS v4.0 基础分 |
-| `cvss40_severity` | VARCHAR(16) | 否 | CVSS v4.0 严重度 |
-| `cvss40_vector` | VARCHAR(1000) | 否 | CVSS v4.0 向量 |
-| `cvss40_source` | VARCHAR(200) | 否 | CVSS v4.0 评分来源 |
+| `cvss40_score` | DECIMAL(3,1) | 否 | 预留的 CVSS v4.0 基础分；V1 不导入或使用 |
+| `cvss40_severity` | VARCHAR(16) | 否 | 预留的 CVSS v4.0 严重度；V1 不导入或使用 |
+| `cvss40_vector` | VARCHAR(1000) | 否 | 预留的 CVSS v4.0 向量；V1 不导入或使用 |
+| `cvss40_source` | VARCHAR(200) | 否 | 预留的 CVSS v4.0 评分来源；V1 不导入或使用 |
 | `is_kev` | TINYINT(1) | 是 | 是否为 KEV |
 | `kev_date_added` | DATE | 否 | KEV 加入日期 |
 | `kev_due_date` | DATE | 否 | KEV 要求处置日期 |
@@ -289,7 +289,7 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 
 ## 9. `vulnerability_ots_match`
 
-一行对应一个“OTS + CVE”候选关系，保存外网采集工具形成的匹配方式、依据、可选置信度和来源批次。该表由数据导入维护，不设置人工情报分析流程。
+一行对应一个“OTS + CVE”候选关系，保存外部数据服务输入的匹配方式、依据、可选置信度和来源批次。该表由数据导入维护，不设置人工情报分析流程。
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | :---: | --- |
@@ -347,7 +347,7 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 | `treatment` | VARCHAR(32) | 否 | 处置方式 |
 | `treatment_detail` | TEXT | 否 | 处置说明 |
 | `evidence_text` | TEXT | 否 | 证据说明或内网引用位置 |
-| `cvss_version` | VARCHAR(8) | 否 | 产品采用 `3.1` 或 `4.0` |
+| `cvss_version` | VARCHAR(8) | 否 | 预留字段，允许 `3.1` 或 `4.0`；V1 评估固定写入 `3.1` |
 | `environmental_score` | DECIMAL(3,1) | 否 | 产品环境分数 |
 | `environmental_vector` | VARCHAR(1000) | 否 | 产品环境向量 |
 | `cvss_metrics_json` | JSON | 否 | 产品环境指标 |

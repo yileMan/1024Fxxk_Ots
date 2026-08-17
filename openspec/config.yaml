@@ -1,0 +1,56 @@
+schema: spec-driven
+
+context: |
+  项目：OTS 信息维护平台 V1。
+  需求、系统方案和数据结构基线分别为 doc/OTS-需求规格说明-V1.6.md、
+  doc/OTS-系统方案-V1.6.md 和 doc/OTS-数据表结构-11表-V1.0.md；开发任务基线为 doc/Task.md。
+
+  总体架构：外网采集工具读取内网导出的 OTS 采集范围，采集 NVD、CISA KEV 和
+  endoflife.date 数据，经范围过滤后生成版本化 ZIP/CSV 数据包；内网管理平台通过
+  人工文件交换导入数据。两端不得直接通信，内网管理平台不得访问互联网或保存外网 API Key。
+
+  技术路线：
+  - 前端使用 Vue 3 + TypeScript + 管理端组件库，使用 Vite 构建、Vitest 和组件测试；
+  - 后端及外网采集工具使用 Python，Web API 使用 FastAPI；
+  - 后端按 api/routes、schemas、services、repositories、models 分层；
+  - 数据访问使用 SQLAlchemy；数据库迁移遵循项目 ADR，使用编号化 SQL 迁移并保留回滚说明，
+    不得让 Alembic 自动创建额外业务表；
+  - 数据库使用 MySQL 8.4 LTS 或组织已验证的 MySQL 8.x，采用 InnoDB 和 utf8mb4；
+  - 前后端契约以 OpenAPI 为准，并生成 TypeScript 类型，禁止手写两套不一致的数据模型；
+  - 后台任务使用单个后台执行进程和 import_batch 状态，不使用 Redis、RabbitMQ 或新增任务表；
+  - 测试使用 pytest、MySQL 集成测试、Vitest、组件测试和 Playwright 冒烟测试，新增代码覆盖率不低于 80%。
+
+  架构约束：管理平台采用单体应用和单节点 MySQL；V1 仅使用方案定义的 11 张应用基础表，
+  不引入微服务、消息队列、缓存集群、对象存储或独立搜索引擎。关键写操作与 audit_log
+  在同一事务中提交，失败回滚不得产生审计记录。所有候选匹配必须明确标注为候选，不能自动形成产品受影响结论。
+
+  V1 范围外：邮件通知、AI 建议生成、跨产品评估复制、历史 CSV 自动映射、SSO/MFA、
+  标准 SBOM、复杂统计大屏、消息队列和微服务化。
+
+  文档语言：所有 OpenSpec 生成的文档必须使用中文。命令、代码、文件路径、技术标识符、
+  API/协议字段以及 OpenSpec 校验所要求的固定语法关键字可以保留英文。
+
+rules:
+  proposal:
+    - 使用中文说明目的、范围、非目标、受影响的需求编号和依赖 change。
+    - 每个 change 应形成可独立验收的纵向切片，不把同一业务能力长期拆成前后端两个 change。
+  specs:
+    - 正文使用中文；保留 OpenSpec 严格校验要求的固定标题和关键字。
+    - 每项需求必须包含可验证的 Given/When/Then 场景，并明确权限、异常和边界行为。
+  design:
+    - 使用中文说明数据变更、API、权限、状态机、前端交互、失败处理、迁移和回滚方案。
+    - 明确需求基线、方案基线和 11 张应用基础表约束；有取舍时记录理由和风险。
+  tasks:
+    - 使用中文编写任务，按测试、契约、数据/后端、前端、集成、文档与验收组织可勾选项。
+    - 必须包含 OpenSpec 严格校验、前后端测试与构建、覆盖率和需求追溯检查。
+
+operations:
+  apply:
+    guidance:
+      - 实现前阅读需求、方案、数据结构和当前 change，保持最小范围修改。
+      - 先建立或补充失败测试，再实现功能，并用相关测试和构建验证。
+      - 实施过程和测试摘要使用中文。
+  archive:
+    guidance:
+      - 仅在严格校验、测试、构建和业务验收通过后归档。
+      - 使用中文总结归档结果，并更新 doc/Task.md 中的状态和完成证据。
