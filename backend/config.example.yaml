@@ -1,0 +1,3 @@
+# 本地配置模板。生产环境建议使用 OTS_DATABASE_URL 环境变量覆盖。
+database:
+  url: "mysql+pymysql://root:your-password@localhost:3306/ots_test?charset=utf8mb4"

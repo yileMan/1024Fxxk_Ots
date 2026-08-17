@@ -5,6 +5,10 @@
 .env
 .env.*
 !.env.example
+backend/config.yaml
+front/test-results/
+front/dist/
+front/coverage/
 
 # Editor and OS files
 .idea/

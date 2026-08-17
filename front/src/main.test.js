@@ -7,7 +7,7 @@ beforeEach(() => {
 })
 
 it('mounts the application', async () => {
-  await import('./main.js')
+  await import('./main.ts')
 
-  expect(document.querySelector('#app')?.textContent).toBe('fuck 1024')
+  expect(document.querySelector('#app')?.textContent).toContain('OTS 信息维护平台')
 })

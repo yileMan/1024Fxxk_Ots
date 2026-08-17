@@ -1,0 +1,23 @@
+from pathlib import Path
+
+from sqlalchemy import create_engine
+
+from app.migrations import apply_migrations, discover_migrations
+
+
+def test_migrations_are_numbered_and_do_not_create_business_tables() -> None:
+    migrations = discover_migrations(Path(__file__).parents[1] / "migrations")
+
+    assert [migration.version for migration in migrations] == [1]
+    assert "app_user" not in migrations[0].sql
+    assert "audit_log" not in migrations[0].sql
+
+
+def test_migrations_apply_once(tmp_path) -> None:
+    migration_dir = tmp_path / "migrations"
+    migration_dir.mkdir()
+    (migration_dir / "001_example.sql").write_text("CREATE TABLE example (id INTEGER PRIMARY KEY);", encoding="utf-8")
+    engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
+
+    assert apply_migrations(engine, migration_dir) == [1]
+    assert apply_migrations(engine, migration_dir) == []

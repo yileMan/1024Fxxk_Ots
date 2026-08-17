@@ -122,7 +122,7 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M0：工程与规范基线
 
-#### [ ] OTS-00 `ots-00-platform-foundation`（复杂度：L）
+#### [~] OTS-00 `ots-00-platform-foundation`（复杂度：L，已于 2026-08-17 归档；按确认保留 16 项未完成实施任务）
 
 **目标**：建立后续所有 OpenSpec change 共用的工程、契约、数据库和测试基线。
 

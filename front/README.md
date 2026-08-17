@@ -14,3 +14,12 @@ npm run dev
 npm test
 npm run build
 ```
+
+完整验证还包括：
+
+```powershell
+npm run test:coverage
+npm run typecheck
+```
+
+健康页调用同源 `/api/v1/health`。后续接口以 OpenAPI 为唯一契约来源，必须同步更新 API 类型生成或契约校验。
