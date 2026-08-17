@@ -8,9 +8,9 @@ from app.migrations import apply_migrations, discover_migrations
 def test_migrations_are_numbered_and_do_not_create_business_tables() -> None:
     migrations = discover_migrations(Path(__file__).parents[1] / "migrations")
 
-    assert [migration.version for migration in migrations] == [1]
-    assert "app_user" not in migrations[0].sql
-    assert "audit_log" not in migrations[0].sql
+    assert [migration.version for migration in migrations] == [1, 2]
+    assert "app_user" in migrations[1].sql
+    assert "audit_log" in migrations[1].sql
 
 
 def test_migrations_apply_once(tmp_path) -> None:
@@ -21,3 +21,4 @@ def test_migrations_apply_once(tmp_path) -> None:
 
     assert apply_migrations(engine, migration_dir) == [1]
     assert apply_migrations(engine, migration_dir) == []
+    engine.dispose()

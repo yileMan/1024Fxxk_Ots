@@ -7,6 +7,8 @@
     "dev": "vite --host localhost",
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
+    "api:generate": "cd ../backend && .\\.venv\\Scripts\\python.exe run.py export-openapi ../front/src/api/openapi.json && cd ../front && npx openapi-typescript src/api/openapi.json -o src/api/generated.ts",
+    "api:check": "npm run api:generate && git diff --exit-code -- src/api/openapi.json src/api/generated.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test"

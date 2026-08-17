@@ -1,40 +1,27 @@
 <template>
-  <main class="platform-shell">
-    <header>
-      <h1>OTS 信息维护平台</h1>
-      <p>平台基础服务状态</p>
-    </header>
-    <section aria-labelledby="health-heading">
-      <h2 id="health-heading">系统健康</h2>
-      <p>服务状态：{{ serviceStatus }}</p>
-      <p>数据库状态：{{ databaseStatus }}</p>
-      <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
-    </section>
-  </main>
+  <header class="platform-shell">
+    <strong>OTS 信息维护平台</strong>
+    <span v-if="authentication.user">{{ authentication.user.display_name }}</span>
+    <button v-if="authentication.user" type="button" @click="signOut">退出</button>
+  </header>
+  <p v-if="authentication.feedback" role="alert">{{ authentication.feedback }}</p>
+  <RouterView />
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { RouterView, useRouter } from 'vue-router'
 
-type HealthResponse = { service: string; database: string }
+import { logout } from './api/auth'
+import { authentication, clearAuthentication } from './auth'
 
-const serviceStatus = ref('加载中')
-const databaseStatus = ref('加载中')
-const errorMessage = ref('')
+const router = useRouter()
 
-onMounted(async () => {
+async function signOut(): Promise<void> {
   try {
-    const response = await fetch('/api/v1/health')
-    const payload = (await response.json()) as HealthResponse
-    if (!response.ok) {
-      throw new Error('health unavailable')
-    }
-    serviceStatus.value = payload.service === 'available' ? '可用' : '不可用'
-    databaseStatus.value = payload.database === 'available' ? '可用' : '不可用'
-  } catch {
-    serviceStatus.value = '不可用'
-    databaseStatus.value = '不可用'
-    errorMessage.value = '无法连接系统健康服务'
+    await logout()
+  } finally {
+    clearAuthentication()
+    await router.replace('/login')
   }
-})
+}
 </script>

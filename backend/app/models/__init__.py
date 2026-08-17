@@ -1,1 +1,3 @@
-"""SQLAlchemy model package; business models are added by later changes."""
+from app.models.user import AppUser, AuditLog, Base
+
+__all__ = ["AppUser", "AuditLog", "Base"]

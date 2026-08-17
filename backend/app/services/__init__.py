@@ -1,1 +1,3 @@
-"""Service package; business services are added by later changes."""
+from app.services.authentication import AuthenticationService
+
+__all__ = ["AuthenticationService"]

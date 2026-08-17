@@ -7,8 +7,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes.health import router as health_router
+from app.api.routes.authentication import router as authentication_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
+from app.services.authentication import AuthenticationService
 
 logger = logging.getLogger("ots")
 
@@ -16,7 +18,13 @@ logger = logging.getLogger("ots")
 def create_app() -> FastAPI:
     settings = Settings.from_environment()
     application = FastAPI(title="OTS Backend", version="0.1.0")
+    application.state.settings = settings
     application.state.database = Database(settings.database_url)
+    if application.state.database.session_factory is not None:
+        application.state.authentication_service = AuthenticationService(
+            application.state.database.session_factory,
+            settings.auth_secret or "development-only-auth-secret-change-me",
+        )
 
     @application.middleware("http")
     async def correlation_id(request: Request, call_next):
@@ -56,6 +64,7 @@ def create_app() -> FastAPI:
         return {"message": "OTS backend is running"}
 
     application.include_router(health_router, prefix="/api/v1")
+    application.include_router(authentication_router, prefix="/api/v1")
 
     return application
 

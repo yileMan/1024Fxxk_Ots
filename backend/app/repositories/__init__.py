@@ -1,1 +1,3 @@
-"""Repository package; business repositories are added by later changes."""
+from app.repositories.users import UserRepository
+
+__all__ = ["UserRepository"]

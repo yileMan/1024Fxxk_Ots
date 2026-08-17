@@ -20,6 +20,7 @@ npm run build
 ```powershell
 npm run test:coverage
 npm run typecheck
+npm run api:check
 ```
 
-健康页调用同源 `/api/v1/health`。后续接口以 OpenAPI 为唯一契约来源，必须同步更新 API 类型生成或契约校验。
+健康页和认证接口均调用同源 `/api/v1`。前端只在内存中保存当前用户，认证 Cookie 由浏览器管理；不得写入 `localStorage` 或 `sessionStorage`。接口以 OpenAPI 为唯一契约来源，提交前运行 `npm run api:check`。

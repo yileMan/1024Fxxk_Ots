@@ -8,6 +8,9 @@ import yaml
 @dataclass(frozen=True)
 class Settings:
     database_url: str | None
+    auth_secret: str | None
+    allowed_origin: str
+    cookie_secure: bool
 
     @classmethod
     def from_environment(cls, config_path: Path | None = None) -> "Settings":
@@ -25,4 +28,14 @@ class Settings:
             raise RuntimeError("database.url 必须是字符串")
         if environment == "production" and not database_url:
             raise RuntimeError("生产环境缺少 OTS_DATABASE_URL 配置")
-        return cls(database_url=database_url)
+        auth_secret = os.getenv("OTS_AUTH_SECRET")
+        if environment == "production" and (auth_secret is None or len(auth_secret) < 32):
+            raise RuntimeError("生产环境缺少强度足够的 OTS_AUTH_SECRET 配置")
+        allowed_origin = os.getenv("OTS_ALLOWED_ORIGIN", "http://localhost:5173")
+        cookie_secure = os.getenv("OTS_COOKIE_SECURE", "true" if environment == "production" else "false").lower() == "true"
+        return cls(
+            database_url=database_url,
+            auth_secret=auth_secret,
+            allowed_origin=allowed_origin,
+            cookie_secure=cookie_secure,
+        )

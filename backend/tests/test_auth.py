@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.main import create_app
 from app.models.user import AppUser, Base
@@ -9,14 +10,16 @@ from app.services.authentication import AuthenticationService, PasswordPolicyErr
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch) -> TestClient:
+def client(tmp_path, monkeypatch):
     database_path = tmp_path / "auth.db"
     monkeypatch.setenv("OTS_DATABASE_URL", f"sqlite:///{database_path}")
     monkeypatch.setenv("OTS_AUTH_SECRET", "test-secret-that-is-long-enough-for-authentication")
     monkeypatch.setenv("OTS_ALLOWED_ORIGIN", "http://testserver")
     application = create_app()
     Base.metadata.create_all(application.state.database.engine)
-    return TestClient(application)
+    with TestClient(application) as test_client:
+        yield test_client
+    application.state.database.engine.dispose()
 
 
 def test_initialize_admin_creates_only_one_user(client: TestClient) -> None:
@@ -124,7 +127,7 @@ def test_logout_is_idempotent_and_auth_actions_do_not_write_audit_log(client: Te
     assert response.status_code == 204
     assert second_response.status_code == 204
     with client.app.state.database.session_factory() as session:
-        assert session.execute("SELECT COUNT(*) FROM audit_log").scalar_one() == 0
+        assert session.execute(text("SELECT COUNT(*) FROM audit_log")).scalar_one() == 0
 
 
 def test_write_requests_reject_an_untrusted_origin(client: TestClient) -> None:

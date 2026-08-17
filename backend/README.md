@@ -15,6 +15,14 @@ py run.py migrate
 py run.py
 ```
 
+初始化管理员（密码使用无回显输入；自动化部署可改用 `OTS_INITIAL_ADMIN_PASSWORD` 环境变量）：
+
+```powershell
+py run.py initialize-admin admin "初始管理员"
+```
+
+生产环境必须设置至少 32 个字符的 `OTS_AUTH_SECRET`。同时配置 `OTS_ALLOWED_ORIGIN`；HTTPS 部署保持 `OTS_COOKIE_SECURE=true`。轮换签名密钥会使所有当前会话失效。
+
 API 文档：<http://localhost:5353/docs>
 
 ## 测试

@@ -1,4 +1,6 @@
 fastapi>=0.115,<1.0
+argon2-cffi>=23.1,<26.0
+itsdangerous>=2.2,<3.0
 sqlalchemy>=2.0,<3.0
 pymysql>=1.1,<2.0
 PyYAML>=6.0,<7.0

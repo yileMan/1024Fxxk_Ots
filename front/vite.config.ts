@@ -17,7 +17,7 @@ export default defineConfig({
     exclude: ['**/node_modules/**', 'e2e/**'],
     coverage: {
       reporter: ['text'],
-      exclude: ['dist/**', 'e2e/**', 'node_modules/**', 'playwright.config.ts', 'src/env.d.ts'],
+      exclude: ['dist/**', 'e2e/**', 'node_modules/**', 'playwright.config.ts', 'src/env.d.ts', 'src/api/generated.ts'],
       thresholds: {
         lines: 80,
         functions: 80,
