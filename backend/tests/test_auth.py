@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import create_app
-from app.models.user import AppUser, Base
+from app.models.user import AppUser, AuditLog, Base
 from app.services.authentication import AuthenticationService
 
 
@@ -106,3 +106,54 @@ def test_unknown_user_id_cookie_is_rejected(client: TestClient) -> None:
 
     assert response.status_code == 401
     assert response.json()["code"] == "AUTH_SESSION_INVALID"
+
+
+@pytest.mark.parametrize("cookie_value", [None, "999", "not-a-user-id"])
+def test_logout_idempotently_clears_the_current_browser_cookie_without_audit(
+    client: TestClient,
+    monkeypatch,
+    cookie_value: str | None,
+) -> None:
+    if cookie_value is not None:
+        client.cookies.set("ots_user_id", cookie_value)
+
+    def fail_if_identity_is_resolved(_user_id: str):
+        raise AssertionError("退出不应查询当前用户")
+
+    monkeypatch.setattr(
+        client.app.state.authentication_service,
+        "current_user",
+        fail_if_identity_is_resolved,
+    )
+
+    response = client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 204
+    set_cookie = response.headers["set-cookie"].lower()
+    assert "ots_user_id=" in set_cookie
+    assert "max-age=0" in set_cookie
+    assert "path=/" in set_cookie
+    with client.app.state.database.session_factory() as session:
+        assert session.query(AuditLog).count() == 0
+
+
+def test_logout_allows_another_user_to_login_immediately(client: TestClient) -> None:
+    service = AuthenticationService(client.app.state.database.session_factory)
+    service.initialize_admin("admin", "初始管理员", "admin-password")
+    service.initialize_admin("owner", "产品负责人", "owner-password")
+    client.post(
+        "/api/v1/auth/login",
+        json={"login_name": "admin", "password": "admin-password"},
+    )
+
+    logout_response = client.post("/api/v1/auth/logout")
+    current_response = client.get("/api/v1/auth/me")
+    second_login = client.post(
+        "/api/v1/auth/login",
+        json={"login_name": "owner", "password": "owner-password"},
+    )
+
+    assert logout_response.status_code == 204
+    assert current_response.status_code == 401
+    assert second_login.status_code == 200
+    assert second_login.json()["login_name"] == "owner"

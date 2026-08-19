@@ -76,6 +76,22 @@ test('管理员可以进入用户管理并创建多角色用户', async ({ page 
 
   await page.goto('/system/users')
   await expect(page.getByRole('heading', { name: '用户与角色' })).toBeVisible()
+  const navigationItems = await page.locator('aside.app-sidebar nav a').allTextContents()
+  expect(navigationItems.map((item) => item.trim())).toEqual(['工作台', '用户与角色', '运行状态'])
+  const layout = await page.evaluate(() => {
+    const sidebar = document.querySelector('aside.app-sidebar')?.getBoundingClientRect()
+    const content = document.querySelector('main')?.getBoundingClientRect()
+    return {
+      sidebarX: sidebar?.x,
+      sidebarWidth: sidebar?.width,
+      contentX: content?.x,
+      brandRed: getComputedStyle(document.documentElement).getPropertyValue('--brand-red').trim(),
+    }
+  })
+  expect(layout.sidebarX).toBe(0)
+  expect(layout.sidebarWidth).toBeGreaterThanOrEqual(220)
+  expect(layout.contentX).toBeGreaterThanOrEqual(220)
+  expect(layout.brandRed.toLowerCase()).toBe('#d71920')
   await page.getByRole('button', { name: '新建用户' }).click()
   await page.getByLabel('登录名').fill('new-owner')
   await page.getByLabel('显示名称').fill('新负责人')

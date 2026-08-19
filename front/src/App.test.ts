@@ -99,4 +99,45 @@ describe('App', () => {
     expect(router.currentRoute.value.path).toBe('/forbidden')
     expect(wrapper.get('h1').text()).toBe('没有访问权限')
   })
+
+  it('uses a left sidebar with exactly three ordered navigation items', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
+        { status: 200 },
+      ),
+    )
+    await router.push('/system')
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    const sidebar = wrapper.get('aside.app-sidebar')
+    expect(sidebar.findAll('nav a').map((link) => link.text())).toEqual([
+      '工作台',
+      '用户与角色',
+      '运行状态',
+    ])
+    expect(sidebar.get('a[aria-current="page"]').text()).toBe('工作台')
+  })
+
+  it('clears in-memory identity and returns to login after logout', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    await router.push('/system')
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="退出登录"]').trigger('click')
+    await flushPromises()
+
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/auth/logout')
+    expect(router.currentRoute.value.path).toBe('/login')
+    expect(authentication.user).toBeNull()
+  })
 })
