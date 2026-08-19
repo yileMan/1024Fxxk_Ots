@@ -83,4 +83,20 @@ describe('App', () => {
     expect(router.currentRoute.value.path).toBe('/system')
     expect(authentication.user?.id).toBe(1)
   })
+
+  it('routes a non-admin identity to an explicit forbidden page', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ id: 2, login_name: 'owner', display_name: '产品负责人', roles: ['product_owner'] }),
+        { status: 200 },
+      ),
+    )
+
+    await router.push('/system/users')
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/forbidden')
+    expect(wrapper.get('h1').text()).toBe('没有访问权限')
+  })
 })

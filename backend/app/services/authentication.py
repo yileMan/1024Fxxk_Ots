@@ -43,13 +43,16 @@ class AuthenticationService:
             user = AppUser(
                 login_name=login_name,
                 display_name=display_name,
-                password_hash=self._password_hasher.hash(password),
+                password_hash=self.hash_password(password),
                 roles_json=["admin"],
                 status="active",
             )
             session.add(user)
             session.flush()
             return self._public_user(user)
+
+    def hash_password(self, password: str) -> str:
+        return self._password_hasher.hash(password)
 
     def login(self, login_name: str, password: str) -> PublicUser:
         with self._session_factory.begin() as session:

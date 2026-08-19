@@ -8,9 +8,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes.health import router as health_router
 from app.api.routes.authentication import router as authentication_router
+from app.api.routes.users import router as users_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
+from app.services.users import UserManagementService
 
 logger = logging.getLogger("ots")
 
@@ -23,6 +25,10 @@ def create_app() -> FastAPI:
     if application.state.database.session_factory is not None:
         application.state.authentication_service = AuthenticationService(
             application.state.database.session_factory,
+        )
+        application.state.user_management_service = UserManagementService(
+            application.state.database.session_factory,
+            application.state.authentication_service,
         )
 
     @application.middleware("http")
@@ -46,6 +52,13 @@ def create_app() -> FastAPI:
 
     @application.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if isinstance(exc.detail, dict):
+            return error_response(
+                request,
+                exc.status_code,
+                str(exc.detail.get("code", "HTTP_ERROR")),
+                str(exc.detail.get("message", "请求的资源不可用")),
+            )
         code = "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
         return error_response(request, exc.status_code, code, "请求的资源不可用")
 
@@ -64,6 +77,7 @@ def create_app() -> FastAPI:
 
     application.include_router(health_router, prefix="/api/v1")
     application.include_router(authentication_router, prefix="/api/v1")
+    application.include_router(users_router, prefix="/api/v1")
 
     return application
 

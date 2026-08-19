@@ -23,6 +23,14 @@ py run.py initialize-admin admin "初始管理员"
 
 登录只校验用户名和密码；成功后使用仅包含用户 ID 的 `ots_user_id` Cookie 识别后续请求，不需要认证密钥、来源或 Cookie 时效配置。
 
+## 用户与固定角色管理
+
+具有 `admin` 角色的用户可通过 `/api/v1/users` 分页查询、创建和编辑本地用户，并可执行密码重置与停用。固定角色仅包含 `admin`、`product_owner`、`reviewer`；一个用户可以具有多个角色。
+
+所有编辑、密码重置和停用请求都必须携带当前 `row_version`。若返回 `USER_VERSION_CONFLICT`，应重新读取用户后再提交，不能覆盖服务器上的较新版本。停用只更新状态并保留历史；按照当前认证基线，登录仍然只校验用户名和密码。
+
+成功的用户写操作和脱敏 `audit_log` 在同一事务提交。审计只标识密码已重置，不保存明文或密码摘要。
+
 API 文档：<http://localhost:5353/docs>
 
 ## 测试

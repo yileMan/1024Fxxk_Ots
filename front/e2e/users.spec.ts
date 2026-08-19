@@ -45,12 +45,12 @@ test('管理员可以进入用户管理并创建多角色用户', async ({ page 
   await page.getByLabel('登录名').fill('new-owner')
   await page.getByLabel('显示名称').fill('新负责人')
   await page.getByLabel('初始密码').fill('secret')
-  await page.getByLabel('产品负责人').check()
-  await page.getByLabel('审核人').check()
+  await page.getByRole('checkbox', { name: /产品负责人/ }).check()
+  await page.getByRole('checkbox', { name: /审核人/ }).check()
   await page.getByRole('button', { name: '创建用户' }).click()
 
   await expect(page.getByText('新负责人')).toBeVisible()
-  await expect(page.getByText('产品负责人')).toBeVisible()
+  await expect(page.getByRole('table').getByText('产品负责人')).toBeVisible()
 })
 
 test('非管理员直接进入用户管理会得到明确拒绝', async ({ page }) => {
