@@ -2,8 +2,15 @@
 端口5353
 ``` 
 cd .\backend
-py run.py migrate // 同步数据库
-py run.py
+
+# 首次启动或数据库结构有变化时执行
+.\.venv\Scripts\python.exe run.py migrate
+
+# 首次创建管理员
+.\.venv\Scripts\python.exe run.py initialize-admin admin "初始管理员"
+
+# 启动后端
+.\.venv\Scripts\python.exe run.py
 ```
 
 

@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 
-import { AuthenticationError, currentUser, type PublicUser } from './api/auth'
+import { currentUser, type PublicUser } from './api/auth'
 
 export const authentication = reactive<{
   user: PublicUser | null
@@ -10,9 +10,9 @@ export const authentication = reactive<{
 
 let initialization: Promise<PublicUser | null> | null = null
 
-function setSessionFailure(code: string): void {
+function setSessionFailure(): void {
   authentication.user = null
-  authentication.feedback = code === 'AUTH_USER_DISABLED' ? '账号已停用' : '会话已失效'
+  authentication.feedback = ''
 }
 
 export async function restoreAuthentication(): Promise<PublicUser | null> {
@@ -25,8 +25,8 @@ export async function restoreAuthentication(): Promise<PublicUser | null> {
       authentication.feedback = ''
       return user
     })
-    .catch((error: unknown) => {
-      setSessionFailure(error instanceof AuthenticationError ? error.code : 'NETWORK_ERROR')
+    .catch(() => {
+      setSessionFailure()
       return null
     })
     .finally(() => {
@@ -40,12 +40,6 @@ export function setAuthenticatedUser(user: PublicUser): void {
   authentication.user = user
   authentication.initialized = true
   authentication.feedback = ''
-}
-
-export function clearAuthentication(message = ''): void {
-  authentication.user = null
-  authentication.initialized = true
-  authentication.feedback = message
 }
 
 export function resetAuthenticationForTesting(): void {

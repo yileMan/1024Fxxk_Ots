@@ -1,6 +1,9 @@
 import { createApp } from 'vue'
 
 import App from './App.vue'
+import { restoreAuthentication } from './auth'
 import { router } from './router'
 
-createApp(App).use(router).mount('#app')
+void restoreAuthentication().finally(() => {
+  createApp(App).use(router).mount('#app')
+})

@@ -4,13 +4,17 @@ beforeEach(() => {
   document.body.innerHTML = '<div id="app"></div>'
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'AUTH_SESSION_INVALID' }), { status: 401 })),
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
+        { status: 200 },
+      ),
+    ),
   )
   vi.resetModules()
 })
 
-it('mounts the authenticated application shell', async () => {
+it('restores the user-id cookie identity before mounting', async () => {
   await import('./main')
-
-  expect(document.querySelector('#app')?.textContent).toContain('OTS 信息维护平台')
+  await vi.waitFor(() => expect(document.querySelector('#app')?.textContent).toContain('初始管理员'))
 })

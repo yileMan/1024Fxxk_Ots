@@ -2,27 +2,13 @@
   <header class="platform-shell">
     <strong>OTS 信息维护平台</strong>
     <span v-if="authentication.user">{{ authentication.user.display_name }}</span>
-    <button v-if="authentication.user" type="button" @click="signOut">退出</button>
   </header>
   <p v-if="authentication.feedback" role="alert">{{ authentication.feedback }}</p>
   <RouterView />
 </template>
 
 <script setup lang="ts">
-import { RouterView, useRouter } from 'vue-router'
+import { RouterView } from 'vue-router'
 
-import { logout } from './api/auth'
-import { authentication, clearAuthentication } from './auth'
-
-const router = useRouter()
-
-async function signOut(): Promise<void> {
-  try {
-    await logout()
-    clearAuthentication()
-    await router.replace('/login')
-  } catch {
-    authentication.feedback = '退出失败，请重试'
-  }
-}
+import { authentication } from './auth'
 </script>

@@ -87,20 +87,6 @@
         }
       }
     },
-    "/api/v1/auth/logout": {
-      "post": {
-        "tags": [
-          "authentication"
-        ],
-        "summary": "Logout",
-        "operationId": "logout_api_v1_auth_logout_post",
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          }
-        }
-      }
-    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [
@@ -142,14 +128,10 @@
         "properties": {
           "login_name": {
             "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
             "title": "Login Name"
           },
           "password": {
             "type": "string",
-            "maxLength": 256,
-            "minLength": 1,
             "title": "Password"
           }
         },

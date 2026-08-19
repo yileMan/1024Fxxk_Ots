@@ -1,9 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class LoginRequest(BaseModel):
-    login_name: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=1, max_length=256)
+    login_name: str
+    password: str
 
 
 class PublicUserResponse(BaseModel):

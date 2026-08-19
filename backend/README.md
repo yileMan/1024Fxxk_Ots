@@ -21,7 +21,7 @@ py run.py
 py run.py initialize-admin admin "初始管理员"
 ```
 
-生产环境必须设置至少 32 个字符的 `OTS_AUTH_SECRET`。同时配置 `OTS_ALLOWED_ORIGIN`；HTTPS 部署保持 `OTS_COOKIE_SECURE=true`。轮换签名密钥会使所有当前会话失效。
+登录只校验用户名和密码；成功后使用仅包含用户 ID 的 `ots_user_id` Cookie 识别后续请求，不需要认证密钥、来源或 Cookie 时效配置。
 
 API 文档：<http://localhost:5353/docs>
 

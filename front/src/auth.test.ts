@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthenticationError, login } from './api/auth'
 import {
   authentication,
-  clearAuthentication,
   resetAuthenticationForTesting,
   restoreAuthentication,
 } from './auth'
@@ -26,18 +25,23 @@ describe('authentication state', () => {
     )
 
     const [first, second] = await Promise.all([restoreAuthentication(), restoreAuthentication()])
+    const cached = await restoreAuthentication()
 
     expect(first?.login_name).toBe('admin')
     expect(second?.roles).toEqual(['admin'])
+    expect(cached?.id).toBe(1)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(authentication.feedback).toBe('')
   })
 
-  it('clears identity with a displayable message', () => {
-    clearAuthentication('会话已失效')
+  it('reports an unavailable user-id cookie without restoring identity', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ code: 'AUTH_SESSION_INVALID' }), { status: 401 }),
+    )
 
+    await expect(restoreAuthentication()).resolves.toBeNull()
     expect(authentication.user).toBeNull()
-    expect(authentication.feedback).toBe('会话已失效')
+    expect(authentication.feedback).toBe('')
   })
 
   it('maps malformed API failures to a stable client error', async () => {

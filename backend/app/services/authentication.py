@@ -1,21 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
-from itsdangerous import BadSignature, URLSafeSerializer
 from sqlalchemy.orm import sessionmaker
 
 from app.models.user import AppUser
 from app.repositories.users import UserRepository
-
-SESSION_SECONDS = 2 * 60 * 60
-
-
-class PasswordPolicyError(ValueError):
-    pass
 
 
 class InvalidCredentialsError(ValueError):
@@ -23,10 +15,6 @@ class InvalidCredentialsError(ValueError):
 
 
 class InvalidSessionError(ValueError):
-    pass
-
-
-class DisabledUserError(ValueError):
     pass
 
 
@@ -39,23 +27,16 @@ class PublicUser:
 
 
 class AuthenticationService:
-    def __init__(self, session_factory: sessionmaker, secret: str) -> None:
+    def __init__(self, session_factory: sessionmaker) -> None:
         self._session_factory = session_factory
         self._repository = UserRepository()
         self._password_hasher = PasswordHasher()
-        self._serializer = URLSafeSerializer(secret, salt="ots-session-v1")
-
-    @staticmethod
-    def _validate_password(password: str) -> None:
-        if not 12 <= len(password) <= 256:
-            raise PasswordPolicyError("密码长度必须为 12 至 256 个字符")
 
     @staticmethod
     def _public_user(user: AppUser) -> PublicUser:
         return PublicUser(user.id, user.login_name, user.display_name, list(user.roles_json))
 
     def initialize_admin(self, login_name: str, display_name: str, password: str) -> PublicUser | None:
-        self._validate_password(password)
         with self._session_factory.begin() as session:
             if self._repository.get_by_login_name(session, login_name) is not None:
                 return None
@@ -73,7 +54,7 @@ class AuthenticationService:
     def login(self, login_name: str, password: str) -> PublicUser:
         with self._session_factory.begin() as session:
             user = self._repository.get_by_login_name(session, login_name)
-            if user is None or user.status != "active":
+            if user is None:
                 raise InvalidCredentialsError()
             try:
                 password_matches = self._password_hasher.verify(user.password_hash, password)
@@ -81,32 +62,15 @@ class AuthenticationService:
                 password_matches = False
             if not password_matches:
                 raise InvalidCredentialsError()
-            user.last_login_at = datetime.now(timezone.utc)
             return self._public_user(user)
 
-    def create_session_token(self, user_id: int, issued_at: datetime | None = None) -> str:
-        issued_at = issued_at or datetime.now(timezone.utc)
-        payload = {
-            "v": 1,
-            "uid": user_id,
-            "iat": int(issued_at.timestamp()),
-            "exp": int((issued_at + timedelta(seconds=SESSION_SECONDS)).timestamp()),
-        }
-        return self._serializer.dumps(payload)
-
-    def current_user(self, token: str) -> PublicUser:
+    def current_user(self, user_id: str) -> PublicUser:
         try:
-            payload = self._serializer.loads(token)
-            expires_at = int(payload["exp"])
-            user_id = int(payload["uid"])
-        except (BadSignature, KeyError, TypeError, ValueError) as error:
+            parsed_user_id = int(user_id)
+        except ValueError as error:
             raise InvalidSessionError() from error
-        if datetime.now(timezone.utc).timestamp() > expires_at:
-            raise InvalidSessionError()
         with self._session_factory() as session:
-            user = self._repository.get_by_id(session, user_id)
+            user = self._repository.get_by_id(session, parsed_user_id)
             if user is None:
                 raise InvalidSessionError()
-            if user.status != "active":
-                raise DisabledUserError()
             return self._public_user(user)

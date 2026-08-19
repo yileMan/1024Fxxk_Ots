@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import { authentication, restoreAuthentication } from './auth'
+import { restoreAuthentication } from './auth'
 import HealthPage from './pages/HealthPage.vue'
 import LoginPage from './pages/LoginPage.vue'
 import NotFoundPage from './pages/NotFoundPage.vue'
@@ -18,17 +18,11 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  const user = await restoreAuthentication()
-  if (to.meta.requiresAuthentication && !user) {
-    return { path: '/login', query: { redirect: to.fullPath } }
+  if (!to.meta.requiresAuthentication) {
+    return true
   }
-  if (to.path === '/login' && user) {
-    const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : '/system'
-    return redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/system'
+  if (await restoreAuthentication()) {
+    return true
   }
-  return true
+  return { path: '/login', query: { redirect: to.fullPath } }
 })
-
-export function isAuthenticated(): boolean {
-  return authentication.user !== null
-}

@@ -1,10 +1,4 @@
-# local-authentication Specification
-
-## Purpose
-
-为 OTS 管理平台提供最小本地登录能力：登录时仅校验用户名和密码，登录成功后通过用户 ID Cookie 在后续请求中传递身份，以支持既有角色、产品范围授权和审计操作者识别。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 初始化本地管理员
 系统 SHALL 提供幂等的初始化本地登录用户能力；初始化时保存登录名、显示名称和密码摘要，不强制密码长度、复杂度、固定角色或账号状态要求。
@@ -46,7 +40,7 @@
 - **THEN** 系统返回登录成功及该用户公开信息
 - **AND** 系统不读取或校验用户状态
 
-### Requirement: 用户 ID Cookie
+### Requirement: 安全的认证 Cookie
 系统 SHALL 在登录成功时设置仅包含用户 ID 的 `ots_user_id` Cookie；该 Cookie SHALL 仅用于后续请求识别用户 ID，不包含签名、固定过期时间、角色快照或其他会话信息。
 
 #### Scenario: 登录签发 Cookie
@@ -55,7 +49,7 @@
 - **THEN** 响应设置值为该用户 ID 的 `ots_user_id` Cookie
 - **AND** Cookie 不包含签名、过期时间或角色信息
 
-#### Scenario: 携带用户 ID Cookie
+#### Scenario: Cookie 被篡改或已经过期
 - **GIVEN** 请求携带任意用户 ID Cookie
 - **WHEN** 请求访问需要识别用户的接口
 - **THEN** 系统直接使用 Cookie 中的用户 ID 查询用户记录
@@ -99,3 +93,17 @@
 - **WHEN** 用户访问需要登录的页面
 - **THEN** 前端跳转到 `/login` 并携带原目标页面作为站内重定向参数
 - **AND** 前端不在目标业务页面显示“会话已失效”提示
+
+## REMOVED Requirements
+
+### Requirement: 用户退出
+**Reason**: 平台不保存登录会话。
+**Migration**: 移除 `/api/v1/auth/logout` 和前端退出入口。
+
+### Requirement: Cookie 写请求同源保护
+**Reason**: 平台不再使用认证 Cookie，也不在登录流程中校验请求来源。
+**Migration**: 移除认证专用来源校验配置和逻辑。
+
+### Requirement: 认证行为不进入数据库变更审计
+**Reason**: 会话相关认证行为将被移除。
+**Migration**: 删除只针对登录会话、退出和当前用户查询的审计测试与日志处理。

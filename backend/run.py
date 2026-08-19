@@ -36,10 +36,7 @@ if __name__ == "__main__":
         database = Database(settings.database_url)
         if database.session_factory is None:
             raise SystemExit("数据库未配置")
-        user = AuthenticationService(
-            database.session_factory,
-            settings.auth_secret,
-        ).initialize_admin(sys.argv[2], sys.argv[3], password)
+        user = AuthenticationService(database.session_factory).initialize_admin(sys.argv[2], sys.argv[3], password)
         print("管理员已存在" if user is None else f"管理员已初始化：{user.login_name}")
         raise SystemExit(0)
     uvicorn.run("app.main:app", host="localhost", port=5353, reload=True)
