@@ -1,3 +1,8 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: 安全的认证 Cookie`
+- TO: `### Requirement: 用户 ID Cookie`
+
 ## MODIFIED Requirements
 
 ### Requirement: 初始化本地管理员
@@ -40,7 +45,7 @@
 - **THEN** 系统返回登录成功及该用户公开信息
 - **AND** 系统不读取或校验用户状态
 
-### Requirement: 安全的认证 Cookie
+### Requirement: 用户 ID Cookie
 系统 SHALL 在登录成功时设置仅包含用户 ID 的 `ots_user_id` Cookie；该 Cookie SHALL 仅用于后续请求识别用户 ID，不包含签名、固定过期时间、角色快照或其他会话信息。
 
 #### Scenario: 登录签发 Cookie
@@ -49,7 +54,7 @@
 - **THEN** 响应设置值为该用户 ID 的 `ots_user_id` Cookie
 - **AND** Cookie 不包含签名、过期时间或角色信息
 
-#### Scenario: Cookie 被篡改或已经过期
+#### Scenario: 携带用户 ID Cookie
 - **GIVEN** 请求携带任意用户 ID Cookie
 - **WHEN** 请求访问需要识别用户的接口
 - **THEN** 系统直接使用 Cookie 中的用户 ID 查询用户记录

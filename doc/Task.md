@@ -143,7 +143,7 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M1：身份、授权与主数据
 
-#### [x] OTS-01 `ots-01-local-authentication`（复杂度：L，已于 2026-08-18 归档；2026-08-19 按 `remove-authentication` 简化完成）
+#### [x] OTS-01 `ots-01-local-authentication`（复杂度：L，已于 2026-08-18 归档；`remove-authentication` 已于 2026-08-19 归档）
 
 **目标**：完成仅校验用户名密码的本地登录，并以用户 ID Cookie 传递当前用户身份。
 
@@ -154,6 +154,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：正确用户名密码可登录并写入用户 ID Cookie；错误密码不可登录；停用用户不额外拦截；后续请求可恢复当前用户；未登录访问业务页面跳转登录并可返回目标页面；登录行为不写数据库变更审计。
 
 **需求映射**：FR-USER-001、FR-USER-002、FR-USER-004，NFR 12.3。
+
+**完成证据**：实现提交 `e556035`；后端 pytest 18 项、前端 Vitest 10 项和 Playwright 2 项通过，前端类型检查与构建通过，OpenSpec change 与 5 个主规格严格校验通过。
 
 #### [ ] OTS-02 `ots-02-user-role-administration`（复杂度：M，依赖：OTS-01）
 
