@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 
 test('健康页展示服务和数据库可用状态', async ({ page }) => {
+  await page.route('**/api/v1/auth/me', async (route) => {
+    await route.fulfill({ status: 401, json: { code: 'AUTH_SESSION_INVALID' } })
+  })
   await page.route('**/api/v1/health', async (route) => {
     await route.fulfill({ json: { service: 'available', database: 'available' } })
   })
