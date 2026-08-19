@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.schemas.authentication import LoginRequest, PublicUserResponse
 from app.services.authentication import (
@@ -49,3 +49,10 @@ async def current_user(request: Request) -> JSONResponse:
     except InvalidSessionError:
         return _error(request, 401, "AUTH_SESSION_INVALID", "会话已失效")
     return JSONResponse(_response_user(user))
+
+
+@router.post("/logout", status_code=204)
+async def logout() -> Response:
+    response = Response(status_code=204)
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return response

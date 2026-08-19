@@ -21,7 +21,7 @@ py run.py
 py run.py initialize-admin admin "初始管理员"
 ```
 
-登录只校验用户名和密码；成功后使用仅包含用户 ID 的 `ots_user_id` Cookie 识别后续请求，不需要认证密钥、来源或 Cookie 时效配置。
+登录只校验用户名和密码；成功后使用仅包含用户 ID 的 `ots_user_id` Cookie 识别后续请求，不需要认证密钥、来源或 Cookie 时效配置。`POST /api/v1/auth/logout` 只清除当前浏览器的 Cookie，不查询业务数据、不写审计，缺失或无效 Cookie 下也会幂等成功。
 
 ## 用户与固定角色管理
 

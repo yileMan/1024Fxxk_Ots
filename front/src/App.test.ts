@@ -140,4 +140,25 @@ describe('App', () => {
     expect(router.currentRoute.value.path).toBe('/login')
     expect(authentication.user).toBeNull()
   })
+
+  it('keeps the current identity and shows feedback when logout fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'NETWORK_ERROR' }), { status: 503 }))
+    await router.push('/system')
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="退出登录"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/system')
+    expect(authentication.user?.id).toBe(1)
+    expect(wrapper.text()).toContain('退出失败，请检查网络后重试')
+  })
 })

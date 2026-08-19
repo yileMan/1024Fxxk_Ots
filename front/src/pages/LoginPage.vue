@@ -79,26 +79,26 @@ async function submit(): Promise<void> {
 
 <style scoped>
 .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(420px, 1.08fr) minmax(420px, .92fr); background: var(--paper); }
-.brand-panel { position: relative; min-height: 100vh; overflow: hidden; display: flex; flex-direction: column; padding: 42px clamp(38px, 6vw, 84px); color: #f8f1df; background: var(--forest-deep); }
-.brand-panel::after { content: ""; position: absolute; width: 340px; height: 340px; right: -120px; bottom: 10%; border: 1px solid rgba(213, 152, 47, .45); border-radius: 50%; box-shadow: 0 0 0 64px rgba(213, 152, 47, .035), 0 0 0 128px rgba(213, 152, 47, .025); }
+.brand-panel { position: relative; min-height: 100vh; overflow: hidden; display: flex; flex-direction: column; padding: 42px clamp(38px, 6vw, 84px); color: #fff; background: var(--forest-deep); }
+.brand-panel::after { content: ""; position: absolute; width: 430px; height: 430px; right: -190px; bottom: 4%; border: 1px solid rgba(215, 25, 32, .65); border-radius: 50%; box-shadow: 0 0 0 72px rgba(215, 25, 32, .055), 0 0 0 144px rgba(215, 25, 32, .03); }
 .panel-grid { position: absolute; inset: 0; opacity: .12; background-image: linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px); background-size: 52px 52px; mask-image: linear-gradient(to bottom right, black, transparent 75%); }
 .brand-panel header, .brand-copy, .brand-panel footer { position: relative; z-index: 1; }
 .brand-panel header { display: flex; align-items: center; gap: 14px; }
-.login-brand-mark { width: 40px; height: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 7px; border: 1px solid rgba(248, 241, 223, .45); transform: rotate(-3deg); }
-.login-brand-mark i { background: var(--amber); }
+.login-brand-mark { width: 40px; height: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 7px; border-radius: 4px; background: var(--brand-red); transform: skewX(-6deg); }
+.login-brand-mark i { background: #fff; }
 .brand-panel header strong, .brand-panel header small { display: block; }
 .brand-panel header strong { font: 800 25px/1 var(--font-display); letter-spacing: .12em; }
-.brand-panel header small { margin-top: 5px; color: rgba(248, 241, 223, .62); font-size: 9px; letter-spacing: .18em; }
+.brand-panel header small { margin-top: 5px; color: rgba(255, 255, 255, .58); font-size: 9px; letter-spacing: .18em; }
 .brand-copy { margin: auto 0; max-width: 620px; padding: 80px 0; }
 .eyebrow { margin: 0 0 18px; color: var(--amber); font-size: 11px; font-weight: 900; letter-spacing: .21em; }
 .brand-copy h2 { margin: 0; font: 700 clamp(46px, 5.6vw, 78px)/1.12 var(--font-display); letter-spacing: -.045em; }
 .brand-copy h2 em { color: var(--amber); font-style: normal; }
-.brand-copy > p:last-child { max-width: 480px; margin: 28px 0 0; color: rgba(248, 241, 223, .68); line-height: 1.9; }
-.brand-panel footer { display: flex; justify-content: space-between; color: rgba(248, 241, 223, .55); font-size: 9px; letter-spacing: .17em; }
+.brand-copy > p:last-child { max-width: 480px; margin: 28px 0 0; color: rgba(255, 255, 255, .65); line-height: 1.9; }
+.brand-panel footer { display: flex; justify-content: space-between; color: rgba(255, 255, 255, .5); font-size: 9px; letter-spacing: .17em; }
 .brand-panel footer span:first-child { display: flex; align-items: center; gap: 8px; }
 .brand-panel footer i { width: 7px; height: 7px; border-radius: 50%; background: #71bf85; box-shadow: 0 0 0 4px rgba(113, 191, 133, .13); }
 .login-panel { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 64px clamp(32px, 6vw, 88px); background: var(--paper); }
-.login-panel::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 75% 12%, rgba(213, 152, 47, .11), transparent 24%); }
+.login-panel::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(135deg, rgba(215, 25, 32, .055), transparent 28%); }
 .access-rule { position: absolute; top: 34px; right: 42px; display: grid; gap: 4px; text-align: right; }
 .access-rule span { color: var(--amber-dark); font-size: 9px; font-weight: 900; letter-spacing: .18em; }
 .access-rule strong { color: var(--text-muted); font-size: 10px; }
@@ -107,11 +107,11 @@ async function submit(): Promise<void> {
 .form-intro { margin: 18px 0 34px; color: var(--text-muted); line-height: 1.8; }
 form { display: grid; gap: 20px; }
 label { display: grid; gap: 9px; color: var(--ink); font-size: 12px; font-weight: 900; }
-input { width: 100%; min-height: 54px; border: 1px solid var(--line-strong); border-radius: 0; background: #fffef9; padding: 0 16px; color: var(--ink); font: 500 15px var(--font-body); outline: none; transition: border .18s, box-shadow .18s; }
-input:focus { border-color: var(--forest); box-shadow: 4px 4px 0 rgba(24, 78, 63, .12); }
+input { width: 100%; min-height: 54px; border: 1px solid var(--line-strong); border-radius: 4px; background: #fff; padding: 0 16px; color: var(--ink); font: 500 15px var(--font-body); outline: none; transition: border .18s, box-shadow .18s; }
+input:focus { border-color: var(--brand-red); box-shadow: 0 0 0 3px rgba(215, 25, 32, .1); }
 input::placeholder { color: #9a9e97; }
-form button { min-height: 58px; display: flex; justify-content: space-between; align-items: center; border: 0; padding: 0 20px; color: #fffdf7; background: var(--forest); font-size: 14px; font-weight: 900; cursor: pointer; box-shadow: 6px 6px 0 var(--amber); transition: transform .18s, box-shadow .18s; }
-form button:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 9px 9px 0 var(--amber); }
+form button { min-height: 58px; display: flex; justify-content: space-between; align-items: center; border: 0; border-radius: 4px; padding: 0 20px; color: #fff; background: var(--brand-red); font-size: 14px; font-weight: 900; cursor: pointer; box-shadow: 0 10px 24px rgba(215, 25, 32, .2); transition: transform .18s, background .18s, box-shadow .18s; }
+form button:hover:not(:disabled) { transform: translateY(-2px); background: var(--brand-red-deep); box-shadow: 0 14px 28px rgba(168, 15, 24, .25); }
 form button:disabled { opacity: .65; cursor: wait; }
 form button b { font-size: 21px; font-weight: 400; }
 .error-message, .feedback { margin: -5px 0 0; padding: 12px 14px; border-left: 4px solid var(--danger); background: #f8e5df; color: var(--danger); font-size: 12px; font-weight: 800; }

@@ -35,6 +35,7 @@ h1 { margin: 12px 0; color: var(--ink); font: 700 clamp(46px, 7vw, 76px)/1 var(-
 .module-card > span { float: right; color: var(--amber); font: 700 44px var(--font-display); }
 .module-card small { color: var(--amber-dark); font-weight: 900; letter-spacing: .15em; }
 .featured small { color: var(--amber); }
+.featured > span, .featured small, .featured b { color: #fff; opacity: .82; }
 .module-card h2 { margin: 44px 0 12px; font: 700 32px var(--font-display); }
 .module-card p { max-width: 330px; line-height: 1.7; opacity: .72; }
 .module-card b { display: inline-block; margin-top: 28px; color: var(--amber); font-size: 12px; }

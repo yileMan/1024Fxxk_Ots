@@ -31,3 +31,7 @@ export function login(loginName: string, password: string): Promise<PublicUser> 
     body: JSON.stringify({ login_name: loginName, password }),
   })
 }
+
+export function logout(): Promise<void> {
+  return request<void>('/api/v1/auth/logout', { method: 'POST' })
+}

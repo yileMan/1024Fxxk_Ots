@@ -25,7 +25,7 @@
   right: -12px;
   top: -36px;
   font: 800 132px/1 var(--font-display);
-  color: rgba(24, 58, 49, 0.07);
+  color: rgba(215, 25, 32, 0.07);
 }
 
 .eyebrow { color: var(--amber-dark); letter-spacing: .18em; font-weight: 800; }

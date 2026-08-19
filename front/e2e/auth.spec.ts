@@ -44,5 +44,5 @@ test('用户名密码登录后通过用户 ID Cookie 恢复身份', async ({ pag
   await page.getByLabel('密码').fill('owner-password')
   await page.getByRole('button', { name: '登录' }).click()
   await expect(page).toHaveURL(/\/system$/)
-  await expect(page.getByText('产品负责人')).toBeVisible()
+  await expect(page.locator('.identity-chip strong')).toHaveText('产品负责人')
 })

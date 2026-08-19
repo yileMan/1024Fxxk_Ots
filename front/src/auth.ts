@@ -42,6 +42,12 @@ export function setAuthenticatedUser(user: PublicUser): void {
   authentication.feedback = ''
 }
 
+export function clearAuthenticatedUser(): void {
+  authentication.user = null
+  authentication.initialized = true
+  authentication.feedback = ''
+}
+
 export function resetAuthenticationForTesting(): void {
   authentication.user = null
   authentication.initialized = false
