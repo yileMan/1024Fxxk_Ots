@@ -157,7 +157,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：实现提交 `e556035`；后端 pytest 18 项、前端 Vitest 10 项和 Playwright 2 项通过，前端类型检查与构建通过，OpenSpec change 与 5 个主规格严格校验通过。
 
-#### [ ] OTS-02 `ots-02-user-role-administration`（复杂度：M，依赖：OTS-01）
+#### [x] OTS-02 `ots-02-user-role-administration`（复杂度：M，依赖：OTS-01）
 
 **目标**：管理员维护用户和固定角色。
 
@@ -168,6 +168,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：非管理员被拒绝；停用不删除历史；并发编辑不能静默覆盖；列表和表单状态完整。
 
 **需求映射**：FR-USER-001、FR-USER-002、FR-USER-007、FR-AUDIT-001、FR-AUDIT-002。
+
+**完成证据**：实现提交 `5c1eab6`、`46b43dc`、`e9a2fe5`，验证提交 `b264975`；后端 pytest 27 项通过且覆盖率 91.89%，前端 Vitest 23 项通过且覆盖率 97.52%，Playwright 4 项通过，类型检查、生产构建、OpenAPI 漂移检查与 OpenSpec 严格校验通过。
 
 #### [ ] OTS-03 `ots-03-product-version-management`（复杂度：L，依赖：OTS-02）
 
