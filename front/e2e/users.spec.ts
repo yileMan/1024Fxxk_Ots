@@ -77,7 +77,7 @@ test('管理员可以进入用户管理并创建多角色用户', async ({ page 
   await page.goto('/system/users')
   await expect(page.getByRole('heading', { name: '用户与角色' })).toBeVisible()
   const navigationItems = await page.locator('aside.app-sidebar nav a').allTextContents()
-  expect(navigationItems.map((item) => item.trim())).toEqual(['工作台', '用户与角色', '运行状态'])
+  expect(navigationItems.map((item) => item.trim())).toEqual(['工作台', '产品管理', '用户与角色', '运行状态'])
   const layout = await page.evaluate(() => {
     const sidebar = document.querySelector('aside.app-sidebar')?.getBoundingClientRect()
     const content = document.querySelector('main')?.getBoundingClientRect()

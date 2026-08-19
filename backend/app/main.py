@@ -9,10 +9,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.routes.health import router as health_router
 from app.api.routes.authentication import router as authentication_router
 from app.api.routes.users import router as users_router
+from app.api.routes.products import router as products_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
 from app.services.users import UserManagementService
+from app.services.products import ProductManagementService
 
 logger = logging.getLogger("ots")
 
@@ -29,6 +31,9 @@ def create_app() -> FastAPI:
         application.state.user_management_service = UserManagementService(
             application.state.database.session_factory,
             application.state.authentication_service,
+        )
+        application.state.product_management_service = ProductManagementService(
+            application.state.database.session_factory,
         )
 
     @application.middleware("http")
@@ -78,6 +83,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router, prefix="/api/v1")
     application.include_router(authentication_router, prefix="/api/v1")
     application.include_router(users_router, prefix="/api/v1")
+    application.include_router(products_router, prefix="/api/v1")
 
     return application
 

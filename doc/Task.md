@@ -171,7 +171,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：实现提交 `5c1eab6`、`46b43dc`、`e9a2fe5`，验证提交 `b264975`；后端 pytest 27 项通过且覆盖率 91.89%，前端 Vitest 23 项通过且覆盖率 97.52%，Playwright 4 项通过，类型检查、生产构建、OpenAPI 漂移检查与 OpenSpec 严格校验通过。
 
-#### [ ] OTS-03 `ots-03-product-version-management`（复杂度：L，依赖：OTS-02）
+#### [x] OTS-03 `ots-03-product-version-management`（复杂度：L，依赖：OTS-02）
 
 **目标**：完成产品与产品版本管理，并为每个版本指定负责人和审核人。
 
@@ -182,6 +182,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：同产品版本号不能重复；无相应角色人员不能被指定；停用保留历史；负责人/审核人调整不改写已完成记录。
 
 **需求映射**：FR-MASTER-001、FR-MASTER-002、FR-MASTER-003、FR-MASTER-007、FR-USER-006、FR-USER-007。
+
+**完成证据**：后端 pytest 31 项通过且覆盖率 89%，前端 Vitest 32 项通过且函数覆盖率 85.26%，Playwright 6 项通过；类型检查、生产构建、OpenAPI 重复生成一致性与 OpenSpec 严格校验通过。
 
 #### [ ] OTS-04 `ots-04-ots-bom-management`（复杂度：L，依赖：OTS-03）
 

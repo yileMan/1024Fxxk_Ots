@@ -1,0 +1,23 @@
+CREATE TABLE product_version (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    product_id BIGINT UNSIGNED NOT NULL,
+    version_no VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    primary_cvss_version VARCHAR(8) NOT NULL,
+    owner_id BIGINT UNSIGNED NOT NULL,
+    reviewer_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    row_version INT UNSIGNED NOT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    CONSTRAINT pk_product_version PRIMARY KEY (id),
+    CONSTRAINT fk_product_version_product FOREIGN KEY (product_id) REFERENCES product(id),
+    CONSTRAINT fk_product_version_owner FOREIGN KEY (owner_id) REFERENCES app_user(id),
+    CONSTRAINT fk_product_version_reviewer FOREIGN KEY (reviewer_id) REFERENCES app_user(id),
+    CONSTRAINT uk_product_version UNIQUE (product_id, version_no),
+    CONSTRAINT ck_product_version_cvss CHECK (primary_cvss_version IN ('3.1', '4.0')),
+    CONSTRAINT ck_product_version_status CHECK (status IN ('active', 'disabled')),
+    INDEX idx_product_version_status (product_id, status),
+    INDEX idx_product_version_owner (owner_id, status),
+    INDEX idx_product_version_reviewer (reviewer_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
