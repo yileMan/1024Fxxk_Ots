@@ -19,6 +19,8 @@ describe('App', () => {
     const wrapper = mount(App, { global: { plugins: [router] } })
 
     expect(wrapper.get('h1').text()).toBe('登录 OTS 信息维护平台')
+    expect(wrapper.text()).toContain('内网可信工作台')
+    expect(wrapper.text()).toContain('访问边界')
     expect(wrapper.get('input[name="login_name"]')).toBeTruthy()
     expect(wrapper.get('input[name="password"]')).toBeTruthy()
   })
