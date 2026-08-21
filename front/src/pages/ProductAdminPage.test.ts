@@ -10,6 +10,16 @@ const version = { id: 2, product_id: 1, version_no: '1.0', description: null, pr
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock) })
 
 describe('ProductAdminPage', () => {
+  it('hides record versions from the product column', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [product], total: 1, page: 1, page_size: 20 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200 }))
+    const wrapper = mount(ProductAdminPage)
+    await flushPromises()
+    expect(wrapper.get('tbody td').text()).not.toContain(`v${product.row_version}`)
+  })
+
   it('creates a product and its initial version with the three-step wizard', async () => {
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200 }))
