@@ -44,4 +44,15 @@ describe('ProductOtsManager', () => {
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('第 2 行 · is_eol · 仅允许 true 或 false')
   })
+
+  it('shows feedback when a CSV download fails', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 100 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'NETWORK_ERROR' }), { status: 503 }))
+    const wrapper = mount(ProductOtsManager, { props: { versionId: 2 } })
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === '下载 CSV 模板')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('下载失败，请稍后重试')
+  })
 })

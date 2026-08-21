@@ -103,7 +103,7 @@ def test_product_ots_relations_export_and_audit(client: TestClient) -> None:
 def test_csv_import_is_atomic_idempotent_and_reports_fields(client: TestClient) -> None:
     login(client)
     _, version = create_version(client)
-    headers = {"content-type": "text/csv; charset=utf-8", "x-file-name": "bom.csv"}
+    headers = {"content-type": "text/csv; charset=utf-8", "x-file-name": r"C:\sensitive\bom.csv"}
     valid = "ots_name,ots_version,official_website,is_eol\nOpenSSL,3.0.0,https://openssl.org,false\nzlib,1.3,https://zlib.net,false\n"
     first = client.post(f"/api/v1/product-versions/{version['id']}/ots/import", content=valid.encode(), headers=headers)
     second = client.post(f"/api/v1/product-versions/{version['id']}/ots/import", content=valid.encode(), headers=headers)
@@ -117,6 +117,10 @@ def test_csv_import_is_atomic_idempotent_and_reports_fields(client: TestClient) 
     assert {item["field"] for item in failed.json()["errors"]} == {"official_website", "is_eol"}
     assert all(item["row"] == 2 for item in failed.json()["errors"])
     assert client.get("/api/v1/ots-components", params={"query": "new"}).json()["total"] == 0
+    with client.app.state.database.session_factory() as session:
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "batch_upsert").order_by(AuditLog.id))
+        assert audit is not None
+        assert audit.detail_json["file_name"] == "bom.csv"
 
 
 def test_relation_with_downstream_history_cannot_be_removed(client: TestClient) -> None:
