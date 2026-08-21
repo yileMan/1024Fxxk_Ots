@@ -2,13 +2,19 @@
   <main class="system-page">
     <p class="eyebrow">CONTROL DESK / OVERVIEW</p>
     <h1>系统工作台</h1>
-    <p class="intro">这里是 OTS 信息维护平台的内网入口。当前阶段已开放本地身份与用户角色维护。</p>
+    <p class="intro">这里是 OTS 信息维护平台的内网入口。维护产品、版本和实际使用的 OTS 清单，为后续采集与评估建立可信主数据。</p>
     <div class="module-grid">
-      <RouterLink v-if="isAdmin" class="module-card featured" to="/system/users">
-        <span>01</span><small>系统管理</small><h2>用户与角色</h2><p>维护账号、固定角色、密码与人员状态。</p><b>进入模块 ↗</b>
+      <RouterLink v-if="isAdmin" class="module-card featured" to="/system/products">
+        <span>01</span><small>主数据</small><h2>产品管理</h2><p>维护产品、版本、负责人、审核人和版本 OTS 清单。</p><b>进入模块 ↗</b>
+      </RouterLink>
+      <RouterLink v-if="isAdmin" class="module-card" to="/system/ots">
+        <span>02</span><small>共享组件</small><h2>OTS 主数据</h2><p>维护 OTS 名称、版本、官方网站、EOL 与关联产品。</p><b>进入模块 ↗</b>
+      </RouterLink>
+      <RouterLink v-if="isAdmin" class="module-card" to="/system/users">
+        <span>03</span><small>系统管理</small><h2>用户与角色</h2><p>维护账号、固定角色、密码与人员状态。</p><b>进入模块 ↗</b>
       </RouterLink>
       <RouterLink class="module-card" to="/health">
-        <span>02</span><small>平台运行</small><h2>服务状态</h2><p>检查 API 与数据库可用性。</p><b>查看状态 ↗</b>
+        <span>04</span><small>平台运行</small><h2>服务状态</h2><p>检查 API 与数据库可用性。</p><b>查看状态 ↗</b>
       </RouterLink>
     </div>
   </main>

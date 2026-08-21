@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOts, createProductOts, exportProductOts, importProductOts, listOts, listProductOts, OtsApiError, removeProductOts, updateOts } from './ots'
 
 const fetchMock = vi.fn()
-beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() }) })
+beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() }); vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined) })
 
 describe('OTS API client', () => {
   it('uses generated-contract JSON resources', async () => {

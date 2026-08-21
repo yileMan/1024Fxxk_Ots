@@ -10,11 +10,13 @@ from app.api.routes.health import router as health_router
 from app.api.routes.authentication import router as authentication_router
 from app.api.routes.users import router as users_router
 from app.api.routes.products import router as products_router
+from app.api.routes.ots import router as ots_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
 from app.services.users import UserManagementService
 from app.services.products import ProductManagementService
+from app.services.ots import OtsManagementService
 
 logger = logging.getLogger("ots")
 
@@ -35,6 +37,9 @@ def create_app() -> FastAPI:
         application.state.product_management_service = ProductManagementService(
             application.state.database.session_factory,
         )
+        application.state.ots_management_service = OtsManagementService(
+            application.state.database.session_factory,
+        )
 
     @application.middleware("http")
     async def correlation_id(request: Request, call_next):
@@ -45,14 +50,17 @@ def create_app() -> FastAPI:
         logger.info("request_completed correlation_id=%s status=%s", request_id, response.status_code)
         return response
 
-    def error_response(request: Request, status: int, code: str, message: str) -> JSONResponse:
+    def error_response(request: Request, status: int, code: str, message: str, extra: dict[str, object] | None = None) -> JSONResponse:
+        content: dict[str, object] = {
+            "code": code,
+            "message": message,
+            "correlation_id": getattr(request.state, "correlation_id", "generated-by-middleware"),
+        }
+        if extra:
+            content.update(extra)
         return JSONResponse(
             status_code=status,
-            content={
-                "code": code,
-                "message": message,
-                "correlation_id": getattr(request.state, "correlation_id", "generated-by-middleware"),
-            },
+            content=content,
         )
 
     @application.exception_handler(StarletteHTTPException)
@@ -63,6 +71,7 @@ def create_app() -> FastAPI:
                 exc.status_code,
                 str(exc.detail.get("code", "HTTP_ERROR")),
                 str(exc.detail.get("message", "请求的资源不可用")),
+                {key: value for key, value in exc.detail.items() if key not in {"code", "message"}},
             )
         code = "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
         return error_response(request, exc.status_code, code, "请求的资源不可用")
@@ -84,6 +93,7 @@ def create_app() -> FastAPI:
     application.include_router(authentication_router, prefix="/api/v1")
     application.include_router(users_router, prefix="/api/v1")
     application.include_router(products_router, prefix="/api/v1")
+    application.include_router(ots_router, prefix="/api/v1")
 
     return application
 

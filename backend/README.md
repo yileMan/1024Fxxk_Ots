@@ -33,6 +33,27 @@ py run.py initialize-admin admin "初始管理员"
 
 API 文档：<http://localhost:5353/docs>
 
+## OTS 与产品 OTS 清单
+
+管理员可通过 `/api/v1/ots-components` 查询、创建和编辑 OTS，通过
+`/api/v1/product-versions/{version_id}/ots` 维护产品版本与 OTS 的关联。OTS 严格使用
+名称、版本、官方网站和是否 EOL 四项核心业务信息，不提供状态、停用或删除；产品版本退出使用
+某 OTS 时移除关联，已有下游评估历史的关联不能移除。
+
+产品 OTS 清单 CSV 固定使用 UTF-8 和以下表头：
+
+```csv
+ots_name,ots_version,official_website,is_eol
+```
+
+`is_eol` 仅允许 `true` 或 `false`。导入会创建缺失 OTS、复用四项字段一致的已有 OTS，
+但名称/版本命中而官网或 EOL 不一致时会返回包含行号、字段和原因的冲突；任一错误都会使整份
+文件不写入。模板、导出和导入端点分别为：
+
+- `GET /api/v1/product-ots/template`
+- `GET /api/v1/product-versions/{version_id}/ots/export`
+- `POST /api/v1/product-versions/{version_id}/ots/import`，请求体为 `text/csv`，文件名可通过 `X-File-Name` 传递
+
 ## 测试
 
 ```powershell

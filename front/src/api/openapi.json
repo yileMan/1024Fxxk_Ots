@@ -1011,10 +1011,561 @@
           }
         }
       }
+    },
+    "/api/v1/ots-components": {
+      "get": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "List Ots",
+        "operationId": "list_ots_api_v1_ots_components_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          },
+          {
+            "name": "is_eol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Eol"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtsPageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Create Ots",
+        "operationId": "create_ots_api_v1_ots_components_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtsCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ots-components/{ots_id}": {
+      "get": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Get Ots",
+        "operationId": "get_ots_api_v1_ots_components__ots_id__get",
+        "parameters": [
+          {
+            "name": "ots_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ots Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Update Ots",
+        "operationId": "update_ots_api_v1_ots_components__ots_id__put",
+        "parameters": [
+          {
+            "name": "ots_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ots Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtsUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ots-components/{ots_id}/product-versions": {
+      "get": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Associated Versions",
+        "operationId": "associated_versions_api_v1_ots_components__ots_id__product_versions_get",
+        "parameters": [
+          {
+            "name": "ots_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ots Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OtsProductVersionResponse"
+                  },
+                  "title": "Response Associated Versions Api V1 Ots Components  Ots Id  Product Versions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/product-versions/{version_id}/ots": {
+      "get": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "List Product Ots",
+        "operationId": "list_product_ots_api_v1_product_versions__version_id__ots_get",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductOtsResponse"
+                  },
+                  "title": "Response List Product Ots Api V1 Product Versions  Version Id  Ots Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Create Product Ots",
+        "operationId": "create_product_ots_api_v1_product_versions__version_id__ots_post",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductOtsCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductOtsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/product-versions/{version_id}/ots/{relation_id}": {
+      "delete": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Remove Product Ots",
+        "operationId": "remove_product_ots_api_v1_product_versions__version_id__ots__relation_id__delete",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "relation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Relation Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/product-ots/template": {
+      "get": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Product Ots Template",
+        "operationId": "product_ots_template_api_v1_product_ots_template_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/product-versions/{version_id}/ots/export": {
+      "get": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Export Product Ots",
+        "operationId": "export_product_ots_api_v1_product_versions__version_id__ots_export_get",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/product-versions/{version_id}/ots/import": {
+      "post": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Import Product Ots",
+        "operationId": "import_product_ots_api_v1_product_versions__version_id__ots_import_post",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "X-File-Name",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "product-ots.csv",
+              "title": "X-File-Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string",
+                "contentMediaType": "application/octet-stream",
+                "title": "Content"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsvImportResultResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "CsvImportResultResponse": {
+        "properties": {
+          "created_ots": {
+            "type": "integer",
+            "title": "Created Ots"
+          },
+          "created_relations": {
+            "type": "integer",
+            "title": "Created Relations"
+          },
+          "existing_relations": {
+            "type": "integer",
+            "title": "Existing Relations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created_ots",
+          "created_relations",
+          "existing_relations"
+        ],
+        "title": "CsvImportResultResponse"
+      },
       "DisableRequest": {
         "properties": {
           "row_version": {
@@ -1059,6 +1610,206 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "OtsCreateRequest": {
+        "properties": {
+          "ots_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Ots Version"
+          },
+          "official_website": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "pattern": "^https?://",
+            "title": "Official Website"
+          },
+          "is_eol": {
+            "type": "boolean",
+            "title": "Is Eol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ots_name",
+          "ots_version",
+          "official_website",
+          "is_eol"
+        ],
+        "title": "OtsCreateRequest"
+      },
+      "OtsPageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OtsResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "OtsPageResponse"
+      },
+      "OtsProductVersionResponse": {
+        "properties": {
+          "product_ots_id": {
+            "type": "integer",
+            "title": "Product Ots Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "product_code": {
+            "type": "string",
+            "title": "Product Code"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "product_version_id": {
+            "type": "integer",
+            "title": "Product Version Id"
+          },
+          "version_no": {
+            "type": "string",
+            "title": "Version No"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_ots_id",
+          "product_id",
+          "product_code",
+          "product_name",
+          "product_version_id",
+          "version_no",
+          "status"
+        ],
+        "title": "OtsProductVersionResponse"
+      },
+      "OtsResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "official_website": {
+            "type": "string",
+            "title": "Official Website"
+          },
+          "is_eol": {
+            "type": "boolean",
+            "title": "Is Eol"
+          },
+          "row_version": {
+            "type": "integer",
+            "title": "Row Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ots_name",
+          "ots_version",
+          "official_website",
+          "is_eol",
+          "row_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "OtsResponse"
+      },
+      "OtsUpdateRequest": {
+        "properties": {
+          "ots_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Ots Version"
+          },
+          "official_website": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "pattern": "^https?://",
+            "title": "Official Website"
+          },
+          "is_eol": {
+            "type": "boolean",
+            "title": "Is Eol"
+          },
+          "row_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Row Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ots_name",
+          "ots_version",
+          "official_website",
+          "is_eol",
+          "row_version"
+        ],
+        "title": "OtsUpdateRequest"
       },
       "PasswordResetRequest": {
         "properties": {
@@ -1111,6 +1862,80 @@
           "product_name"
         ],
         "title": "ProductCreateRequest"
+      },
+      "ProductOtsCreateRequest": {
+        "properties": {
+          "ots_component_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Ots Component Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ots_component_id"
+        ],
+        "title": "ProductOtsCreateRequest"
+      },
+      "ProductOtsResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "product_version_id": {
+            "type": "integer",
+            "title": "Product Version Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "created_by": {
+            "type": "integer",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "official_website": {
+            "type": "string",
+            "title": "Official Website"
+          },
+          "is_eol": {
+            "type": "boolean",
+            "title": "Is Eol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_version_id",
+          "ots_component_id",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "ots_name",
+          "ots_version",
+          "official_website",
+          "is_eol"
+        ],
+        "title": "ProductOtsResponse"
       },
       "ProductPageResponse": {
         "properties": {

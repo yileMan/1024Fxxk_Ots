@@ -265,10 +265,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ots-components": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ots */
+        get: operations["list_ots_api_v1_ots_components_get"];
+        put?: never;
+        /** Create Ots */
+        post: operations["create_ots_api_v1_ots_components_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ots-components/{ots_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ots */
+        get: operations["get_ots_api_v1_ots_components__ots_id__get"];
+        /** Update Ots */
+        put: operations["update_ots_api_v1_ots_components__ots_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ots-components/{ots_id}/product-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Associated Versions */
+        get: operations["associated_versions_api_v1_ots_components__ots_id__product_versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/product-versions/{version_id}/ots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Product Ots */
+        get: operations["list_product_ots_api_v1_product_versions__version_id__ots_get"];
+        put?: never;
+        /** Create Product Ots */
+        post: operations["create_product_ots_api_v1_product_versions__version_id__ots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/product-versions/{version_id}/ots/{relation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Product Ots */
+        delete: operations["remove_product_ots_api_v1_product_versions__version_id__ots__relation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/product-ots/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Product Ots Template */
+        get: operations["product_ots_template_api_v1_product_ots_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/product-versions/{version_id}/ots/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Product Ots */
+        get: operations["export_product_ots_api_v1_product_versions__version_id__ots_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/product-versions/{version_id}/ots/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Product Ots */
+        post: operations["import_product_ots_api_v1_product_versions__version_id__ots_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CsvImportResultResponse */
+        CsvImportResultResponse: {
+            /** Created Ots */
+            created_ots: number;
+            /** Created Relations */
+            created_relations: number;
+            /** Existing Relations */
+            existing_relations: number;
+        };
         /** DisableRequest */
         DisableRequest: {
             /** Row Version */
@@ -286,6 +434,83 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** OtsCreateRequest */
+        OtsCreateRequest: {
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Official Website */
+            official_website: string;
+            /** Is Eol */
+            is_eol: boolean;
+        };
+        /** OtsPageResponse */
+        OtsPageResponse: {
+            /** Items */
+            items: components["schemas"]["OtsResponse"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** OtsProductVersionResponse */
+        OtsProductVersionResponse: {
+            /** Product Ots Id */
+            product_ots_id: number;
+            /** Product Id */
+            product_id: number;
+            /** Product Code */
+            product_code: string;
+            /** Product Name */
+            product_name: string;
+            /** Product Version Id */
+            product_version_id: number;
+            /** Version No */
+            version_no: string;
+            /** Status */
+            status: string;
+        };
+        /** OtsResponse */
+        OtsResponse: {
+            /** Id */
+            id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Official Website */
+            official_website: string;
+            /** Is Eol */
+            is_eol: boolean;
+            /** Row Version */
+            row_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** OtsUpdateRequest */
+        OtsUpdateRequest: {
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Official Website */
+            official_website: string;
+            /** Is Eol */
+            is_eol: boolean;
+            /** Row Version */
+            row_version: number;
+        };
         /** PasswordResetRequest */
         PasswordResetRequest: {
             /** Password */
@@ -301,6 +526,40 @@ export interface components {
             product_name: string;
             /** Description */
             description?: string | null;
+        };
+        /** ProductOtsCreateRequest */
+        ProductOtsCreateRequest: {
+            /** Ots Component Id */
+            ots_component_id: number;
+        };
+        /** ProductOtsResponse */
+        ProductOtsResponse: {
+            /** Id */
+            id: number;
+            /** Product Version Id */
+            product_version_id: number;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Created By */
+            created_by: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Official Website */
+            official_website: string;
+            /** Is Eol */
+            is_eol: boolean;
         };
         /** ProductPageResponse */
         ProductPageResponse: {
@@ -1154,6 +1413,354 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ots_api_v1_ots_components_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                is_eol?: boolean | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtsPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_ots_api_v1_ots_components_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ots_api_v1_ots_components__ots_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ots_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_ots_api_v1_ots_components__ots_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ots_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    associated_versions_api_v1_ots_components__ots_id__product_versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ots_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtsProductVersionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_product_ots_api_v1_product_versions__version_id__ots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOtsResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_product_ots_api_v1_product_versions__version_id__ots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductOtsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOtsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_product_ots_api_v1_product_versions__version_id__ots__relation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: number;
+                relation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    product_ots_template_api_v1_product_ots_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_product_ots_api_v1_product_versions__version_id__ots_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_product_ots_api_v1_product_versions__version_id__ots_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-File-Name"?: string;
+            };
+            path: {
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvImportResultResponse"];
                 };
             };
             /** @description Validation Error */

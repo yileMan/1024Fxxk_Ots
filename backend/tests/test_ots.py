@@ -50,7 +50,7 @@ def test_ots_requires_admin_and_has_no_disable_or_delete(client: TestClient) -> 
     assert created.status_code == 201
     assert created.json()["ots_name"] == "OpenSSL"
     assert "status" not in created.json()
-    assert client.post(f"/api/v1/ots-components/{created.json()['id']}/disable", json={"row_version": 1}).status_code == 405
+    assert client.post(f"/api/v1/ots-components/{created.json()['id']}/disable", json={"row_version": 1}).status_code == 404
     assert client.delete(f"/api/v1/ots-components/{created.json()['id']}").status_code == 405
 
 
@@ -94,6 +94,11 @@ def test_product_ots_relations_export_and_audit(client: TestClient) -> None:
         audits = session.scalars(select(AuditLog).where(AuditLog.object_type == "product_ots")).all()
         assert len(audits) == 1
 
+    removed = client.delete(f"/api/v1/product-versions/{version['id']}/ots/{relation.json()['id']}")
+    assert removed.status_code == 204
+    assert client.get(f"/api/v1/ots-components/{ots['id']}").status_code == 200
+    assert client.get(f"/api/v1/product-versions/{version['id']}/ots").json() == []
+
 
 def test_csv_import_is_atomic_idempotent_and_reports_fields(client: TestClient) -> None:
     login(client)
@@ -126,3 +131,18 @@ def test_relation_with_downstream_history_cannot_be_removed(client: TestClient) 
     protected = client.delete(f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}")
     assert protected.status_code == 409
     assert protected.json()["code"] == "PRODUCT_OTS_HISTORY_CONFLICT"
+
+
+def test_csv_rejects_bad_headers_duplicate_keys_and_extra_columns_without_writes(client: TestClient) -> None:
+    login(client)
+    _, version = create_version(client)
+    headers = {"content-type": "text/csv; charset=utf-8", "x-file-name": "bad.csv"}
+    bad_header = client.post(f"/api/v1/product-versions/{version['id']}/ots/import", content=b"name,version\nOpenSSL,3.0\n", headers=headers)
+    duplicate_and_extra = "ots_name,ots_version,official_website,is_eol\nOpenSSL,3.0,https://openssl.org,false\nOpenSSL,3.0,https://openssl.org,false,extra\n"
+    bad_rows = client.post(f"/api/v1/product-versions/{version['id']}/ots/import", content=duplicate_and_extra.encode(), headers=headers)
+
+    assert bad_header.status_code == 422
+    assert bad_header.json()["errors"][0]["field"] == "header"
+    assert bad_rows.status_code == 422
+    assert {error["field"] for error in bad_rows.json()["errors"]} == {"row", "ots_name"}
+    assert client.get("/api/v1/ots-components").json()["total"] == 0

@@ -8,6 +8,7 @@
       <nav aria-label="主导航">
         <RouterLink to="/system"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z" /></svg><span>工作台</span></RouterLink>
         <RouterLink v-if="isAdmin" to="/system/products"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 8h8v2H8zm0 4h8v2H8zm0 4h5v2H8z" /></svg><span>产品管理</span></RouterLink>
+        <RouterLink v-if="isAdmin" to="/system/ots"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.8 8 12 11.7 5.2 8 12 4.3ZM5 9.7l6 3.3v6.4l-6-3.3V9.7Zm8 9.7V13l6-3.3v6.4l-6 3.3Z" /></svg><span>OTS</span></RouterLink>
         <RouterLink to="/system/users"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3Zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z" /></svg><span>用户与角色</span></RouterLink>
         <RouterLink to="/health"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 13h4l2-6 4 12 2-6h6v-2h-4.56L13 21.32 9 9.32 8.44 11H3v2Z" /></svg><span>运行状态</span></RouterLink>
       </nav>
