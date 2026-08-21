@@ -58,3 +58,25 @@ test('非管理员不能进入产品管理', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '没有访问权限' })).toBeVisible()
   await expect(page.locator('aside nav')).not.toContainText('产品管理')
 })
+
+test('授权普通用户可从我的产品只读查看版本和 OTS', async ({ page }) => {
+  const product = { id: 10, product_code: 'P-001', product_name: '监护仪', description: null, status: 'active', row_version: 1, created_at: '', updated_at: '' }
+  const version = { id: 11, product_id: 10, version_no: '2.0', description: null, primary_cvss_version: '3.1', owner_id: 2, reviewer_id: 3, status: 'active', row_version: 1, created_at: '', updated_at: '' }
+  const ots = { id: 7, product_version_id: 11, ots_component_id: 5, created_by: 1, created_at: '', updated_at: '', ots_name: 'OpenSSL', ots_version: '3.0', official_website: 'https://openssl.org', is_eol: false }
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ status: 200, json: { id: 2, login_name: 'owner', display_name: '负责人', roles: ['product_owner'] } }))
+  await page.route('**/api/v1/scopes/me', route => route.fulfill({ status: 200, json: { is_global: false, scopes: [], effective_product_ids: [10], effective_version_ids: [11] } }))
+  await page.route('**/api/v1/products?**', route => route.fulfill({ status: 200, json: { items: [product], total: 1, page: 1, page_size: 20 } }))
+  await page.route('**/api/v1/products/10/versions', route => route.fulfill({ status: 200, json: [version] }))
+  await page.route('**/api/v1/product-versions/11/ots', route => route.fulfill({ status: 200, json: [ots] }))
+
+  await page.goto('/system/my-products')
+  await expect(page.getByRole('heading', { name: '我的产品' })).toBeVisible()
+  await expect(page.locator('aside nav')).toContainText('我的产品')
+  await expect(page.locator('aside nav')).not.toContainText('产品管理')
+  await expect(page.locator('aside nav')).not.toContainText('用户与角色')
+  await page.getByRole('button', { name: '查看监护仪版本' }).click()
+  await page.getByRole('button', { name: '查看版本2.0 OTS清单' }).click()
+  await expect(page.getByText('OpenSSL')).toBeVisible()
+  await expect(page.getByText('3.0')).toBeVisible()
+  await expect(page.getByRole('button', { name: /新建|编辑|停用|移除/ })).toHaveCount(0)
+})

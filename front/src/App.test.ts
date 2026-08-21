@@ -122,6 +122,26 @@ describe('App', () => {
     expect(sidebar.get('a[aria-current="page"]').text()).toBe('工作台')
   })
 
+  it('shows a scoped read-only product entry and hides every admin entry for an authorized user', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 2, login_name: 'owner', display_name: '产品负责人', roles: ['product_owner'] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        is_global: false,
+        scopes: [],
+        effective_product_ids: [10],
+        effective_version_ids: [11],
+      }), { status: 200 }))
+    await router.push('/system')
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(wrapper.get('aside.app-sidebar').findAll('nav a').map((link) => link.text())).toEqual([
+      '工作台',
+      '我的产品',
+      '运行状态',
+    ])
+  })
+
   it('clears in-memory identity and returns to login after logout', async () => {
     fetchMock
       .mockResolvedValueOnce(
