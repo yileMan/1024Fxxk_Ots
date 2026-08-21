@@ -185,7 +185,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：后端 pytest 31 项通过且覆盖率 89%，前端 Vitest 32 项通过且函数覆盖率 85.26%，Playwright 6 项通过；类型检查、生产构建、OpenAPI 重复生成一致性与 OpenSpec 严格校验通过。
 
-#### [ ] OTS-04 `ots-04-ots-bom-management`（复杂度：L，依赖：OTS-03）
+#### [x] OTS-04 `ots-04-ots-bom-management`（复杂度：L，依赖：OTS-03）
 
 **目标**：完成 OTS 主数据、产品版本与 OTS 清单管理。
 
@@ -196,6 +196,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：同名同版本 OTS 不重复；同一版本/OTS 关联不重复；CSV 错误包含行和字段；移除关联不得误删 OTS 主数据。
 
 **需求映射**：FR-MASTER-001、FR-MASTER-004、FR-MASTER-005、FR-MASTER-006。
+
+**完成证据**：后端 pytest 37 项通过且覆盖率 90.66%，前端 Vitest 44 项通过且覆盖率 97.74%，Playwright 8 项通过；类型检查、生产构建、主规格同步与 OpenSpec 严格校验通过。
 
 #### [ ] OTS-05 `ots-05-product-scope-authorization`（复杂度：L，依赖：OTS-02/03/04）
 
