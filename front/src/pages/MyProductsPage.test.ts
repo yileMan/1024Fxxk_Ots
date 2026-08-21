@@ -91,4 +91,16 @@ describe('MyProductsPage', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('产品授权已失效')
     expect(wrapper.text()).not.toContain('暂时不可用')
   })
+
+  it('removes already rendered protected details when a nested request returns 403', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [product], total: 1, page: 1, page_size: 20 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'PRODUCT_SCOPE_FORBIDDEN' }), { status: 403 }))
+    const wrapper = mount(MyProductsPage)
+    await flushPromises()
+    await wrapper.get('button[aria-label="查看监护仪版本"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('产品授权已失效')
+    expect(wrapper.find('[aria-label="授权产品版本"]').exists()).toBe(false)
+  })
 })
