@@ -199,7 +199,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：后端 pytest 37 项通过且覆盖率 90.66%，前端 Vitest 44 项通过且覆盖率 97.74%，Playwright 8 项通过；类型检查、生产构建、主规格同步与 OpenSpec 严格校验通过。
 
-#### [ ] OTS-05 `ots-05-product-scope-authorization`（复杂度：L，依赖：OTS-02/03/04）
+#### [x] OTS-05 `ots-05-product-scope-authorization`（复杂度：L，依赖：OTS-02/03/04）
 
 **目标**：实现产品级和版本级授权，并统一约束前后端可见范围。
 
@@ -210,6 +210,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：产品授权包含有效版本；版本授权不能访问同产品其他版本；管理员全局访问；API 直接请求同样阻止越权。
 
 **需求映射**：FR-USER-003、FR-USER-004，权限规则 1～9。
+
+**完成证据**：后端 pytest 45 项通过且覆盖率 91.44%，前端 Vitest 62 项通过且覆盖率 96.99%，系统 Chrome Playwright 10 项通过；类型检查、生产构建、OpenAPI 一致性、主规格同步与 OpenSpec 严格校验通过。
 
 ### M2：外部数据输入与离线交换
 
