@@ -100,7 +100,7 @@ describe('App', () => {
     expect(wrapper.get('h1').text()).toBe('没有访问权限')
   })
 
-  it('uses a left sidebar with four ordered navigation items for administrators', async () => {
+  it('uses a left sidebar with five ordered navigation items for administrators', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
@@ -115,6 +115,7 @@ describe('App', () => {
     expect(sidebar.findAll('nav a').map((link) => link.text())).toEqual([
       '工作台',
       '产品管理',
+      'OTS',
       '用户与角色',
       '运行状态',
     ])

@@ -10,13 +10,15 @@ const version = { id: 2, product_id: 1, version_no: '1.0', description: null, pr
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock) })
 
 describe('ProductAdminPage', () => {
-  it('creates a product and its initial version with the two-step wizard', async () => {
+  it('creates a product and its initial version with the three-step wizard', async () => {
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: 3, display_name: '负责人', roles: ['product_owner'], status: 'active' }], total: 1, page: 1, page_size: 20 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: 4, display_name: '审核人', roles: ['reviewer'], status: 'active' }], total: 1, page: 1, page_size: 20 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(product), { status: 201 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(version), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 100 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [product], total: 1, page: 1, page_size: 20 }), { status: 200 }))
     const wrapper = mount(ProductAdminPage)
     await flushPromises()
@@ -34,8 +36,42 @@ describe('ProductAdminPage', () => {
     await wrapper.get('form[data-form="product-editor"]').trigger('submit')
     await flushPromises()
 
+    expect(wrapper.get('[role="dialog"]').text()).toContain('第 3 步')
+    await wrapper.get('button[data-action="finish-product-wizard"]').trigger('click')
+    await flushPromises()
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('终端产品')
+  })
+
+  it('keeps saved product and version context when the third-step CSV import fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: 3, display_name: '负责人', roles: ['product_owner'], status: 'active' }], total: 1, page: 1, page_size: 20 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: 4, display_name: '审核人', roles: ['reviewer'], status: 'active' }], total: 1, page: 1, page_size: 20 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(product), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(version), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 100 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'OTS_CSV_INVALID', errors: [{ row: 2, field: 'is_eol', reason: '仅允许 true 或 false' }] }), { status: 422 }))
+    const wrapper = mount(ProductAdminPage)
+    await flushPromises()
+    await wrapper.get('button[data-action="create-product"]').trigger('click')
+    await wrapper.get('input[name="product_code"]').setValue('OTS-001')
+    await wrapper.get('input[name="product_name"]').setValue('终端产品')
+    await wrapper.get('form[data-form="product-editor"]').trigger('submit')
+    await flushPromises()
+    await wrapper.get('input[name="version_no"]').setValue('1.0')
+    await wrapper.get('select[name="owner_id"]').setValue('3')
+    await wrapper.get('select[name="reviewer_id"]').setValue('4')
+    await wrapper.get('form[data-form="product-editor"]').trigger('submit')
+    await flushPromises()
+    const input = wrapper.get('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [new File(['bad'], 'bom.csv')] })
+    await input.trigger('change')
+    await wrapper.get('button[data-action="import-product-ots"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('第 3 步')
+    expect(wrapper.text()).toContain('第 2 行 · is_eol · 仅允许 true 或 false')
   })
 
   it('shows version records after opening version maintenance', async () => {

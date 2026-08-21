@@ -24,6 +24,8 @@ test('管理员可创建产品、首个版本和第二个版本', async ({ page 
     if (method === 'POST') { const body = request.postDataJSON(); const created = { id: products.length + 1, ...body, status: 'active', row_version: 1, created_at: '2026-08-19T12:00:00', updated_at: '2026-08-19T12:00:00' }; products.push(created); return route.fulfill({ status: 201, json: created }) }
     return route.fulfill({ status: 200, json: { items: products, total: products.length, page: 1, page_size: 20 } })
   })
+  await page.route('**/api/v1/ots-components**', route => route.fulfill({ status: 200, json: { items: [], total: 0, page: 1, page_size: 100 } }))
+  await page.route('**/api/v1/product-versions/*/ots', route => route.fulfill({ status: 200, json: [] }))
 
   await page.goto('/system/products')
   await expect(page.locator('aside nav')).toContainText('产品管理')
@@ -34,7 +36,11 @@ test('管理员可创建产品、首个版本和第二个版本', async ({ page 
   await page.getByLabel('版本号').fill('1.0')
   await page.getByLabel('负责人').selectOption('3')
   await page.getByLabel('审核人').selectOption('4')
-  await page.getByRole('button', { name: '保存' }).click()
+  await page.getByRole('button', { name: '保存并进入 OTS 清单' }).click()
+  await expect(page.getByRole('dialog')).toContainText('第 3 步')
+  await expect(page.getByRole('button', { name: '下载 CSV 模板' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '导出当前清单' })).toBeVisible()
+  await page.getByRole('button', { name: '完成建档' }).click()
   await expect(page.getByText('测试产品')).toBeVisible()
 
   await page.getByRole('button', { name: '维护测试产品版本' }).click()
