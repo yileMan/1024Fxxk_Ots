@@ -83,4 +83,12 @@ describe('MyProductsPage', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('我的产品暂时不可用')
     expect(wrapper.find('[data-state="empty"]').exists()).toBe(false)
   })
+
+  it('shows an explicit permission message when the scope has been revoked', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: 'PRODUCT_SCOPE_FORBIDDEN' }), { status: 403 }))
+    const wrapper = mount(MyProductsPage)
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('产品授权已失效')
+    expect(wrapper.text()).not.toContain('暂时不可用')
+  })
 })
