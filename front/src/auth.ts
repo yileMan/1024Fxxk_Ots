@@ -36,6 +36,7 @@ async function restoreScope(): Promise<void> {
     authentication.scope = await currentScopeSummary()
   } catch {
     authentication.scope = null
+    authentication.feedback = '产品授权状态暂时不可用，请刷新页面重试'
   } finally {
     authentication.scopeInitialized = true
   }
