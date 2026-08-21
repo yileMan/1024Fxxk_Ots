@@ -191,6 +191,7 @@ class OtsManagementService:
 
     def import_csv(self, *, actor_id: int, version_id: int, content: bytes, file_name: str) -> CsvImportResult:
         rows = self._parse_csv(content)
+        safe_file_name = file_name.replace("\\", "/").rsplit("/", 1)[-1][:255] or "product-ots.csv"
         try:
             with self._session_factory.begin() as session:
                 self._version(session, version_id)
@@ -225,7 +226,7 @@ class OtsManagementService:
                     created_relations += 1
                 session.flush()
                 if created_ots or created_relations:
-                    self._audit(session, actor_id, "batch_upsert", "product_ots", None, {"product_version_id": version_id, "file_name": file_name, "created_ots": created_ots, "created_relations": created_relations, "existing_relations": existing_relations})
+                    self._audit(session, actor_id, "batch_upsert", "product_ots", None, {"product_version_id": version_id, "file_name": safe_file_name, "created_ots": created_ots, "created_relations": created_relations, "existing_relations": existing_relations})
                 return CsvImportResult(created_ots, created_relations, existing_relations)
         except IntegrityError as error:
             raise ProductOtsConflictError() from error

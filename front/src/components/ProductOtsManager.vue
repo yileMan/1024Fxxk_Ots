@@ -1,6 +1,6 @@
 <template>
   <section class="ots-manager">
-    <header><div><strong>产品 OTS 清单</strong><small>关联共享 OTS 主数据，不复制组件信息</small></div><div class="tools"><button type="button" @click="downloadProductOtsTemplate">下载 CSV 模板</button><button type="button" :disabled="busy" @click="exportProductOts(versionId)">导出当前清单</button></div></header>
+    <header><div><strong>产品 OTS 清单</strong><small>关联共享 OTS 主数据，不复制组件信息</small></div><div class="tools"><button type="button" @click="downloadTemplate">下载 CSV 模板</button><button type="button" :disabled="busy" @click="exportCurrent">导出当前清单</button></div></header>
     <div class="associate"><label>选择 OTS<select v-model.number="selectedOtsId"><option :value="0">请选择已有 OTS</option><option v-for="item in available" :key="item.id" :value="item.id">{{ item.ots_name }} · {{ item.ots_version }}</option></select></label><button type="button" :disabled="!selectedOtsId||busy" @click="addSelected">添加关联</button></div>
     <p v-if="loading">正在读取 OTS 清单…</p><p v-else-if="loadError" role="alert">OTS 清单暂时不可用，请稍后重试</p><p v-else-if="items.length===0" class="empty">当前版本尚未关联 OTS</p>
     <table v-else><thead><tr><th>OTS</th><th>官方网站</th><th>EOL</th><th>操作</th></tr></thead><tbody><tr v-for="item in items" :key="item.id"><td><strong>{{ item.ots_name }}</strong><small>{{ item.ots_version }}</small></td><td><a :href="item.official_website" target="_blank" rel="noreferrer">{{ item.official_website }}</a></td><td>{{ item.is_eol?'是':'否' }}</td><td><button type="button" :aria-label="`移除${item.ots_name}`" @click="remove(item)">移除</button></td></tr></tbody></table>
@@ -19,6 +19,8 @@ onMounted(load)
 async function load(){loading.value=true;loadError.value=false;try{const[page,links]=await Promise.all([listOts({pageSize:100}),listProductOts(props.versionId)]);catalog.value=page.items;items.value=links}catch{loadError.value=true}finally{loading.value=false}}
 async function addSelected(){if(!selectedOtsId.value)return;busy.value=true;feedback.value='';try{await createProductOts(props.versionId,selectedOtsId.value);selectedOtsId.value=0;await load()}catch(e){feedback.value=e instanceof OtsApiError&&e.code==='PRODUCT_OTS_CONFLICT'?'该 OTS 已在当前清单中':'添加关联失败，请稍后重试'}finally{busy.value=false}}
 async function remove(item:ProductOts){if(!confirm(`从当前产品版本移除 ${item.ots_name}？OTS 主数据不会删除。`))return;try{await removeProductOts(props.versionId,item.id);await load()}catch(e){feedback.value=e instanceof OtsApiError&&e.code==='PRODUCT_OTS_HISTORY_CONFLICT'?'该关联已有历史评估，不能移除':'移除失败，请稍后重试'}}
+async function downloadTemplate(){feedback.value='';try{await downloadProductOtsTemplate()}catch{feedback.value='下载失败，请稍后重试'}}
+async function exportCurrent(){feedback.value='';try{await exportProductOts(props.versionId)}catch{feedback.value='下载失败，请稍后重试'}}
 function selectFile(event:Event){file.value=(event.target as HTMLInputElement).files?.[0]??null;errors.value=[];feedback.value=''}
 async function runImport(){if(!file.value)return;busy.value=true;errors.value=[];feedback.value='';try{const result=await importProductOts(props.versionId,file.value);feedback.value=`导入完成：新增 OTS ${result.created_ots}，新增关联 ${result.created_relations}，已存在 ${result.existing_relations}`;await load()}catch(e){if(e instanceof OtsApiError&&e.errors.length)errors.value=e.errors;else feedback.value='导入失败，请检查文件后重试'}finally{busy.value=false}}
 </script>
