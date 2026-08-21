@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from app.api.routes.authentication import COOKIE_NAME
+from app.api.authorization import require_admin
 from app.schemas.users import (
     PasswordResetRequest,
     Role,
@@ -13,7 +13,7 @@ from app.schemas.users import (
     UserResponse,
     UserUpdateRequest,
 )
-from app.services.authentication import InvalidSessionError, PublicUser
+from app.services.authentication import PublicUser
 from app.services.users import (
     UserLoginNameConflictError,
     UserManagementError,
@@ -27,19 +27,6 @@ router = APIRouter(prefix="/users", tags=["user-administration"])
 
 def _detail(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
-
-
-def require_admin(request: Request) -> PublicUser:
-    user_id = request.cookies.get(COOKIE_NAME)
-    if user_id is None:
-        raise HTTPException(401, detail=_detail("AUTH_SESSION_INVALID", "会话已失效"))
-    try:
-        user = request.app.state.authentication_service.current_user(user_id)
-    except InvalidSessionError as error:
-        raise HTTPException(401, detail=_detail("AUTH_SESSION_INVALID", "会话已失效")) from error
-    if "admin" not in user.roles:
-        raise HTTPException(403, detail=_detail("AUTH_FORBIDDEN", "无权访问用户管理"))
-    return user
 
 
 def _service(request: Request) -> UserManagementService:

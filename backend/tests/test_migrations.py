@@ -22,6 +22,11 @@ def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> N
     assert "idx_scope_version" in migrations[7].sql
     assert "status" not in migrations[5].sql
 
+    rollback = (Path(__file__).parents[1] / "migrations" / "008_user_product_scope.rollback.md").read_text(encoding="utf-8")
+    assert "备份" in rollback
+    assert "DROP TABLE user_product_scope" in rollback
+    assert "级联删除" in rollback
+
 
 def test_migrations_apply_once(tmp_path) -> None:
     migration_dir = tmp_path / "migrations"

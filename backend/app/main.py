@@ -11,12 +11,14 @@ from app.api.routes.authentication import router as authentication_router
 from app.api.routes.users import router as users_router
 from app.api.routes.products import router as products_router
 from app.api.routes.ots import router as ots_router
+from app.api.routes.scopes import router as scopes_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
 from app.services.users import UserManagementService
 from app.services.products import ProductManagementService
 from app.services.ots import OtsManagementService
+from app.services.scopes import ScopeAuthorizationService
 
 logger = logging.getLogger("ots")
 
@@ -38,6 +40,9 @@ def create_app() -> FastAPI:
             application.state.database.session_factory,
         )
         application.state.ots_management_service = OtsManagementService(
+            application.state.database.session_factory,
+        )
+        application.state.scope_authorization_service = ScopeAuthorizationService(
             application.state.database.session_factory,
         )
 
@@ -94,6 +99,7 @@ def create_app() -> FastAPI:
     application.include_router(users_router, prefix="/api/v1")
     application.include_router(products_router, prefix="/api/v1")
     application.include_router(ots_router, prefix="/api/v1")
+    application.include_router(scopes_router, prefix="/api/v1")
 
     return application
 

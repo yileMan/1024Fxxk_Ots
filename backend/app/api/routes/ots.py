@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response, status
 
-from app.api.routes.users import require_admin
+from app.api.authorization import require_admin, require_current_user
 from app.schemas.ots import CsvImportResultResponse, OtsCreateRequest, OtsPageResponse, OtsProductVersionResponse, OtsResponse, OtsUpdateRequest, ProductOtsCreateRequest, ProductOtsResponse
 from app.services.authentication import PublicUser
 from app.services.ots import OtsConflictError, OtsCsvInvalidError, OtsManagementError, OtsNotFoundError, OtsVersionConflictError, ProductOtsConflictError, ProductOtsHistoryConflictError
+from app.services.scopes import ProductScopeForbiddenError, ScopeTargetNotFoundError
 
 router = APIRouter(tags=["ots-bom-management"])
 
@@ -65,9 +66,14 @@ def associated_versions(ots_id: int, request: Request, _admin: PublicUser = Depe
 
 
 @router.get("/product-versions/{version_id}/ots", response_model=list[ProductOtsResponse])
-def list_product_ots(version_id: int, request: Request, _admin: PublicUser = Depends(require_admin)) -> list[ProductOtsResponse]:
+def list_product_ots(version_id: int, request: Request, user: PublicUser = Depends(require_current_user)) -> list[ProductOtsResponse]:
     try:
+        request.app.state.scope_authorization_service.require_version_access(user, version_id)
         return [ProductOtsResponse.model_validate(item, from_attributes=True) for item in _service(request).list_product_ots(version_id)]
+    except ProductScopeForbiddenError as error:
+        raise HTTPException(403, detail={"code": error.code, "message": "无权访问该产品版本"}) from error
+    except ScopeTargetNotFoundError as error:
+        raise HTTPException(404, detail={"code": error.code, "message": "产品版本不存在"}) from error
     except OtsManagementError as error:
         _error(error)
 

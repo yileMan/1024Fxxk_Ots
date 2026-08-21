@@ -45,7 +45,7 @@ def create_user(client: TestClient, login_name: str, roles: list[str]) -> dict[s
     return response.json()
 
 
-def test_products_require_an_admin_identity(client: TestClient) -> None:
+def test_products_require_identity_and_non_admin_reads_are_scope_filtered(client: TestClient) -> None:
     assert client.get("/api/v1/products").status_code == 401
 
     AuthenticationService(client.app.state.database.session_factory).initialize_admin(
@@ -57,8 +57,9 @@ def test_products_require_an_admin_identity(client: TestClient) -> None:
 
     response = client.get("/api/v1/products")
 
-    assert response.status_code == 403
-    assert response.json()["code"] == "AUTH_FORBIDDEN"
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 0
 
 
 def test_admin_can_manage_products_and_versions_with_qualified_people(client: TestClient) -> None:

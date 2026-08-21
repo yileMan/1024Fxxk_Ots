@@ -7,14 +7,18 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, event, select, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import Session
 
 from app.infrastructure.settings import Settings
 from app.main import create_app
 from app.migrations import apply_migrations
+from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
-from app.services.authentication import AuthenticationService
+from app.services.authentication import AuthenticationService, PublicUser
+from app.services.scopes import ProductScopeForbiddenError, ScopeAuthorizationService
 
 
 @pytest.fixture
@@ -230,6 +234,58 @@ def test_admin_is_global_and_disabled_targets_make_explicit_scopes_ineffective(c
     assert forbidden.json()["code"] == "PRODUCT_SCOPE_FORBIDDEN"
 
 
+def test_scope_audit_failure_rolls_back_the_grant(client: TestClient) -> None:
+    login(client)
+    owner = create_user(client, "owner", ["product_owner"])
+    reviewer = create_user(client, "reviewer", ["reviewer"])
+    product, _ = create_product_with_versions(client, "P-401", owner["id"], reviewer["id"])
+
+    def fail_scope_audit(session: Session, _flush_context, _instances) -> None:
+        if any(
+            isinstance(item, AuditLog) and item.object_type == "user_product_scope"
+            for item in session.new
+        ):
+            raise RuntimeError("audit unavailable")
+
+    event.listen(Session, "before_flush", fail_scope_audit)
+    try:
+        response = grant_scope(client, owner["id"], "product", product["id"])
+    finally:
+        event.remove(Session, "before_flush", fail_scope_audit)
+
+    assert response.status_code == 500
+    with client.app.state.database.session_factory() as session:
+        assert session.scalar(select(UserProductScope)) is None
+        assert session.scalar(
+            select(AuditLog).where(AuditLog.object_type == "user_product_scope")
+        ) is None
+
+
+def test_assignment_rules_are_composable_and_admin_does_not_bypass_them() -> None:
+    admin = PublicUser(1, "admin", "管理员", ["admin"])
+    reviewer = PublicUser(2, "reviewer", "审核人", ["reviewer"])
+
+    with pytest.raises(ProductScopeForbiddenError):
+        ScopeAuthorizationService.require_assigned_role(
+            admin,
+            required_role="reviewer",
+            assigned_user_id=1,
+        )
+    ScopeAuthorizationService.require_assigned_role(
+        reviewer,
+        required_role="reviewer",
+        assigned_user_id=2,
+    )
+    with pytest.raises(ProductScopeForbiddenError):
+        ScopeAuthorizationService.require_assigned_role(
+            reviewer,
+            required_role="reviewer",
+            assigned_user_id=2,
+            submitted_by=2,
+            forbid_self_review=True,
+        )
+
+
 def test_mysql_scope_migration_and_audit_commit_together(monkeypatch) -> None:
     configured_url = Settings.from_environment().database_url
     assert configured_url is not None
@@ -259,6 +315,27 @@ def test_mysql_scope_migration_and_audit_commit_together(monkeypatch) -> None:
             )
             granted = grant_scope(mysql_client, owner["id"], "product", product["id"])
             assert granted.status_code == 200
+
+        with pytest.raises(DBAPIError):
+            with test_engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO user_product_scope "
+                        "(user_id, scope_type, product_id, product_version_id, scope_key, created_by) "
+                        "VALUES (:user_id, 'product', :product_id, :version_id, 'invalid', 1)"
+                    ),
+                    {
+                        "user_id": owner["id"],
+                        "product_id": product["id"],
+                        "version_id": 1,
+                    },
+                )
+        with pytest.raises(DBAPIError):
+            with test_engine.begin() as connection:
+                connection.execute(
+                    text("DELETE FROM product WHERE id = :product_id"),
+                    {"product_id": product["id"]},
+                )
 
         with application.state.database.session_factory() as session:
             scope_count = session.scalar(text("SELECT COUNT(*) FROM user_product_scope"))

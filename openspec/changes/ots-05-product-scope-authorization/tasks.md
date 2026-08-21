@@ -5,24 +5,24 @@
 - [x] 1.3 为授权查询、授予、重复幂等、撤销、非法类型、跨产品版本、非管理员访问和事务审计回滚先编写 API 失败测试
 - [x] 1.4 为产品/版本列表与详情裁剪、分页总数、授权版本 OTS 清单读取、范围外直接 ID 访问和普通用户写入拒绝先编写路由失败测试
 - [x] 1.5 为授权配置组件、当前范围状态、加载/空/错误反馈、操作可见性和 403 路由先编写 Vitest/组件失败测试
-- [ ] 1.6 固定 OpenAPI 请求/响应、HTTP 状态和稳定错误码 `PRODUCT_SCOPE_FORBIDDEN`，覆盖角色、范围、资源分配和禁止自审的组合边界
+- [x] 1.6 固定 OpenAPI 请求/响应、HTTP 状态和稳定错误码 `PRODUCT_SCOPE_FORBIDDEN`，覆盖角色、范围、资源分配和禁止自审的组合边界
 
 ## 2. 数据迁移与模型
 
-- [ ] 2.1 新增 `008_user_product_scope.sql`，按数据基线创建字段、`scope_type`/空值约束、外键、`uk_user_product_scope` 和两个范围查询索引
-- [ ] 2.2 新增 `008_user_product_scope.rollback.md`，写明应用回滚顺序、授权备份/导出前置条件、删表影响和禁止级联删除的验证步骤
-- [ ] 2.3 新增 SQLAlchemy `UserProductScope` 模型及必要关系，确保 `scope_key` 只能由服务端按 `product:<id>` 或 `version:<id>` 生成
-- [ ] 2.4 在真实 MySQL 上验证空库与升级库迁移、重复执行检测、非法组合拒绝、外键保护、索引和受控回滚
+- [x] 2.1 新增 `008_user_product_scope.sql`，按数据基线创建字段、`scope_type`/空值约束、外键、`uk_user_product_scope` 和两个范围查询索引
+- [x] 2.2 新增 `008_user_product_scope.rollback.md`，写明应用回滚顺序、授权备份/导出前置条件、删表影响和禁止级联删除的验证步骤
+- [x] 2.3 新增 SQLAlchemy `UserProductScope` 模型及必要关系，确保 `scope_key` 只能由服务端按 `product:<id>` 或 `version:<id>` 生成
+- [x] 2.4 在真实 MySQL 上验证空库与升级库迁移、重复执行检测、非法组合拒绝、外键保护、索引和受控回滚
 
 ## 3. 后端授权核心
 
-- [ ] 3.1 实现授权 Repository 的显式范围查询、精确增删、重复重读和基于 SQL 谓词的有效产品/版本范围计算
-- [ ] 3.2 实现授权 Service 的目标存在性、版本归属、范围类型校验、产品级/版本级并集、停用实体过滤和管理员全局语义
-- [ ] 3.3 实现授予/撤销与 `audit_log` 同事务提交，验证重复、校验失败、403、唯一键竞态和事务失败均不产生多余审计
-- [ ] 3.4 实现认证、管理员、产品范围、版本范围及未来负责人/审核人条件可组合的依赖，统一返回 401、403 与 404
-- [ ] 3.5 新增 `GET/POST /api/v1/users/{user_id}/scopes`、`DELETE /api/v1/users/{user_id}/scopes/{scope_id}` 和 `GET /api/v1/scopes/me` 路由及 Schema
-- [ ] 3.6 将产品/版本 GET 列表和详情接入 SQL 层范围裁剪，确保 `items` 与 `total` 使用相同范围谓词，写接口继续仅管理员可用
-- [ ] 3.7 将产品版本 OTS 清单 GET 接入版本范围校验，保持 OTS 主数据、关联增删和 CSV 管理接口仅管理员可用
+- [x] 3.1 实现授权 Repository 的显式范围查询、精确增删、重复重读和基于 SQL 谓词的有效产品/版本范围计算
+- [x] 3.2 实现授权 Service 的目标存在性、版本归属、范围类型校验、产品级/版本级并集、停用实体过滤和管理员全局语义
+- [x] 3.3 实现授予/撤销与 `audit_log` 同事务提交，验证重复、校验失败、403、唯一键竞态和事务失败均不产生多余审计
+- [x] 3.4 实现认证、管理员、产品范围、版本范围及未来负责人/审核人条件可组合的依赖，统一返回 401、403 与 404
+- [x] 3.5 新增 `GET/POST /api/v1/users/{user_id}/scopes`、`DELETE /api/v1/users/{user_id}/scopes/{scope_id}` 和 `GET /api/v1/scopes/me` 路由及 Schema
+- [x] 3.6 将产品/版本 GET 列表和详情接入 SQL 层范围裁剪，确保 `items` 与 `total` 使用相同范围谓词，写接口继续仅管理员可用
+- [x] 3.7 将产品版本 OTS 清单 GET 接入版本范围校验，保持 OTS 主数据、关联增删和 CSV 管理接口仅管理员可用
 
 ## 4. 前端授权体验
 

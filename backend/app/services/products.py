@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.models.products import Product, ProductVersion
 from app.models.user import AppUser, AuditLog
 from app.repositories.products import ProductRepository
+from app.repositories.scopes import ScopeRepository
+from app.services.scopes import ProductScopeForbiddenError
 
 
 class ProductManagementError(ValueError):
@@ -43,20 +45,23 @@ class ProductManagementService:
     def __init__(self, session_factory: sessionmaker) -> None:
         self._session_factory = session_factory
         self._repository = ProductRepository()
+        self._scope_repository = ScopeRepository()
 
     @staticmethod
     def _audit(session: Session, actor_id: int, action: str, object_type: str, object_id: int, detail: dict[str, object]) -> None:
         session.add(AuditLog(user_id=actor_id, action=action, object_type=object_type, object_id=str(object_id), detail_json=detail))
 
-    def list_products(self, *, query: str | None, status: str | None, page: int, page_size: int) -> ProductPage:
+    def list_products(self, *, query: str | None, status: str | None, page: int, page_size: int, viewer_id: int | None = None) -> ProductPage:
         with self._session_factory() as session:
-            products = self._repository.list_products(session, query=query, status=status)
-            start = (page - 1) * page_size
-            return ProductPage(products[start : start + page_size], len(products), page, page_size)
+            products, total = self._repository.list_products(session, query=query, status=status, viewer_id=viewer_id, page=page, page_size=page_size)
+            return ProductPage(products, total, page, page_size)
 
-    def get_product(self, product_id: int) -> Product:
+    def get_product(self, product_id: int, viewer_id: int | None = None) -> Product:
         with self._session_factory() as session:
-            return self._product(session, product_id)
+            product = self._product(session, product_id)
+            if viewer_id is not None and not self._scope_repository.has_product_access(session, viewer_id, product_id):
+                raise ProductScopeForbiddenError()
+            return product
 
     def create_product(self, *, actor_id: int, product_code: str, product_name: str, description: str | None) -> Product:
         try:
@@ -92,15 +97,20 @@ class ProductManagementService:
             session.expire(product)
             return self._product(session, product_id)
 
-    def list_versions(self, product_id: int) -> list[ProductVersion]:
+    def list_versions(self, product_id: int, viewer_id: int | None = None) -> list[ProductVersion]:
         with self._session_factory() as session:
             self._product(session, product_id)
-            return self._repository.list_versions(session, product_id)
+            if viewer_id is not None and not self._scope_repository.has_product_access(session, viewer_id, product_id):
+                raise ProductScopeForbiddenError()
+            return self._repository.list_versions(session, product_id, viewer_id)
 
-    def get_version(self, product_id: int, version_id: int) -> ProductVersion:
+    def get_version(self, product_id: int, version_id: int, viewer_id: int | None = None) -> ProductVersion:
         with self._session_factory() as session:
             self._product(session, product_id)
-            return self._version(session, product_id, version_id)
+            version = self._version(session, product_id, version_id)
+            if viewer_id is not None and not self._scope_repository.has_version_access(session, viewer_id, version_id):
+                raise ProductScopeForbiddenError()
+            return version
 
     def create_version(self, *, actor_id: int, product_id: int, version_no: str, description: str | None, owner_id: int, reviewer_id: int) -> ProductVersion:
         try:
