@@ -7,6 +7,7 @@
     </header>
 
     <p v-if="loading" class="state">正在读取授权产品…</p>
+    <p v-else-if="accessForbidden" class="state error" role="alert">产品授权已失效或无权访问，请联系管理员确认授权范围</p>
     <p v-else-if="loadError" class="state error" role="alert">我的产品暂时不可用，请稍后重试</p>
     <section v-else-if="products.length === 0" class="state empty" data-state="empty">
       <strong>当前没有有效的产品授权</strong>
@@ -69,8 +70,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
-import { listProductOts, type ProductOts } from '../api/ots'
-import { listProducts, listVersions, type Product, type ProductVersion } from '../api/products'
+import { listProductOts, OtsApiError, type ProductOts } from '../api/ots'
+import { listProducts, listVersions, ProductApiError, type Product, type ProductVersion } from '../api/products'
 
 const products = ref<Product[]>([])
 const total = ref(0)
@@ -78,6 +79,7 @@ const page = ref(1)
 const pageSize = 20
 const loading = ref(true)
 const loadError = ref(false)
+const accessForbidden = ref(false)
 const selectedProduct = ref<Product | null>(null)
 const versions = ref<ProductVersion[]>([])
 const versionsLoading = ref(false)
@@ -90,13 +92,15 @@ const otsError = ref(false)
 async function loadProducts(targetPage = 1): Promise<void> {
   loading.value = true
   loadError.value = false
+  accessForbidden.value = false
   try {
     const result = await listProducts({ page: targetPage, pageSize })
     products.value = result.items
     total.value = result.total
     page.value = result.page
-  } catch {
-    loadError.value = true
+  } catch (error) {
+    if (error instanceof ProductApiError && error.status === 403) accessForbidden.value = true
+    else loadError.value = true
   } finally {
     loading.value = false
   }
@@ -110,8 +114,9 @@ async function showVersions(product: Product): Promise<void> {
   versionsError.value = false
   try {
     versions.value = await listVersions(product.id)
-  } catch {
-    versionsError.value = true
+  } catch (error) {
+    if (error instanceof ProductApiError && error.status === 403) accessForbidden.value = true
+    else versionsError.value = true
   } finally {
     versionsLoading.value = false
   }
@@ -129,8 +134,9 @@ async function showOts(version: ProductVersion): Promise<void> {
   otsError.value = false
   try {
     otsItems.value = await listProductOts(version.id)
-  } catch {
-    otsError.value = true
+  } catch (error) {
+    if (error instanceof OtsApiError && error.status === 403) accessForbidden.value = true
+    else otsError.value = true
   } finally {
     otsLoading.value = false
   }
