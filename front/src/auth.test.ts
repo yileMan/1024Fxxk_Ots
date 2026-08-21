@@ -58,6 +58,18 @@ describe('authentication state', () => {
     expect(sessionStorage.length).toBe(0)
   })
 
+  it('reports scope-summary failures without discarding the authenticated identity', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 2, login_name: 'owner', display_name: '负责人', roles: ['product_owner'] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'SERVICE_UNAVAILABLE' }), { status: 503 }))
+
+    await restoreAuthentication()
+
+    expect(authentication.user?.login_name).toBe('owner')
+    expect(authentication.scope).toBeNull()
+    expect(authentication.feedback).toContain('产品授权状态暂时不可用')
+  })
+
   it('reports an unavailable user-id cookie without restoring identity', async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ code: 'AUTH_SESSION_INVALID' }), { status: 401 }),
