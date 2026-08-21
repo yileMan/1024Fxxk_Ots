@@ -76,7 +76,7 @@ test('授权普通用户可从我的产品只读查看版本和 OTS', async ({ p
   await expect(page.locator('aside nav')).not.toContainText('用户与角色')
   await page.getByRole('button', { name: '查看监护仪版本' }).click()
   await page.getByRole('button', { name: '查看版本2.0 OTS清单' }).click()
-  await expect(page.getByText('OpenSSL')).toBeVisible()
+  await expect(page.getByText('OpenSSL', { exact: true })).toBeVisible()
   await expect(page.getByText('3.0')).toBeVisible()
   await expect(page.getByRole('button', { name: /新建|编辑|停用|移除/ })).toHaveCount(0)
 })
