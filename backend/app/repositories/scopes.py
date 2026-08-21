@@ -70,9 +70,45 @@ class ScopeRepository:
         return sorted(set(session.scalars(statement).all()))
 
     def has_product_access(self, session: Session, user_id: int, product_id: int) -> bool:
-        product_ids = self.effective_product_ids(session, user_id)
-        return product_id in product_ids
+        active_version = select(ProductVersion.id).where(
+            ProductVersion.id == UserProductScope.product_version_id,
+            ProductVersion.product_id == Product.id,
+            ProductVersion.status == "active",
+        ).exists()
+        statement = (
+            select(UserProductScope.id)
+            .join(Product, Product.id == UserProductScope.product_id)
+            .where(
+                UserProductScope.user_id == user_id,
+                UserProductScope.product_id == product_id,
+                Product.status == "active",
+                or_(
+                    UserProductScope.scope_type == "product",
+                    and_(UserProductScope.scope_type == "version", active_version),
+                ),
+            )
+            .limit(1)
+        )
+        return session.scalar(statement) is not None
 
     def has_version_access(self, session: Session, user_id: int, version_id: int) -> bool:
-        version_ids = self.effective_version_ids(session, user_id)
-        return version_id in version_ids
+        statement = (
+            select(UserProductScope.id)
+            .join(ProductVersion, ProductVersion.product_id == UserProductScope.product_id)
+            .join(Product, Product.id == ProductVersion.product_id)
+            .where(
+                UserProductScope.user_id == user_id,
+                ProductVersion.id == version_id,
+                Product.status == "active",
+                ProductVersion.status == "active",
+                or_(
+                    UserProductScope.scope_type == "product",
+                    and_(
+                        UserProductScope.scope_type == "version",
+                        UserProductScope.product_version_id == version_id,
+                    ),
+                ),
+            )
+            .limit(1)
+        )
+        return session.scalar(statement) is not None

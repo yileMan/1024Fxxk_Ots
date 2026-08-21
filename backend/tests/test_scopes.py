@@ -200,6 +200,41 @@ def test_product_and_version_scopes_filter_reads_and_block_direct_writes(client:
     assert forbidden_write.json()["code"] == "AUTH_FORBIDDEN"
 
 
+def test_product_scope_vertical_flow_covers_versions_and_ots_then_revokes_access(client: TestClient) -> None:
+    login(client)
+    owner = create_user(client, "owner", ["product_owner"])
+    reviewer = create_user(client, "reviewer", ["reviewer"])
+    product, versions = create_product_with_versions(
+        client, "P-250", owner["id"], reviewer["id"], ("1.0", "2.0")
+    )
+    ots = client.post(
+        "/api/v1/ots-components",
+        json={"ots_name": "OpenSSL", "ots_version": "3.0", "official_website": "https://openssl.org", "is_eol": False},
+    ).json()
+    client.post(
+        f"/api/v1/product-versions/{versions[1]['id']}/ots",
+        json={"ots_component_id": ots["id"]},
+    )
+    granted = grant_scope(client, owner["id"], "product", product["id"])
+    assert granted.status_code == 200
+
+    login(client, "owner", "user-password")
+    assert [
+        version["id"]
+        for version in client.get(f"/api/v1/products/{product['id']}/versions").json()
+    ] == [version["id"] for version in versions]
+    assert client.get(f"/api/v1/product-versions/{versions[1]['id']}/ots").json()[0]["ots_name"] == "OpenSSL"
+
+    login(client)
+    assert client.delete(
+        f"/api/v1/users/{owner['id']}/scopes/{granted.json()['id']}"
+    ).status_code == 204
+    login(client, "owner", "user-password")
+    denied = client.get(f"/api/v1/products/{product['id']}")
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "PRODUCT_SCOPE_FORBIDDEN"
+
+
 def test_admin_is_global_and_disabled_targets_make_explicit_scopes_ineffective(client: TestClient) -> None:
     login(client)
     owner = create_user(client, "owner", ["product_owner"])

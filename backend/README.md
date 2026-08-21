@@ -33,6 +33,31 @@ py run.py initialize-admin admin "初始管理员"
 
 API 文档：<http://localhost:5353/docs>
 
+## 产品与版本范围授权
+
+具有 `admin` 角色的用户可在用户管理中维护产品级或版本级范围：
+
+- `GET/POST /api/v1/users/{user_id}/scopes`
+- `DELETE /api/v1/users/{user_id}/scopes/{scope_id}`
+- `GET /api/v1/scopes/me`
+
+`scope_key` 只由服务端生成：产品级为 `product:<product_id>`，版本级为
+`version:<product_version_id>`。产品级范围包含该产品全部有效版本；版本级范围只包含指定有效
+版本；多个范围按并集计算。管理员无需显式范围即可全局读取，但范围不会替代固定角色、当前负责人、
+当前审核人或禁止自审等业务条件。
+
+产品、版本和产品版本 OTS 清单的只读接口在服务端执行范围裁剪；范围外详情或直接 ID 请求返回
+`403 PRODUCT_SCOPE_FORBIDDEN`。产品、版本、OTS 主数据和产品 OTS 关联的写接口仍仅管理员可用，
+前端隐藏按钮不是安全边界。实际发生的授权增删与 `audit_log` 在同一事务提交，重复幂等请求和失败
+事务不产生授权审计。
+
+数据库升级使用 `migrations/008_user_product_scope.sql`。回滚前必须先回滚应用并备份/导出授权及
+审计证据；已有授权数据的环境应保留表并采用前向修复，具体限制见
+`migrations/008_user_product_scope.rollback.md`。
+
+该能力对应 `FR-USER-003`、`FR-USER-004` 和权限规则 1～9。自动化证据位于
+`tests/test_scopes.py`、`tests/test_products.py`、`tests/test_ots.py` 和 `tests/test_migrations.py`。
+
 ## OTS 与产品 OTS 清单
 
 管理员可通过 `/api/v1/ots-components` 查询、创建和编辑 OTS，通过
