@@ -7,6 +7,15 @@ const ots = { id: 1, ots_name: 'OpenSSL', ots_version: '3.0', official_website: 
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock) })
 
 describe('OtsAdminPage', () => {
+  it('hides OTS and record versions from the list', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [ots], total: 1, page: 1, page_size: 20 }), { status: 200 }))
+    const wrapper = mount(OtsAdminPage)
+    await flushPromises()
+    const list = wrapper.get('tbody').text()
+    expect(list).not.toContain(ots.ots_version)
+    expect(list).not.toContain(`v${ots.row_version}`)
+  })
+
   it('lists, creates and edits OTS without disable or delete actions', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [ots], total: 1, page: 1, page_size: 20 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ...ots, id: 2, ots_name: 'zlib' }), { status: 201 }))
