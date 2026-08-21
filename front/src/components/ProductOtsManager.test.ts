@@ -9,6 +9,14 @@ const relation = { id: 7, product_version_id: 2, ots_component_id: 1, created_by
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); vi.stubGlobal('confirm', vi.fn(() => true)) })
 
 describe('ProductOtsManager', () => {
+  it('hides OTS versions from the product OTS list', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [ots], total: 1, page: 1, page_size: 100 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([relation]), { status: 200 }))
+    const wrapper = mount(ProductOtsManager, { props: { versionId: 2 } })
+    await flushPromises()
+    expect(wrapper.get('tbody').text()).not.toContain(relation.ots_version)
+  })
+
   it('adds and removes an OTS relation without deleting master data', async () => {
     const page = { items: [ots], total: 1, page: 1, page_size: 100 }
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(page), { status: 200 }))
