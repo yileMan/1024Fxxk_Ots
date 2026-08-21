@@ -1,5 +1,10 @@
 # 项目协作规则
 
+## Git 分支
+
+- 默认直接在当前主干分支工作；除非用户明确要求，否则不要创建功能分支、临时分支或 worktree 分支。
+- 完成修改后只提交到当前主干，不自动执行 `git push`。
+
 ## Playwright 浏览器运行时
 
 - 不要执行 `npx playwright install chromium`，也不要自动下载 Playwright Chromium；该下载在当前环境中已多次因 CDN 无响应而失败。
