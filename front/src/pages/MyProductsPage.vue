@@ -89,6 +89,15 @@ const otsItems = ref<ProductOts[]>([])
 const otsLoading = ref(false)
 const otsError = ref(false)
 
+function denyAccess(): void {
+  accessForbidden.value = true
+  products.value = []
+  selectedProduct.value = null
+  selectedVersion.value = null
+  versions.value = []
+  otsItems.value = []
+}
+
 async function loadProducts(targetPage = 1): Promise<void> {
   loading.value = true
   loadError.value = false
@@ -99,7 +108,7 @@ async function loadProducts(targetPage = 1): Promise<void> {
     total.value = result.total
     page.value = result.page
   } catch (error) {
-    if (error instanceof ProductApiError && error.status === 403) accessForbidden.value = true
+    if (error instanceof ProductApiError && error.status === 403) denyAccess()
     else loadError.value = true
   } finally {
     loading.value = false
@@ -115,7 +124,7 @@ async function showVersions(product: Product): Promise<void> {
   try {
     versions.value = await listVersions(product.id)
   } catch (error) {
-    if (error instanceof ProductApiError && error.status === 403) accessForbidden.value = true
+    if (error instanceof ProductApiError && error.status === 403) denyAccess()
     else versionsError.value = true
   } finally {
     versionsLoading.value = false
@@ -135,7 +144,7 @@ async function showOts(version: ProductVersion): Promise<void> {
   try {
     otsItems.value = await listProductOts(version.id)
   } catch (error) {
-    if (error instanceof OtsApiError && error.status === 403) accessForbidden.value = true
+    if (error instanceof OtsApiError && error.status === 403) denyAccess()
     else otsError.value = true
   } finally {
     otsLoading.value = false
