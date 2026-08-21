@@ -31,7 +31,31 @@ describe('authentication state', () => {
     expect(second?.roles).toEqual(['admin'])
     expect(cached?.id).toBe(1)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(authentication.scope?.is_global).toBe(true)
     expect(authentication.feedback).toBe('')
+  })
+
+  it('loads an ordinary user scope summary into memory without browser persistence', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 2, login_name: 'owner', display_name: '负责人', roles: ['product_owner'] }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ is_global: false, scopes: [], effective_product_ids: [10], effective_version_ids: [11] }),
+          { status: 200 },
+        ),
+      )
+
+    await restoreAuthentication()
+
+    expect(authentication.scope?.effective_version_ids).toEqual([11])
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/scopes/me')
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
   })
 
   it('reports an unavailable user-id cookie without restoring identity', async () => {

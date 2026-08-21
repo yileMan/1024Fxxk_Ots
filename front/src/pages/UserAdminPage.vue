@@ -88,6 +88,7 @@
               <td>{{ formatDate(user.last_login_at) }}</td>
               <td>
                 <div class="row-actions">
+                  <button type="button" :aria-label="`配置${user.display_name}产品授权`" @click="scopeUser = user">授权</button>
                   <button type="button" :aria-label="`编辑${user.display_name}`" @click="openEdit(user)">编辑</button>
                   <button type="button" :aria-label="`重置${user.display_name}密码`" @click="openPassword(user)">重置密码</button>
                   <button v-if="user.status === 'active'" class="danger-link" type="button" :aria-label="`停用${user.display_name}`" @click="confirmDisable(user)">停用</button>
@@ -153,6 +154,14 @@
       </section>
     </div>
 
+    <div v-if="scopeUser" class="modal-layer" @click.self="scopeUser = null">
+      <ProductScopeEditor
+        :user-id="scopeUser.id"
+        :user-display-name="scopeUser.display_name"
+        @close="scopeUser = null"
+      />
+    </div>
+
     <div v-if="passwordDialog.open" class="modal-layer" @click.self="passwordDialog.open = false">
       <section class="compact-dialog" role="dialog" aria-modal="true" aria-labelledby="password-title">
         <p class="eyebrow">CREDENTIAL RESET</p>
@@ -180,6 +189,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
+import ProductScopeEditor from '../components/ProductScopeEditor.vue'
+
 import {
   createUser,
   disableUser,
@@ -205,6 +216,7 @@ const loading = ref(true)
 const accessDenied = ref(false)
 const loadError = ref(false)
 const activeCount = computed(() => pageData.items.filter((user) => user.status === 'active').length)
+const scopeUser = ref<ManagedUser | null>(null)
 
 const editor = reactive({
   open: false,

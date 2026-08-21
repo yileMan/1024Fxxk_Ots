@@ -404,6 +404,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{user_id}/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List User Scopes */
+        get: operations["list_user_scopes_api_v1_users__user_id__scopes_get"];
+        put?: never;
+        /** Grant User Scope */
+        post: operations["grant_user_scope_api_v1_users__user_id__scopes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/scopes/{scope_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke User Scope */
+        delete: operations["revoke_user_scope_api_v1_users__user_id__scopes__scope_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scopes/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current Scope Summary */
+        get: operations["current_scope_summary_api_v1_scopes_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -658,6 +710,61 @@ export interface components {
             display_name: string;
             /** Roles */
             roles: string[];
+        };
+        /** ScopeGrantRequest */
+        ScopeGrantRequest: {
+            /**
+             * Scope Type
+             * @enum {string}
+             */
+            scope_type: "product" | "version";
+            /** Product Id */
+            product_id: number;
+            /** Product Version Id */
+            product_version_id?: number | null;
+        };
+        /** ScopeResponse */
+        ScopeResponse: {
+            /** Id */
+            id: number;
+            /** User Id */
+            user_id: number;
+            /**
+             * Scope Type
+             * @enum {string}
+             */
+            scope_type: "product" | "version";
+            /** Product Id */
+            product_id: number;
+            /** Product Version Id */
+            product_version_id: number | null;
+            /** Scope Key */
+            scope_key: string;
+            /** Created By */
+            created_by: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Is Effective */
+            is_effective: boolean;
+        };
+        /** ScopeSummaryResponse */
+        ScopeSummaryResponse: {
+            /** Is Global */
+            is_global: boolean;
+            /** Scopes */
+            scopes: components["schemas"]["ScopeResponse"][];
+            /** Effective Product Ids */
+            effective_product_ids: number[];
+            /** Effective Version Ids */
+            effective_version_ids: number[];
         };
         /** UserCreateRequest */
         UserCreateRequest: {
@@ -1770,6 +1877,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_user_scopes_api_v1_users__user_id__scopes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_user_scope_api_v1_users__user_id__scopes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_user_scope_api_v1_users__user_id__scopes__scope_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+                scope_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    current_scope_summary_api_v1_scopes_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeSummaryResponse"];
                 };
             };
         };

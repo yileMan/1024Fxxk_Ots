@@ -85,6 +85,25 @@ describe('UserAdminPage', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('opens product scope configuration for a selected user', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(userPage), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ is_global: false, scopes: [], effective_product_ids: [], effective_version_ids: [] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 100 }), { status: 200 }),
+      )
+    const wrapper = mount(UserAdminPage)
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="配置张三产品授权"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('#scope-title').text()).toContain('张三')
+    expect(wrapper.get('[data-state="empty"]').text()).toContain('尚未配置产品范围')
+  })
+
   it('creates, edits, resets and disables users through explicit actions', async () => {
     const created = { ...userPage.items[0], id: 3, login_name: 'new-user', display_name: '新用户' }
     const edited = { ...created, display_name: '新用户（已编辑）', row_version: 2 }

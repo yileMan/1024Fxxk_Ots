@@ -1539,6 +1539,163 @@
           }
         }
       }
+    },
+    "/api/v1/users/{user_id}/scopes": {
+      "get": {
+        "tags": [
+          "product-scope-authorization"
+        ],
+        "summary": "List User Scopes",
+        "operationId": "list_user_scopes_api_v1_users__user_id__scopes_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeSummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "product-scope-authorization"
+        ],
+        "summary": "Grant User Scope",
+        "operationId": "grant_user_scope_api_v1_users__user_id__scopes_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeGrantRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/scopes/{scope_id}": {
+      "delete": {
+        "tags": [
+          "product-scope-authorization"
+        ],
+        "summary": "Revoke User Scope",
+        "operationId": "revoke_user_scope_api_v1_users__user_id__scopes__scope_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Scope Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scopes/me": {
+      "get": {
+        "tags": [
+          "product-scope-authorization"
+        ],
+        "summary": "Current Scope Summary",
+        "operationId": "current_scope_summary_api_v1_scopes_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2175,6 +2332,149 @@
           "roles"
         ],
         "title": "PublicUserResponse"
+      },
+      "ScopeGrantRequest": {
+        "properties": {
+          "scope_type": {
+            "type": "string",
+            "enum": [
+              "product",
+              "version"
+            ],
+            "title": "Scope Type"
+          },
+          "product_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Product Id"
+          },
+          "product_version_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Version Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope_type",
+          "product_id"
+        ],
+        "title": "ScopeGrantRequest"
+      },
+      "ScopeResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "scope_type": {
+            "type": "string",
+            "enum": [
+              "product",
+              "version"
+            ],
+            "title": "Scope Type"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "product_version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Version Id"
+          },
+          "scope_key": {
+            "type": "string",
+            "title": "Scope Key"
+          },
+          "created_by": {
+            "type": "integer",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "is_effective": {
+            "type": "boolean",
+            "title": "Is Effective"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "scope_type",
+          "product_id",
+          "product_version_id",
+          "scope_key",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "is_effective"
+        ],
+        "title": "ScopeResponse"
+      },
+      "ScopeSummaryResponse": {
+        "properties": {
+          "is_global": {
+            "type": "boolean",
+            "title": "Is Global"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeResponse"
+            },
+            "type": "array",
+            "title": "Scopes"
+          },
+          "effective_product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Effective Product Ids"
+          },
+          "effective_version_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Effective Version Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_global",
+          "scopes",
+          "effective_product_ids",
+          "effective_version_ids"
+        ],
+        "title": "ScopeSummaryResponse"
       },
       "UserCreateRequest": {
         "properties": {

@@ -130,3 +130,81 @@ test('非管理员直接进入用户管理会得到明确拒绝', async ({ page 
 
   await expect(page.getByRole('heading', { name: '没有访问权限' })).toBeVisible()
 })
+
+test('管理员可以授予并撤销用户产品范围', async ({ page }) => {
+  const user = {
+    id: 2,
+    login_name: 'owner',
+    display_name: '产品负责人',
+    roles: ['product_owner'],
+    status: 'active',
+    last_login_at: null,
+    row_version: 1,
+    created_at: '2026-08-21T12:00:00',
+    updated_at: '2026-08-21T12:00:00',
+  }
+  const product = {
+    id: 10,
+    product_code: 'P-001',
+    product_name: '监护仪',
+    description: null,
+    status: 'active',
+    row_version: 1,
+    created_at: '2026-08-21T12:00:00',
+    updated_at: '2026-08-21T12:00:00',
+  }
+  let scopes: any[] = []
+  const summary = () => ({
+    is_global: false,
+    scopes,
+    effective_product_ids: scopes.length ? [10] : [],
+    effective_version_ids: scopes.length ? [11] : [],
+  })
+  await page.route('**/api/v1/auth/me', route => route.fulfill({
+    status: 200,
+    json: { id: 1, login_name: 'admin', display_name: '管理员', roles: ['admin'] },
+  }))
+  await page.route('**/api/v1/users**', route => route.fulfill({
+    status: 200,
+    json: { items: [user], total: 1, page: 1, page_size: 20 },
+  }))
+  await page.route('**/api/v1/products**', route => route.fulfill({
+    status: 200,
+    json: { items: [product], total: 1, page: 1, page_size: 100 },
+  }))
+  await page.route('**/api/v1/users/2/scopes**', async route => {
+    const request = route.request()
+    if (request.method() === 'POST') {
+      scopes = [{
+        id: 1,
+        user_id: 2,
+        scope_type: 'product',
+        product_id: 10,
+        product_version_id: null,
+        scope_key: 'product:10',
+        created_by: 1,
+        created_at: '2026-08-21T12:00:00',
+        updated_at: '2026-08-21T12:00:00',
+        is_effective: true,
+      }]
+      await route.fulfill({ status: 200, json: scopes[0] })
+      return
+    }
+    if (request.method() === 'DELETE') {
+      scopes = []
+      await route.fulfill({ status: 204 })
+      return
+    }
+    await route.fulfill({ status: 200, json: summary() })
+  })
+
+  await page.goto('/system/users')
+  await page.getByRole('button', { name: '配置产品负责人产品授权' }).click()
+  const editor = page.getByRole('region', { name: '产品负责人 的产品授权' })
+  await expect(editor).toBeVisible()
+  await editor.getByRole('combobox', { name: /^产品/ }).selectOption('10')
+  await editor.getByRole('button', { name: '添加授权' }).click()
+  await expect(editor.getByText('覆盖该产品全部有效版本')).toBeVisible()
+  await editor.getByRole('button', { name: '撤销监护仪授权' }).click()
+  await expect(editor.getByText('尚未配置产品范围')).toBeVisible()
+})
