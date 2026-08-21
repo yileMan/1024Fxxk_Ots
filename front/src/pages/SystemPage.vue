@@ -7,6 +7,9 @@
       <RouterLink v-if="isAdmin" class="module-card featured" to="/system/products">
         <span>01</span><small>主数据</small><h2>产品管理</h2><p>维护产品、版本、负责人、审核人和版本 OTS 清单。</p><b>进入模块 ↗</b>
       </RouterLink>
+      <RouterLink v-if="hasScopedProducts" class="module-card featured" to="/system/my-products">
+        <span>01</span><small>授权范围</small><h2>我的产品</h2><p>只读查看已授权产品、版本和对应 OTS 清单。</p><b>查看产品 ↗</b>
+      </RouterLink>
       <RouterLink v-if="isAdmin" class="module-card" to="/system/ots">
         <span>02</span><small>共享组件</small><h2>OTS 主数据</h2><p>维护 OTS 名称、版本、官方网站、EOL 与关联产品。</p><b>进入模块 ↗</b>
       </RouterLink>
@@ -27,6 +30,7 @@ import { RouterLink } from 'vue-router'
 import { authentication } from '../auth'
 
 const isAdmin = computed(() => authentication.user?.roles.includes('admin') ?? false)
+const hasScopedProducts = computed(() => !isAdmin.value && (authentication.scope?.effective_product_ids.length ?? 0) > 0)
 </script>
 
 <style scoped>
