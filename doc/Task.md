@@ -243,7 +243,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-003、FR-EXCH-008～014、FR-VULN-001～003、FR-VULN-006，NFR 12.3。
 
-**完成证据**：后端 pytest 103 项通过且总覆盖率 93%，核心导入服务覆盖率 83%、契约校验服务 90%，包含 MySQL 8.x 迁移/事务和 10,000 CVE 性能验证（预检与确认导入 49.52 秒、峰值 136.44 MiB）；前端 Vitest 80 项通过且语句覆盖率 96.89%，系统 Chrome Playwright 17 项通过；类型检查、生产构建、OpenAPI 重复生成一致性和 OpenSpec 全量严格校验通过。`doc/samples` 已提供最小合规、1,215 CVE 完整日包、非法 JSON 和精确 1 MiB 字段边界包，并由脚本验证确定性生成。
+**完成证据**：后端 pytest 103 项通过且总覆盖率 93%，核心导入服务覆盖率 83%、契约校验服务 90%，包含 MySQL 8.x 迁移/事务和 10,000 CVE 性能验证（预检与确认导入 49.52 秒、峰值 136.44 MiB）；前端 Vitest 80 项通过且语句覆盖率 96.89%，系统 Chrome Playwright 17 项通过；类型检查、生产构建、OpenAPI 重复生成一致性和 OpenSpec 全量严格校验通过。`doc/samples` 已提供最小合规、1,215 CVE 完整日包、非法 JSON 和精确 1 MiB 字段边界包，并由脚本验证确定性生成。主规格已同步，OpenSpec change 于 2026-08-22 归档为 `2026-08-22-ots-07-package-contract-and-validation`。
 
 #### [ ] OTS-08 `ots-08-internal-ots-vulnerability-matching`（复杂度：L，依赖：OTS-04/07）
 
