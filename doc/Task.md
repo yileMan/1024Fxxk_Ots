@@ -215,7 +215,7 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M2：外部数据输入与离线交换
 
-#### [x] OTS-06 `ots-06-collector-scope-export`（复杂度：M，依赖：OTS-04/05）
+#### [x] OTS-06 `ots-06-collector-scope-export`（复杂度：M，依赖：OTS-04/05，已于 2026-08-22 归档）
 
 **目标**：从实际在用 OTS 生成去重采集范围 CSV。
 
