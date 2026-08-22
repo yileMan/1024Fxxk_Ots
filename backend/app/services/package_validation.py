@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
-import math
+import json
 import re
 import stat
 from dataclasses import dataclass, field
@@ -14,7 +14,6 @@ from zipfile import BadZipFile, ZipFile, ZipInfo
 
 PACKAGE_NAME = re.compile(r"^ots_intelligence_\d{8}_\d{6}\.zip$")
 CVE_ID = re.compile(r"^CVE-\d{4}-\d{4,}$")
-CWE_ID = re.compile(r"^CWE-\d+$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SUPPORTED_FORMAT_VERSIONS = {"1.0"}
 
@@ -43,80 +42,35 @@ CSV_FIELDS: dict[str, tuple[str, ...]] = {
         "covered_to",
         "error_message",
     ),
-    "vulnerabilities.csv": (
+    "nvd_cves.csv": (
         "cve_id",
         "status",
         "published_at",
         "last_modified_at",
         "description",
-        "source",
-    ),
-    "affected_ranges.csv": (
-        "cve_id",
-        "cpe",
-        "version_start_including",
-        "version_start_excluding",
-        "version_end_including",
-        "version_end_excluding",
-    ),
-    "cvss_scores.csv": (
-        "cve_id",
-        "source",
-        "cvss_version",
-        "base_score",
-        "base_severity",
-        "vector",
-    ),
-    "cwes.csv": ("cve_id", "cwe_id"),
-    "references.csv": ("cve_id", "url", "tags"),
-    "kev.csv": (
-        "cve_id",
-        "date_added",
-        "due_date",
-        "known_ransomware_campaign_use",
-        "required_action",
-    ),
-    "lifecycle.csv": (
-        "ots_id",
-        "cycle",
-        "release_date",
-        "eol_date",
-        "status",
-        "source_url",
-    ),
-    "matches.csv": (
-        "cve_id",
-        "ots_id",
-        "match_method",
-        "match_evidence",
-        "confidence",
+        "cvss_json",
+        "cwes_json",
+        "references_json",
+        "configurations_json",
+        "matched_ots_json",
     ),
 }
 
 DATA_FILES = tuple(name for name in CSV_FIELDS if name not in {"manifest.csv", "collector_scope.csv"})
-FILE_KEYS: dict[str, tuple[str, ...]] = {
-    "vulnerabilities.csv": ("cve_id",),
-    "affected_ranges.csv": (
-        "cve_id",
-        "cpe",
-        "version_start_including",
-        "version_start_excluding",
-        "version_end_including",
-        "version_end_excluding",
-    ),
-    "cvss_scores.csv": ("cve_id", "source", "cvss_version"),
-    "cwes.csv": ("cve_id", "cwe_id"),
-    "references.csv": ("cve_id", "url"),
-    "kev.csv": ("cve_id",),
-    "lifecycle.csv": ("ots_id", "cycle"),
-    "matches.csv": ("cve_id", "ots_id", "match_method"),
-}
+FILE_KEYS: dict[str, tuple[str, ...]] = {"nvd_cves.csv": ("cve_id",)}
+JSON_FIELDS = (
+    "cvss_json",
+    "cwes_json",
+    "references_json",
+    "configurations_json",
+    "matched_ots_json",
+)
 
 
 @dataclass(frozen=True)
 class PackageLimits:
     max_upload_bytes: int = 50 * 1024 * 1024
-    max_members: int = 10
+    max_members: int = 3
     max_member_bytes: int = 50 * 1024 * 1024
     max_total_uncompressed_bytes: int = 200 * 1024 * 1024
     max_compression_ratio: float = 100.0
@@ -510,58 +464,47 @@ def _validate_common_fields(
         valid = False
         issues.add("PACKAGE_CSV_INVALID", file_name, reason, row_number=row_number, field_name=field_name, rejected_value=row[field_name])
 
-    if "cve_id" in row and not CVE_ID.fullmatch(row["cve_id"]):
+    if not CVE_ID.fullmatch(row["cve_id"]):
         invalid("cve_id", "CVE ID 格式无效")
-    if "ots_id" in row and _positive_identifier(row["ots_id"]) is None:
-        invalid("ots_id", "OTS ID 格式无效")
-    if file_name == "vulnerabilities.csv":
-        if row["status"] not in {"published", "modified", "rejected"}:
-            invalid("status", "漏洞状态无效")
-        for field_name in ("published_at", "last_modified_at"):
-            if not _parse_time(row[field_name]):
-                invalid(field_name, "时间字段无效")
-        if not row["description"] or not row["source"]:
-            invalid("description" if not row["description"] else "source", "必填字段为空")
-    elif file_name == "affected_ranges.csv" and not row["cpe"]:
-        invalid("cpe", "CPE 不能为空")
-    elif file_name == "cvss_scores.csv":
-        if row["cvss_version"] != "3.1":
-            invalid("cvss_version", "仅接受 CVSS 3.1")
+    if row["status"] not in {"published", "modified", "rejected"}:
+        invalid("status", "漏洞状态无效")
+    for field_name in ("published_at", "last_modified_at"):
+        if not _parse_time(row[field_name]):
+            invalid(field_name, "时间字段无效")
+    if not row["description"]:
+        invalid("description", "漏洞描述不能为空")
+
+    parsed_json: dict[str, list[object]] = {}
+    for field_name in JSON_FIELDS:
         try:
-            score = float(row["base_score"])
-        except ValueError:
-            score = math.nan
-        if not 0 <= score <= 10:
-            invalid("base_score", "CVSS 分数无效")
-        if row["base_severity"] not in {"NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"}:
-            invalid("base_severity", "严重度无效")
-        if not row["vector"].startswith("CVSS:3.1/"):
-            invalid("vector", "CVSS 向量无效")
-    elif file_name == "cwes.csv" and not CWE_ID.fullmatch(row["cwe_id"]):
-        invalid("cwe_id", "CWE ID 格式无效")
-    elif file_name == "references.csv" and not row["url"].startswith(("https://", "http://")):
-        invalid("url", "参考链接无效")
-    elif file_name == "kev.csv":
-        for field_name in ("date_added", "due_date"):
-            try:
-                datetime.fromisoformat(row[field_name])
-            except ValueError:
-                invalid(field_name, "日期字段无效")
-        if row["known_ransomware_campaign_use"] not in {"known", "unknown"}:
-            invalid("known_ransomware_campaign_use", "勒索活动标记无效")
-    elif file_name == "lifecycle.csv":
-        if row["status"] not in {"active", "eol", "unknown"}:
-            invalid("status", "生命周期状态无效")
-    elif file_name == "matches.csv":
-        if not row["match_method"] or not row["match_evidence"]:
-            invalid("match_method" if not row["match_method"] else "match_evidence", "候选匹配依据不能为空")
-        if row["confidence"]:
-            try:
-                confidence = float(row["confidence"])
-            except ValueError:
-                confidence = math.nan
-            if not 0 <= confidence <= 1:
-                invalid("confidence", "置信度无效")
+            value = json.loads(row[field_name])
+        except json.JSONDecodeError:
+            invalid(field_name, "字段不是合法 JSON")
+            continue
+        if not isinstance(value, list):
+            invalid(field_name, "JSON 字段顶层必须为数组")
+            continue
+        parsed_json[field_name] = value
+
+    required_match_fields = {"ots_id", "match_method", "match_evidence", "confidence"}
+    for match in parsed_json.get("matched_ots_json", []):
+        if not isinstance(match, dict) or set(match) != required_match_fields:
+            invalid("matched_ots_json", "候选匹配对象字段不符合契约")
+            continue
+        ots_id = match["ots_id"]
+        confidence = match["confidence"]
+        if isinstance(ots_id, bool) or not isinstance(ots_id, int) or ots_id <= 0:
+            invalid("matched_ots_json", "候选匹配 OTS ID 无效")
+        if not isinstance(match["match_method"], str) or not match["match_method"]:
+            invalid("matched_ots_json", "候选匹配方法不能为空")
+        if not isinstance(match["match_evidence"], str) or not match["match_evidence"]:
+            invalid("matched_ots_json", "候选匹配依据不能为空")
+        if confidence is not None and (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= confidence <= 1
+        ):
+            invalid("matched_ots_json", "候选匹配置信度无效")
     return valid
 
 
@@ -620,32 +563,33 @@ def _validate_references(
         if sample in file_stats.samples:
             file_stats.samples.remove(sample)
 
-    vulnerability_ids = {row["cve_id"] for row in accepted["vulnerabilities.csv"]}
-    matched_cves: set[str] = set()
-    for row in accepted["matches.csv"]:
-        ots_id = int(row["ots_id"])
-        if ots_id not in scope_ids:
-            mark_error("matches.csv", row)
-            issues.add("PACKAGE_SCOPE_INVALID", "matches.csv", "候选匹配引用范围外 OTS", row_number=_row_number(row), field_name="ots_id", rejected_value=ots_id)
-        elif row["cve_id"] not in vulnerability_ids:
-            mark_error("matches.csv", row)
-            issues.add("PACKAGE_REFERENCE_INVALID", "matches.csv", "候选匹配引用不存在的 CVE", row_number=_row_number(row), field_name="cve_id", rejected_value=row["cve_id"])
-        else:
-            matched_cves.add(row["cve_id"])
-    for row in accepted["vulnerabilities.csv"]:
-        if row["cve_id"] not in matched_cves:
-            mark_error("vulnerabilities.csv", row)
-            issues.add("PACKAGE_REFERENCE_INVALID", "vulnerabilities.csv", "CVE 没有任何范围内 OTS 候选匹配", row_number=_row_number(row), field_name="cve_id", rejected_value=row["cve_id"])
-    for file_name in ("affected_ranges.csv", "cvss_scores.csv", "cwes.csv", "references.csv", "kev.csv"):
-        for row in accepted[file_name]:
-            if row["cve_id"] not in matched_cves:
-                mark_error(file_name, row)
-                issues.add("PACKAGE_REFERENCE_INVALID", file_name, "记录引用不存在或无范围内匹配的 CVE", row_number=_row_number(row), field_name="cve_id", rejected_value=row["cve_id"])
-    for row in accepted["lifecycle.csv"]:
-        ots_id = int(row["ots_id"])
-        if ots_id not in scope_ids:
-            mark_error("lifecycle.csv", row)
-            issues.add("PACKAGE_SCOPE_INVALID", "lifecycle.csv", "生命周期记录引用范围外 OTS", row_number=_row_number(row), field_name="ots_id", rejected_value=ots_id)
+    for row in accepted["nvd_cves.csv"]:
+        matches = json.loads(row["matched_ots_json"])
+        if not matches:
+            mark_error("nvd_cves.csv", row)
+            issues.add(
+                "PACKAGE_REFERENCE_INVALID",
+                "nvd_cves.csv",
+                "CVE 没有范围内 OTS 候选匹配",
+                row_number=_row_number(row),
+                field_name="matched_ots_json",
+                rejected_value=row["matched_ots_json"],
+            )
+            continue
+        invalid_scope = False
+        for match in matches:
+            if match["ots_id"] not in scope_ids:
+                invalid_scope = True
+                issues.add(
+                    "PACKAGE_SCOPE_INVALID",
+                    "nvd_cves.csv",
+                    "候选匹配包含范围外 OTS",
+                    row_number=_row_number(row),
+                    field_name="matched_ots_json",
+                    rejected_value=match["ots_id"],
+                )
+        if invalid_scope:
+            mark_error("nvd_cves.csv", row)
 
 
 def _summary(stats: dict[str, FileStats]) -> PackageSummary:

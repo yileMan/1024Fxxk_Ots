@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">DATA EXCHANGE / PACKAGE GATE</p>
         <h1>数据包导入</h1>
-        <span>在任何业务写入之前，检查离线 ZIP 的结构、摘要、范围与引用闭包。</span>
+        <span>在任何业务写入之前，检查三文件 NVD 离线包的结构、摘要、JSON 与范围候选。</span>
       </div>
       <div class="contract-seal" aria-label="当前数据包格式版本">
         <small>CONTRACT</small><strong>1.0</strong><span>ZIP / CSV</span>
@@ -24,7 +24,7 @@
         <h2>离线包校验闸门</h2>
         <p>文件保留在内网受控目录；校验过程不会访问互联网，也不会创建漏洞、候选关系或评估任务。</p>
         <ul>
-          <li>固定十文件根目录</li><li>SHA-256 摘要闭包</li><li>范围内 OTS 引用</li>
+          <li>固定三文件根目录</li><li>仅接收 NVD</li><li>一行一个 CVE</li>
         </ul>
       </div>
       <div class="file-control">
@@ -47,7 +47,7 @@
     <p v-if="requestError" class="feedback error" role="alert"><strong>上传或校验失败</strong><span>本次未展示旧结果，请检查服务后重试。</span></p>
     <p v-if="downloadError" class="feedback error" role="alert">错误清单下载失败，请稍后重试。</p>
     <p v-if="downloadedFile" class="feedback success" aria-live="polite">已下载 {{ downloadedFile }}</p>
-    <p v-if="submitting" class="validating" aria-live="polite"><i></i><span><strong>正在执行受限校验</strong>上传完成后依次检查 ZIP、manifest、CSV、摘要、范围和引用。</span></p>
+    <p v-if="submitting" class="validating" aria-live="polite"><i></i><span><strong>正在执行受限校验</strong>上传完成后依次检查 ZIP、manifest、CSV、JSON、摘要和范围候选。</span></p>
 
     <template v-if="result">
       <section class="result-banner" :class="result.status">
