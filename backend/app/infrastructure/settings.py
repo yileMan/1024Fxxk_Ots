@@ -69,6 +69,6 @@ class Settings:
             import_max_total_bytes=positive_int("OTS_IMPORT_MAX_TOTAL_BYTES", 200 * 1024 * 1024),
             import_max_compression_ratio=positive_float("OTS_IMPORT_MAX_COMPRESSION_RATIO", 100.0),
             import_max_csv_rows=positive_int("OTS_IMPORT_MAX_CSV_ROWS", 10_000),
-            import_max_field_bytes=positive_int("OTS_IMPORT_MAX_FIELD_BYTES", 64 * 1024),
+            import_max_field_bytes=positive_int("OTS_IMPORT_MAX_FIELD_BYTES", 1024 * 1024),
             import_max_errors=positive_int("OTS_IMPORT_MAX_ERRORS", 1_000),
         )

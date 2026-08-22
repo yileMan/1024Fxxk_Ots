@@ -65,6 +65,8 @@ JSON_FIELDS = (
     "configurations_json",
     "matched_ots_json",
 )
+DEFAULT_MAX_FIELD_BYTES = 1024 * 1024
+csv.field_size_limit(50 * 1024 * 1024)
 
 
 def _reject_json_constant(value: str) -> object:
@@ -79,7 +81,7 @@ class PackageLimits:
     max_total_uncompressed_bytes: int = 200 * 1024 * 1024
     max_compression_ratio: float = 100.0
     max_csv_rows: int = 10_000
-    max_field_bytes: int = 64 * 1024
+    max_field_bytes: int = DEFAULT_MAX_FIELD_BYTES
     max_errors: int = 1_000
     max_error_value_chars: int = 256
     max_samples_per_file: int = 5
