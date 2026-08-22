@@ -5,6 +5,7 @@ import ImportPackagePage from './ImportPackagePage.vue'
 
 
 const fetchMock = vi.fn()
+const NativeURL = URL
 
 function response(status: 'validated' | 'failed') {
   return {
@@ -52,12 +53,13 @@ async function chooseFile(wrapper: ReturnType<typeof mount>, name = 'ots_intelli
 }
 
 beforeEach(() => {
+  window.history.replaceState({}, '', '/system/data-exchange/import-packages')
   fetchMock.mockReset()
   vi.stubGlobal('fetch', fetchMock)
-  vi.stubGlobal('URL', {
+  vi.stubGlobal('URL', Object.assign(NativeURL, {
     createObjectURL: vi.fn(() => 'blob:package-errors'),
     revokeObjectURL: vi.fn(),
-  })
+  }))
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
 })
 

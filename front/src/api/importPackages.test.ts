@@ -9,6 +9,7 @@ import {
 
 
 const fetchMock = vi.fn()
+const NativeURL = URL
 
 const validated = {
   id: 12,
@@ -33,10 +34,10 @@ const validated = {
 beforeEach(() => {
   fetchMock.mockReset()
   vi.stubGlobal('fetch', fetchMock)
-  vi.stubGlobal('URL', {
+  vi.stubGlobal('URL', Object.assign(NativeURL, {
     createObjectURL: vi.fn(() => 'blob:package-errors'),
     revokeObjectURL: vi.fn(),
-  })
+  }))
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
 })
 
@@ -75,11 +76,11 @@ describe('import package API client', () => {
   it('keeps stable API errors and does not create a download', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: 'PACKAGE_SCOPE_INVALID' }), { status: 422 }))
 
-    await expect(validateImportPackage(new File(['x'], 'bad.zip'))
+    await expect(validateImportPackage(new File(['x'], 'bad.zip')))
       .rejects.toEqual(expect.objectContaining<Partial<ImportPackageApiError>>({
         code: 'PACKAGE_SCOPE_INVALID',
         status: 422,
-      })))
+      }))
     expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 })
