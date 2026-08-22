@@ -41,14 +41,14 @@ npm run api:check
 `src/api/collectorScope.ts`、对应单元测试和 `e2e/collector-scope.spec.ts`。
 
 管理员可在 `/system/data-exchange/import-packages` 使用“上传数据包、校验预览、确认导入、查看结果”
-四步向导。OTS-07 仅开放前两步：选择单个 ZIP、同步上传、查看包级/文件级分类和有限错误、下载完整
-错误清单；确认导入与查看正式结果保持禁用且不会发送写入请求。刷新带 `batch` 查询参数的页面可重新读取
+四步向导。四步均已开放：选择单个 ZIP、查看相对漏洞库的真实分类和来源事实样例、二次确认事务导入、
+查看成功结果；失败批次可下载完整错误清单。刷新带 `batch` 查询参数的页面可重新读取
 批次；选择新文件前会清除旧结果。File、批次响应和错误明细只保存在页面内存，不写
 `localStorage` 或 `sessionStorage`。页面和客户端实现位于 `src/pages/ImportPackagePage.vue` 与
 `src/api/importPackages.ts`，完整纵向测试位于 `e2e/import-packages.spec.ts`。
 
-当前格式 `1.0` 固定为 `manifest.csv`、`collector_scope.csv`、`nvd_cves.csv` 三文件，页面只预览
-一行一个 CVE 的 NVD 分类和候选 OTS 证据。KEV/EOL 未启用，也不会在前端显示空占位区域。
+当前格式 `1.0` 固定为 `manifest.csv`、`nvd_cves.csv` 两文件。页面预览一行一个 CVE 的来源状态、
+受影响软件/版本范围和 CVSS；成功结果明确提示“内部 OTS 匹配尚未执行”。KEV/EOL 未启用，也不会显示空占位区域。
 
 本项目不自动下载 Playwright Chromium。E2E 优先使用系统 Chrome：
 

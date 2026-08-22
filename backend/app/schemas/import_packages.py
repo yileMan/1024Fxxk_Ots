@@ -19,7 +19,7 @@ class PackageFileStatsResponse(BaseModel):
     duplicate: int
     conflict: int
     error: int
-    samples: list[dict[str, str]]
+    samples: list[dict[str, object]]
 
 
 class PackageSummaryResponse(BaseModel):
@@ -38,11 +38,14 @@ class ImportPackageResponse(BaseModel):
     package_file_name: str
     package_sha256: str
     status: str
-    scope_export_id: str | None
-    scope_count: int
+    source_name: str | None
+    source_release: str | None
+    window_start: str | None
+    window_end: str | None
     classification_basis: str
     final_import_diff: bool
     can_import: bool
+    internal_matching_pending: bool
     summary: PackageSummaryResponse
     file_stats: dict[str, PackageFileStatsResponse]
     errors: list[PackageValidationIssueResponse]

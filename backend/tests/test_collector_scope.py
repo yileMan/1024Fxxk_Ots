@@ -420,7 +420,7 @@ def test_mysql_import_batch_migration_and_collector_scope(monkeypatch) -> None:
             connection.execute(text(f"CREATE DATABASE `{database_name}` CHARACTER SET utf8mb4"))
         test_url = url.set(database=database_name)
         test_engine = create_engine(test_url)
-        assert apply_migrations(test_engine, Path(__file__).parents[1] / "migrations") == list(range(1, 10))
+        assert apply_migrations(test_engine, Path(__file__).parents[1] / "migrations") == list(range(1, 11))
         inspector = inspect(test_engine)
         assert {column["name"] for column in inspector.get_columns("import_batch")} >= {
             "batch_no", "scope_coverage_json", "manifest_json", "imported_by", "finished_at"
@@ -456,6 +456,7 @@ def test_mysql_import_batch_migration_and_collector_scope(monkeypatch) -> None:
         application.state.database.engine.dispose()
         application = None
         with test_engine.begin() as connection:
+            connection.execute(text("DROP TABLE vulnerability"))
             connection.execute(text("DELETE FROM import_batch"))
             connection.execute(text("DROP TABLE import_batch"))
         assert "app_user" in inspect(test_engine).get_table_names()

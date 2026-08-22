@@ -6,9 +6,10 @@ import json
 import re
 import stat
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO, StringIO
 from pathlib import PurePosixPath
+from typing import Any
 from zipfile import BadZipFile, ZipFile, ZipInfo
 
 
@@ -18,53 +19,54 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SUPPORTED_FORMAT_VERSIONS = {"1.0"}
 
 CSV_FIELDS: dict[str, tuple[str, ...]] = {
-    "collector_scope.csv": (
-        "scope_export_id",
-        "ots_id",
-        "ots_name",
-        "ots_version",
-        "official_website",
-        "last_covered_time",
-    ),
     "manifest.csv": (
         "record_type",
         "format_version",
         "batch_no",
         "generated_at",
         "producer_version",
-        "scope_export_id",
-        "scope_sha256",
+        "source_name",
+        "source_release",
+        "window_start",
+        "window_end",
         "file_name",
         "file_sha256",
-        "ots_id",
-        "collection_status",
-        "covered_from",
-        "covered_to",
-        "error_message",
     ),
     "nvd_cves.csv": (
         "cve_id",
-        "status",
+        "source_identifier",
+        "vuln_status",
         "published_at",
         "last_modified_at",
         "description",
+        "affected_software_json",
         "cvss_json",
         "cwes_json",
         "references_json",
         "configurations_json",
-        "matched_ots_json",
     ),
 }
-
-DATA_FILES = tuple(name for name in CSV_FIELDS if name not in {"manifest.csv", "collector_scope.csv"})
-FILE_KEYS: dict[str, tuple[str, ...]] = {"nvd_cves.csv": ("cve_id",)}
+DATA_FILES = ("nvd_cves.csv",)
 JSON_FIELDS = (
+    "affected_software_json",
     "cvss_json",
     "cwes_json",
     "references_json",
     "configurations_json",
-    "matched_ots_json",
 )
+AFFECTED_FIELDS = {
+    "part",
+    "vendor",
+    "product",
+    "version",
+    "version_start_including",
+    "version_start_excluding",
+    "version_end_including",
+    "version_end_excluding",
+    "cpe",
+    "match_criteria_id",
+    "vulnerable",
+}
 DEFAULT_MAX_FIELD_BYTES = 1024 * 1024
 csv.field_size_limit(50 * 1024 * 1024)
 
@@ -76,7 +78,7 @@ def _reject_json_constant(value: str) -> object:
 @dataclass(frozen=True)
 class PackageLimits:
     max_upload_bytes: int = 50 * 1024 * 1024
-    max_members: int = 3
+    max_members: int = 2
     max_member_bytes: int = 50 * 1024 * 1024
     max_total_uncompressed_bytes: int = 200 * 1024 * 1024
     max_compression_ratio: float = 100.0
@@ -114,7 +116,7 @@ class FileStats:
     duplicate: int = 0
     conflict: int = 0
     error: int = 0
-    samples: list[dict[str, str]] = field(default_factory=list)
+    samples: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -128,21 +130,45 @@ class PackageSummary:
 
 
 @dataclass(frozen=True)
+class ExistingVulnerability:
+    content_sha256: str
+    source_modified_at: datetime | None
+
+
+@dataclass(frozen=True)
+class VulnerabilityRecord:
+    cve_id: str
+    source_identifier: str
+    vuln_status: str
+    published_at: datetime
+    last_modified_at: datetime
+    description: str
+    affected_software: list[dict[str, object]]
+    cvss: list[object]
+    cwes: list[object]
+    references: list[object]
+    configurations: list[object]
+    content_sha256: str
+    row_number: int
+
+
+@dataclass(frozen=True)
 class PackageValidationResult:
     is_valid: bool
     batch_no: str | None
     format_version: str | None
-    scope_export_id: str | None
-    scope_count: int
+    source_name: str | None
+    source_release: str | None
+    window_start: datetime | None
+    window_end: datetime | None
     manifest: dict[str, object] | None
-    scope_snapshot: list[dict[str, object]]
-    scope_coverage: list[dict[str, object]]
     file_stats: dict[str, FileStats]
     summary: PackageSummary
     errors: list[ValidationIssue]
     total_error_count: int
     truncated_error_count: int
-    classification_basis: str = "package_structure_v1"
+    records: list[VulnerabilityRecord] = field(default_factory=list)
+    classification_basis: str = "vulnerability_current_facts_v1"
     final_import_diff: bool = False
     can_import: bool = False
 
@@ -168,8 +194,11 @@ class _IssueCollector:
             return
         value = None
         if rejected_value is not None:
-            value = "".join(character for character in str(rejected_value) if character >= " " or character == "\t")
-            value = value[: self._limits.max_error_value_chars]
+            value = "".join(
+                character
+                for character in str(rejected_value)
+                if character >= " " or character == "\t"
+            )[: self._limits.max_error_value_chars]
         self.items.append(
             ValidationIssue(code, file_name, row_number, field_name, reason, value)
         )
@@ -195,21 +224,25 @@ def _read_archive(package: bytes, limits: PackageLimits) -> dict[str, bytes]:
         with ZipFile(BytesIO(package)) as archive:
             infos = archive.infolist()
             names: set[str] = set()
-            total_size = 0
+            declared_total = 0
             for info in infos:
                 if _unsafe_member(info) or info.filename in names:
                     raise PackageValidationError("PACKAGE_ZIP_UNSAFE", "ZIP 包含不安全成员")
                 names.add(info.filename)
                 if info.file_size > limits.max_member_bytes:
                     raise PackageValidationError("PACKAGE_TOO_LARGE", "ZIP 成员超过大小限制")
-                total_size += info.file_size
-                if total_size > limits.max_total_uncompressed_bytes:
+                declared_total += info.file_size
+                if declared_total > limits.max_total_uncompressed_bytes:
                     raise PackageValidationError("PACKAGE_TOO_LARGE", "ZIP 解压总大小超过限制")
-                if info.file_size and (not info.compress_size or info.file_size / info.compress_size > limits.max_compression_ratio):
+                if info.file_size and (
+                    not info.compress_size
+                    or info.file_size / info.compress_size > limits.max_compression_ratio
+                ):
                     raise PackageValidationError("PACKAGE_TOO_LARGE", "ZIP 压缩比超过限制")
-            expected = set(CSV_FIELDS)
-            if names != expected:
-                raise PackageValidationError("PACKAGE_STRUCTURE_INVALID", "ZIP 文件集合不符合契约")
+            if names != set(CSV_FIELDS):
+                raise PackageValidationError(
+                    "PACKAGE_STRUCTURE_INVALID", "ZIP 文件集合不符合两文件契约"
+                )
             if len(infos) > limits.max_members:
                 raise PackageValidationError("PACKAGE_TOO_LARGE", "ZIP 文件数量超过限制")
             contents: dict[str, bytes] = {}
@@ -228,6 +261,89 @@ def _read_archive(package: bytes, limits: PackageLimits) -> dict[str, bytes]:
         raise PackageValidationError("PACKAGE_STRUCTURE_INVALID", "文件不是有效 ZIP") from error
 
 
+def _scan_csv_records(
+    file_name: str, text: str, issues: _IssueCollector
+) -> list[tuple[int, str]]:
+    records: list[tuple[int, str]] = []
+    start = 0
+    start_line = 1
+    physical_line = 1
+    quoted = False
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            if quoted and index + 1 < len(text) and text[index + 1] == '"':
+                index += 2
+                continue
+            quoted = not quoted
+            index += 1
+            continue
+        if character == "\r":
+            if index + 1 < len(text) and text[index + 1] == "\n":
+                if quoted:
+                    physical_line += 1
+                    index += 2
+                    continue
+                records.append((start_line, text[start:index]))
+                physical_line += 1
+                start_line = physical_line
+                index += 2
+                start = index
+                continue
+            if quoted:
+                physical_line += 1
+                index += 1
+                continue
+            issues.add(
+                "PACKAGE_CSV_INVALID",
+                file_name,
+                "CSV 记录必须使用 CRLF 换行",
+                row_number=physical_line,
+                field_name="header" if not records else None,
+            )
+            physical_line += 1
+            index += 1
+            continue
+        if character == "\n":
+            if quoted:
+                physical_line += 1
+                index += 1
+                continue
+            issues.add(
+                "PACKAGE_CSV_INVALID",
+                file_name,
+                "CSV 记录必须使用 CRLF 换行",
+                row_number=physical_line,
+                field_name="header" if not records else None,
+            )
+            records.append((start_line, text[start:index]))
+            physical_line += 1
+            start_line = physical_line
+            index += 1
+            start = index
+            continue
+        index += 1
+    if quoted:
+        issues.add(
+            "PACKAGE_CSV_INVALID",
+            file_name,
+            "CSV 引号未闭合",
+            row_number=start_line,
+        )
+    if start < len(text):
+        records.append((start_line, text[start:]))
+    return records
+
+
+def _parse_csv_record(record: str) -> list[str]:
+    reader = csv.reader(StringIO(record, newline=""), strict=True)
+    values = next(reader)
+    if next(reader, None) is not None:
+        raise csv.Error("record contains multiple rows")
+    return [value.replace("\r\n", "\n").replace("\r", "\n") for value in values]
+
+
 def _decode_csv(
     file_name: str,
     content: bytes,
@@ -235,67 +351,90 @@ def _decode_csv(
     issues: _IssueCollector,
 ) -> list[dict[str, str]]:
     if content.startswith(b"\xef\xbb\xbf") or b"\x00" in content:
-        issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 编码或内容不符合契约", field_name="header")
-        return []
-    if b"\n" in content.replace(b"\r\n", b"") or b"\r" in content.replace(b"\r\n", b""):
-        issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 必须使用 CRLF 换行", field_name="header")
+        issues.add(
+            "PACKAGE_CSV_INVALID",
+            file_name,
+            "CSV 编码或内容不符合契约",
+            field_name="header",
+        )
         return []
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError:
         issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 必须使用 UTF-8", field_name="header")
         return []
-    try:
-        reader = csv.DictReader(StringIO(text, newline=""), strict=True)
-        if tuple(reader.fieldnames or ()) != CSV_FIELDS[file_name]:
-            issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 表头不符合契约", field_name="header")
-            return []
-        rows: list[dict[str, str]] = []
-        for row_number, row in enumerate(reader, start=2):
-            if len(rows) >= limits.max_csv_rows:
-                issues.add("PACKAGE_TOO_LARGE", file_name, "CSV 数据行数超过限制", row_number=row_number)
-                break
-            normalized = {key: value if value is not None else "" for key, value in row.items() if key is not None}
-            extra = row.get(None)
-            if extra:
-                issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 数据列数超过表头", row_number=row_number)
-                continue
-            row_invalid = False
-            for field_name, value in normalized.items():
-                if len(value.encode("utf-8")) > limits.max_field_bytes:
-                    row_invalid = True
-                    issues.add(
-                        "PACKAGE_CSV_INVALID",
-                        file_name,
-                        "字段超过长度限制",
-                        row_number=row_number,
-                        field_name=field_name,
-                        rejected_value=value,
-                    )
-            normalized["__row_number__"] = str(row_number)
-            if row_invalid:
-                normalized["__invalid__"] = "1"
-            rows.append(normalized)
-        return rows
-    except csv.Error:
-        issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 转义或行结构无法解析")
+    raw_records = _scan_csv_records(file_name, text, issues)
+    if not raw_records:
+        issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 缺少表头", field_name="header")
         return []
+    try:
+        header = tuple(_parse_csv_record(raw_records[0][1]))
+    except csv.Error:
+        issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 表头无法解析", field_name="header")
+        return []
+    if header != CSV_FIELDS[file_name]:
+        issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 表头不符合契约", field_name="header")
+        return []
+    rows: list[dict[str, str]] = []
+    for start_line, raw_record in raw_records[1:]:
+        if not raw_record:
+            continue
+        if len(rows) >= limits.max_csv_rows:
+            issues.add(
+                "PACKAGE_TOO_LARGE",
+                file_name,
+                "CSV 数据记录数超过限制",
+                row_number=start_line,
+            )
+            break
+        try:
+            values = _parse_csv_record(raw_record)
+        except csv.Error:
+            issues.add(
+                "PACKAGE_CSV_INVALID",
+                file_name,
+                "CSV 转义或记录结构无法解析",
+                row_number=start_line,
+            )
+            continue
+        if len(values) != len(header):
+            issues.add(
+                "PACKAGE_CSV_INVALID",
+                file_name,
+                "CSV 数据列数与表头不一致",
+                row_number=start_line,
+            )
+            continue
+        row = dict(zip(header, values, strict=True))
+        invalid = False
+        for field_name, value in row.items():
+            if len(value.encode("utf-8")) > limits.max_field_bytes:
+                invalid = True
+                issues.add(
+                    "PACKAGE_CSV_INVALID",
+                    file_name,
+                    "字段超过长度限制",
+                    row_number=start_line,
+                    field_name=field_name,
+                    rejected_value=value,
+                )
+        row["__row_number__"] = str(start_line)
+        if invalid:
+            row["__invalid__"] = "1"
+        rows.append(row)
+    return rows
 
 
-def _parse_time(value: str, *, allow_empty: bool = False) -> bool:
+def _parse_time(value: str) -> datetime | None:
     if not value:
-        return allow_empty
+        return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
-        return False
-    return parsed.tzinfo is not None
-
-
-def _positive_identifier(value: str) -> int | None:
-    if not value.isdigit() or int(value) <= 0:
         return None
-    return int(value)
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 def _row_number(row: dict[str, str]) -> int:
@@ -306,43 +445,39 @@ def _validate_manifest(
     rows: list[dict[str, str]],
     contents: dict[str, bytes],
     issues: _IssueCollector,
-) -> tuple[dict[str, str] | None, list[dict[str, str]], dict[str, dict[str, str]]]:
-    package_rows = [row for row in rows if row["record_type"] == "package"]
-    file_rows = [row for row in rows if row["record_type"] == "file"]
-    scope_rows = [row for row in rows if row["record_type"] == "scope_result"]
-    invalid_types = [row for row in rows if row["record_type"] not in {"package", "file", "scope_result"}]
-    for row in invalid_types:
+) -> tuple[dict[str, object] | None, datetime | None, datetime | None]:
+    package_rows = [row for row in rows if row.get("record_type") == "package"]
+    file_rows = [row for row in rows if row.get("record_type") == "file"]
+    if len(package_rows) != 1 or len(file_rows) != 1 or len(rows) != 2:
         issues.add(
             "PACKAGE_MANIFEST_INVALID",
             "manifest.csv",
-            "未知 manifest 记录类型",
-            row_number=_row_number(row),
+            "manifest 必须恰好包含一条 package 和一条 file 记录",
             field_name="record_type",
-            rejected_value=row["record_type"],
         )
-    if len(package_rows) != 1:
-        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "package 记录必须且只能有一条", field_name="record_type")
-        return None, scope_rows, {}
+        return None, None, None
     package_row = package_rows[0]
+    file_row = file_rows[0]
     common_fields = (
         "format_version",
         "batch_no",
         "generated_at",
         "producer_version",
-        "scope_export_id",
-        "scope_sha256",
+        "source_name",
+        "source_release",
+        "window_start",
+        "window_end",
     )
-    for row in rows:
-        for field_name in common_fields:
-            if row[field_name] != package_row[field_name]:
-                issues.add(
-                    "PACKAGE_MANIFEST_INVALID",
-                    "manifest.csv",
-                    "manifest 公共元数据不一致",
-                    row_number=_row_number(row),
-                    field_name=field_name,
-                    rejected_value=row[field_name],
-                )
+    for field_name in common_fields:
+        if package_row[field_name] != file_row[field_name]:
+            issues.add(
+                "PACKAGE_MANIFEST_INVALID",
+                "manifest.csv",
+                "manifest 公共元数据不一致",
+                row_number=_row_number(file_row),
+                field_name=field_name,
+                rejected_value=file_row[field_name],
+            )
     if package_row["format_version"] not in SUPPORTED_FORMAT_VERSIONS:
         issues.add(
             "PACKAGE_VERSION_UNSUPPORTED",
@@ -352,257 +487,281 @@ def _validate_manifest(
             field_name="format_version",
             rejected_value=package_row["format_version"],
         )
-    if not package_row["batch_no"] or len(package_row["batch_no"].encode("utf-8")) > 100:
+    if not package_row["batch_no"] or len(package_row["batch_no"].encode()) > 100:
         issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "批次号无效", row_number=_row_number(package_row), field_name="batch_no")
-    if not _parse_time(package_row["generated_at"]):
-        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "生成时间无效", row_number=_row_number(package_row), field_name="generated_at", rejected_value=package_row["generated_at"])
-    if not SHA256.fullmatch(package_row["scope_sha256"]):
-        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "范围摘要格式无效", row_number=_row_number(package_row), field_name="scope_sha256")
+    generated_at = _parse_time(package_row["generated_at"])
+    window_start = _parse_time(package_row["window_start"])
+    window_end = _parse_time(package_row["window_end"])
+    if generated_at is None:
+        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "生成时间无效", row_number=_row_number(package_row), field_name="generated_at")
+    if window_start is None or window_end is None or window_start > window_end:
+        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "来源时间窗口无效", row_number=_row_number(package_row), field_name="window_start")
+    if not package_row["producer_version"]:
+        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "生产者版本不能为空", row_number=_row_number(package_row), field_name="producer_version")
+    if package_row["source_name"].lower() != "nvd":
+        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "来源名称必须为 nvd", row_number=_row_number(package_row), field_name="source_name")
+    if not package_row["source_release"]:
+        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "来源发布标识不能为空", row_number=_row_number(package_row), field_name="source_release")
+    if package_row["file_name"] or package_row["file_sha256"]:
+        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "package 记录不得声明文件摘要", row_number=_row_number(package_row), field_name="file_name")
+    if file_row["file_name"] != "nvd_cves.csv" or not SHA256.fullmatch(file_row["file_sha256"]):
+        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "file 记录必须声明 nvd_cves.csv 及 SHA-256", row_number=_row_number(file_row), field_name="file_name")
+    elif hashlib.sha256(contents["nvd_cves.csv"]).hexdigest() != file_row["file_sha256"]:
+        issues.add("PACKAGE_DIGEST_MISMATCH", "nvd_cves.csv", "文件 SHA-256 与 manifest 不一致", field_name="file_sha256", rejected_value=file_row["file_sha256"])
+    normalized = {
+        "format_version": package_row["format_version"],
+        "batch_no": package_row["batch_no"],
+        "generated_at": package_row["generated_at"],
+        "producer_version": package_row["producer_version"],
+        "source_name": package_row["source_name"].lower(),
+        "source_release": package_row["source_release"],
+        "window_start": package_row["window_start"],
+        "window_end": package_row["window_end"],
+        "files": {"nvd_cves.csv": file_row["file_sha256"]},
+    }
+    return normalized, window_start, window_end
 
-    file_by_name: dict[str, dict[str, str]] = {}
-    expected_files = set(CSV_FIELDS) - {"manifest.csv"}
-    for row in file_rows:
-        name = row["file_name"]
-        if name in file_by_name:
-            issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "文件摘要记录重复", row_number=_row_number(row), field_name="file_name", rejected_value=name)
-        file_by_name[name] = row
-    if set(file_by_name) != expected_files:
-        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "manifest 文件清单不完整", field_name="file_name")
-    for name, row in file_by_name.items():
-        if name not in contents:
-            continue
-        actual = hashlib.sha256(contents[name]).hexdigest()
-        if row["file_sha256"] != actual:
-            issues.add(
-                "PACKAGE_DIGEST_MISMATCH",
-                name,
-                "文件 SHA-256 与 manifest 不一致",
-                row_number=_row_number(row),
-                field_name="file_sha256",
-                rejected_value=row["file_sha256"],
+
+def _json_array(
+    row: dict[str, str], field_name: str, issues: _IssueCollector
+) -> list[object] | None:
+    try:
+        value = json.loads(row[field_name], parse_constant=_reject_json_constant)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        value = None
+    if not isinstance(value, list):
+        issues.add(
+            "PACKAGE_CSV_INVALID",
+            "nvd_cves.csv",
+            "字段必须是标准 JSON 数组",
+            row_number=_row_number(row),
+            field_name=field_name,
+            rejected_value=row[field_name],
+        )
+        return None
+    return value
+
+
+def _validate_affected(
+    value: list[object], row: dict[str, str], issues: _IssueCollector
+) -> list[dict[str, object]] | None:
+    result: list[dict[str, object]] = []
+    for item in value:
+        valid = isinstance(item, dict) and set(item) == AFFECTED_FIELDS
+        if valid:
+            assert isinstance(item, dict)
+            valid = (
+                isinstance(item["part"], str)
+                and bool(item["part"])
+                and isinstance(item["vendor"], str)
+                and bool(item["vendor"])
+                and isinstance(item["product"], str)
+                and bool(item["product"])
+                and isinstance(item["vulnerable"], bool)
+                and isinstance(item["cpe"], str)
+                and item["cpe"].startswith("cpe:2.3:")
+                and isinstance(item["match_criteria_id"], str)
             )
-    return package_row, scope_rows, file_by_name
+        if valid:
+            string_or_null = (
+                "version",
+                "version_start_including",
+                "version_start_excluding",
+                "version_end_including",
+                "version_end_excluding",
+            )
+            valid = all(item[name] is None or isinstance(item[name], str) for name in string_or_null)
+            valid = valid and not (
+                item["version_start_including"] is not None
+                and item["version_start_excluding"] is not None
+            )
+            valid = valid and not (
+                item["version_end_including"] is not None
+                and item["version_end_excluding"] is not None
+            )
+        if not valid:
+            issues.add(
+                "PACKAGE_CSV_INVALID",
+                "nvd_cves.csv",
+                "受影响软件对象字段或版本边界无效",
+                row_number=_row_number(row),
+                field_name="affected_software_json",
+                rejected_value=item,
+            )
+            return None
+        result.append(item)
+    return result
 
 
-def _validate_scope(
+def _canonical_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def _sorted_unordered(values: list[object]) -> list[object]:
+    return sorted(values, key=_canonical_json)
+
+
+def _normalized_hash_payload(row: dict[str, Any]) -> dict[str, object]:
+    return {
+        "cve_id": str(row["cve_id"]).upper(),
+        "source_identifier": row["source_identifier"],
+        "vuln_status": row["vuln_status"],
+        "published_at": _parse_time(str(row["published_at"])).isoformat(),
+        "last_modified_at": _parse_time(str(row["last_modified_at"])).isoformat(),
+        "description": str(row["description"]).replace("\r\n", "\n").replace("\r", "\n"),
+        "affected_software": _sorted_unordered(json.loads(row["affected_software_json"], parse_constant=_reject_json_constant)),
+        "cvss": _sorted_unordered(json.loads(row["cvss_json"], parse_constant=_reject_json_constant)),
+        "cwes": _sorted_unordered(json.loads(row["cwes_json"], parse_constant=_reject_json_constant)),
+        "references": _sorted_unordered(json.loads(row["references_json"], parse_constant=_reject_json_constant)),
+        "configurations": json.loads(row["configurations_json"], parse_constant=_reject_json_constant),
+    }
+
+
+def content_hash(row: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(_normalized_hash_payload(row)).encode("utf-8")).hexdigest()
+
+
+def select_cvss31(scores: list[object]) -> tuple[float | None, str | None, str | None, str | None]:
+    candidates: list[tuple[dict[str, object], dict[str, object]]] = []
+    for item in scores:
+        if not isinstance(item, dict):
+            continue
+        data = item.get("cvssData", item)
+        if isinstance(data, dict) and str(data.get("version", "")) == "3.1":
+            candidates.append((item, data))
+    if not candidates:
+        return None, None, None, None
+
+    def rank(candidate: tuple[dict[str, object], dict[str, object]]) -> tuple[int, str, str]:
+        item, data = candidate
+        source = str(item.get("source", ""))
+        primary = str(item.get("type", "")).lower() == "primary"
+        if primary and source.lower() in {"nvd", "nvd@nist.gov"}:
+            priority = 0
+        elif primary:
+            priority = 1
+        else:
+            priority = 2
+        return priority, source, str(data.get("vectorString", data.get("vector", "")))
+
+    selected, data = sorted(candidates, key=rank)[0]
+    score = data.get("baseScore", data.get("base_score"))
+    return (
+        float(score) if isinstance(score, (int, float)) else None,
+        str(data.get("baseSeverity", data.get("base_severity")))
+        if data.get("baseSeverity", data.get("base_severity")) is not None
+        else None,
+        str(data.get("vectorString", data.get("vector")))
+        if data.get("vectorString", data.get("vector")) is not None
+        else None,
+        str(selected["source"]) if selected.get("source") is not None else None,
+    )
+
+
+def _parse_vulnerability_row(
+    row: dict[str, str], issues: _IssueCollector
+) -> VulnerabilityRecord | None:
+    before = issues.total
+    cve_id = row["cve_id"].upper()
+    if not CVE_ID.fullmatch(cve_id):
+        issues.add("PACKAGE_CSV_INVALID", "nvd_cves.csv", "CVE ID 无效", row_number=_row_number(row), field_name="cve_id", rejected_value=row["cve_id"])
+    for name in ("source_identifier", "vuln_status", "description"):
+        if not row[name]:
+            issues.add("PACKAGE_CSV_INVALID", "nvd_cves.csv", "必填字段不能为空", row_number=_row_number(row), field_name=name)
+    published_at = _parse_time(row["published_at"])
+    modified_at = _parse_time(row["last_modified_at"])
+    if published_at is None:
+        issues.add("PACKAGE_CSV_INVALID", "nvd_cves.csv", "发布时间无效", row_number=_row_number(row), field_name="published_at", rejected_value=row["published_at"])
+    if modified_at is None:
+        issues.add("PACKAGE_CSV_INVALID", "nvd_cves.csv", "最后修改时间无效", row_number=_row_number(row), field_name="last_modified_at", rejected_value=row["last_modified_at"])
+    parsed = {name: _json_array(row, name, issues) for name in JSON_FIELDS}
+    affected = None
+    if parsed["affected_software_json"] is not None:
+        affected = _validate_affected(parsed["affected_software_json"], row, issues)
+    if row.get("__invalid__") == "1" or issues.total > before:
+        return None
+    assert published_at is not None and modified_at is not None and affected is not None
+    return VulnerabilityRecord(
+        cve_id=cve_id,
+        source_identifier=row["source_identifier"],
+        vuln_status=row["vuln_status"],
+        published_at=published_at,
+        last_modified_at=modified_at,
+        description=row["description"],
+        affected_software=affected,
+        cvss=parsed["cvss_json"] or [],
+        cwes=parsed["cwes_json"] or [],
+        references=parsed["references_json"] or [],
+        configurations=parsed["configurations_json"] or [],
+        content_sha256=content_hash(row),
+        row_number=_row_number(row),
+    )
+
+
+def _sample(record: VulnerabilityRecord) -> dict[str, object]:
+    score, severity, _, _ = select_cvss31(record.cvss)
+    return {
+        "cve_id": record.cve_id,
+        "vuln_status": record.vuln_status,
+        "description": record.description[:200],
+        "affected_software_json": record.affected_software[:3],
+        "cvss31_score": score,
+        "cvss31_severity": severity,
+    }
+
+
+def _classify(
     rows: list[dict[str, str]],
-    manifest: dict[str, str],
-    scope_rows: list[dict[str, str]],
-    known_ots_ids: set[int],
-    issues: _IssueCollector,
-) -> tuple[set[int], list[dict[str, object]], list[dict[str, object]]]:
-    scope_ids: set[int] = set()
-    snapshot: list[dict[str, object]] = []
-    for row in rows:
-        row_number = _row_number(row)
-        if row["scope_export_id"] != manifest["scope_export_id"]:
-            issues.add("PACKAGE_SCOPE_INVALID", "collector_scope.csv", "范围导出 ID 与 manifest 不一致", row_number=row_number, field_name="scope_export_id", rejected_value=row["scope_export_id"])
-        ots_id = _positive_identifier(row["ots_id"])
-        if ots_id is None:
-            issues.add("PACKAGE_SCOPE_INVALID", "collector_scope.csv", "OTS ID 无效", row_number=row_number, field_name="ots_id", rejected_value=row["ots_id"])
-            continue
-        if ots_id in scope_ids:
-            issues.add("PACKAGE_SCOPE_INVALID", "collector_scope.csv", "OTS ID 在范围快照中重复", row_number=row_number, field_name="ots_id", rejected_value=ots_id)
-            continue
-        scope_ids.add(ots_id)
-        if ots_id not in known_ots_ids:
-            issues.add("PACKAGE_SCOPE_INVALID", "collector_scope.csv", "OTS 无法由管理平台识别", row_number=row_number, field_name="ots_id", rejected_value=ots_id)
-        if not row["ots_name"] or not row["ots_version"] or not row["official_website"]:
-            issues.add("PACKAGE_CSV_INVALID", "collector_scope.csv", "范围必填字段为空", row_number=row_number)
-        if row["last_covered_time"] and not _parse_time(row["last_covered_time"]):
-            issues.add("PACKAGE_CSV_INVALID", "collector_scope.csv", "覆盖时间无效", row_number=row_number, field_name="last_covered_time", rejected_value=row["last_covered_time"])
-        snapshot.append(
-            {
-                "ots_id": ots_id,
-                "ots_name": row["ots_name"],
-                "ots_version": row["ots_version"],
-                "official_website": row["official_website"],
-                "last_covered_time": row["last_covered_time"] or None,
-            }
-        )
-
-    coverage: list[dict[str, object]] = []
-    seen_results: set[int] = set()
-    for row in scope_rows:
-        row_number = _row_number(row)
-        ots_id = _positive_identifier(row["ots_id"])
-        if ots_id is None or ots_id not in scope_ids:
-            issues.add("PACKAGE_SCOPE_INVALID", "manifest.csv", "采集结果引用范围外 OTS", row_number=row_number, field_name="ots_id", rejected_value=row["ots_id"])
-            continue
-        if ots_id in seen_results:
-            issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "逐 OTS 采集结果重复", row_number=row_number, field_name="ots_id", rejected_value=ots_id)
-            continue
-        seen_results.add(ots_id)
-        status_value = row["collection_status"]
-        if status_value not in {"succeeded", "failed", "not_run"}:
-            issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "采集状态无效", row_number=row_number, field_name="collection_status", rejected_value=status_value)
-        if status_value == "succeeded":
-            if not _parse_time(row["covered_to"]):
-                issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "成功采集必须提供覆盖截止时间", row_number=row_number, field_name="covered_to", rejected_value=row["covered_to"])
-        elif row["covered_to"]:
-            issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "失败或未执行不得推进覆盖时间", row_number=row_number, field_name="covered_to", rejected_value=row["covered_to"])
-        if status_value in {"failed", "not_run"} and not row["error_message"]:
-            issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "失败或未执行必须提供原因", row_number=row_number, field_name="error_message")
-        coverage.append(
-            {
-                "ots_id": ots_id,
-                "status": status_value,
-                "covered_from": row["covered_from"] or None,
-                "covered_to": row["covered_to"] or None,
-                "error_message": row["error_message"] or None,
-            }
-        )
-    if seen_results != scope_ids:
-        issues.add("PACKAGE_MANIFEST_INVALID", "manifest.csv", "逐 OTS 采集结果与范围快照不完整对应", field_name="ots_id")
-    return scope_ids, snapshot, coverage
-
-
-def _validate_common_fields(
-    file_name: str,
-    row: dict[str, str],
-    issues: _IssueCollector,
-) -> bool:
-    row_number = _row_number(row)
-    valid = True
-
-    def invalid(field_name: str, reason: str) -> None:
-        nonlocal valid
-        valid = False
-        issues.add("PACKAGE_CSV_INVALID", file_name, reason, row_number=row_number, field_name=field_name, rejected_value=row[field_name])
-
-    if not CVE_ID.fullmatch(row["cve_id"]):
-        invalid("cve_id", "CVE ID 格式无效")
-    if row["status"] not in {"published", "modified", "rejected"}:
-        invalid("status", "漏洞状态无效")
-    for field_name in ("published_at", "last_modified_at"):
-        if not _parse_time(row[field_name]):
-            invalid(field_name, "时间字段无效")
-    if not row["description"]:
-        invalid("description", "漏洞描述不能为空")
-
-    parsed_json: dict[str, list[object]] = {}
-    for field_name in JSON_FIELDS:
-        try:
-            value = json.loads(row[field_name], parse_constant=_reject_json_constant)
-        except (json.JSONDecodeError, ValueError, RecursionError):
-            invalid(field_name, "字段不是合法 JSON")
-            continue
-        if not isinstance(value, list):
-            invalid(field_name, "JSON 字段顶层必须为数组")
-            continue
-        parsed_json[field_name] = value
-
-    required_match_fields = {"ots_id", "match_method", "match_evidence", "confidence"}
-    for match in parsed_json.get("matched_ots_json", []):
-        if not isinstance(match, dict) or set(match) != required_match_fields:
-            invalid("matched_ots_json", "候选匹配对象字段不符合契约")
-            continue
-        ots_id = match["ots_id"]
-        confidence = match["confidence"]
-        if isinstance(ots_id, bool) or not isinstance(ots_id, int) or ots_id <= 0:
-            invalid("matched_ots_json", "候选匹配 OTS ID 无效")
-        if not isinstance(match["match_method"], str) or not match["match_method"]:
-            invalid("matched_ots_json", "候选匹配方法不能为空")
-        if not isinstance(match["match_evidence"], str) or not match["match_evidence"]:
-            invalid("matched_ots_json", "候选匹配依据不能为空")
-        if confidence is not None and (
-            isinstance(confidence, bool)
-            or not isinstance(confidence, (int, float))
-            or not 0 <= confidence <= 1
-        ):
-            invalid("matched_ots_json", "候选匹配置信度无效")
-    return valid
-
-
-def _classify_rows(
-    parsed: dict[str, list[dict[str, str]]],
+    existing: dict[str, ExistingVulnerability],
     limits: PackageLimits,
     issues: _IssueCollector,
-) -> tuple[dict[str, FileStats], dict[str, list[dict[str, str]]]]:
-    stats = {name: FileStats() for name in DATA_FILES}
-    accepted: dict[str, list[dict[str, str]]] = {name: [] for name in DATA_FILES}
-    for file_name in DATA_FILES:
-        seen: dict[tuple[str, ...], tuple[tuple[str, str], ...]] = {}
-        for row in parsed[file_name]:
-            file_stats = stats[file_name]
-            file_stats.total += 1
-            before = issues.total
-            row_valid = row.get("__invalid__") != "1" and _validate_common_fields(file_name, row, issues)
-            key = tuple(row[field_name] for field_name in FILE_KEYS[file_name])
-            canonical = tuple(sorted((field_name, value) for field_name, value in row.items() if not field_name.startswith("__")))
-            if key in seen:
-                if seen[key] == canonical:
-                    file_stats.duplicate += 1
-                    continue
-                file_stats.conflict += 1
-                issues.add(
-                    "PACKAGE_CSV_INVALID",
-                    file_name,
-                    "相同业务键对应不同内容",
-                    row_number=_row_number(row),
-                    field_name=FILE_KEYS[file_name][0],
-                    rejected_value="|".join(key),
-                )
-                continue
-            seen[key] = canonical
-            if not row_valid or issues.total > before:
-                file_stats.error += 1
-                continue
-            file_stats.new += 1
-            accepted[file_name].append(row)
-            if len(file_stats.samples) < limits.max_samples_per_file:
-                file_stats.samples.append({key: value for key, value in row.items() if not key.startswith("__")})
-    return stats, accepted
-
-
-def _validate_references(
-    accepted: dict[str, list[dict[str, str]]],
-    scope_ids: set[int],
-    stats: dict[str, FileStats],
-    issues: _IssueCollector,
-) -> None:
-    def mark_error(file_name: str, row: dict[str, str]) -> None:
-        file_stats = stats[file_name]
-        file_stats.new = max(0, file_stats.new - 1)
-        file_stats.error += 1
-        sample = {key: value for key, value in row.items() if not key.startswith("__")}
-        if sample in file_stats.samples:
-            file_stats.samples.remove(sample)
-
-    for row in accepted["nvd_cves.csv"]:
-        matches = json.loads(row["matched_ots_json"])
-        if not matches:
-            mark_error("nvd_cves.csv", row)
-            issues.add(
-                "PACKAGE_REFERENCE_INVALID",
-                "nvd_cves.csv",
-                "CVE 没有范围内 OTS 候选匹配",
-                row_number=_row_number(row),
-                field_name="matched_ots_json",
-                rejected_value=row["matched_ots_json"],
-            )
+) -> tuple[FileStats, list[VulnerabilityRecord]]:
+    stats = FileStats()
+    records: list[VulnerabilityRecord] = []
+    seen: dict[str, VulnerabilityRecord] = {}
+    for row in rows:
+        stats.total += 1
+        before = issues.total
+        record = _parse_vulnerability_row(row, issues)
+        if record is None or issues.total > before:
+            stats.error += 1
             continue
-        invalid_scope = False
-        for match in matches:
-            if match["ots_id"] not in scope_ids:
-                invalid_scope = True
-                issues.add(
-                    "PACKAGE_SCOPE_INVALID",
-                    "nvd_cves.csv",
-                    "候选匹配包含范围外 OTS",
-                    row_number=_row_number(row),
-                    field_name="matched_ots_json",
-                    rejected_value=match["ots_id"],
-                )
-        if invalid_scope:
-            mark_error("nvd_cves.csv", row)
+        prior = seen.get(record.cve_id)
+        if prior is not None:
+            if prior.content_sha256 == record.content_sha256:
+                stats.duplicate += 1
+            else:
+                stats.conflict += 1
+                issues.add("PACKAGE_CVE_CONFLICT", "nvd_cves.csv", "包内相同 CVE 对应不同内容", row_number=record.row_number, field_name="cve_id", rejected_value=record.cve_id)
+            continue
+        seen[record.cve_id] = record
+        records.append(record)
+        current = existing.get(record.cve_id)
+        if current is None:
+            stats.new += 1
+        elif current.content_sha256 == record.content_sha256:
+            stats.duplicate += 1
+        elif current.source_modified_at is not None and record.last_modified_at > _as_utc(current.source_modified_at):
+            stats.update += 1
+        else:
+            stats.conflict += 1
+            issues.add("PACKAGE_CVE_CONFLICT", "nvd_cves.csv", "来源修改时间未更新但内容不同", row_number=record.row_number, field_name="last_modified_at", rejected_value=record.last_modified_at.isoformat())
+        if len(stats.samples) < limits.max_samples_per_file:
+            stats.samples.append(_sample(record))
+    return stats, records
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _summary(stats: dict[str, FileStats]) -> PackageSummary:
     return PackageSummary(
         total=sum(item.total for item in stats.values()),
         new=sum(item.new for item in stats.values()),
-        update=0,
+        update=sum(item.update for item in stats.values()),
         duplicate=sum(item.duplicate for item in stats.values()),
         conflict=sum(item.conflict for item in stats.values()),
         error=sum(item.error for item in stats.values()),
@@ -612,59 +771,36 @@ def _summary(stats: dict[str, FileStats]) -> PackageSummary:
 def validate_package(
     package: bytes,
     file_name: str,
-    known_ots_ids: set[int],
     *,
+    existing: dict[str, ExistingVulnerability] | None = None,
     limits: PackageLimits = DEFAULT_LIMITS,
 ) -> PackageValidationResult:
     if not PACKAGE_NAME.fullmatch(file_name):
         raise PackageValidationError("PACKAGE_TYPE_INVALID", "数据包文件名不符合契约")
     contents = _read_archive(package, limits)
     issues = _IssueCollector(limits)
-    parsed = {
-        name: _decode_csv(name, contents[name], limits, issues)
-        for name in CSV_FIELDS
-    }
-    manifest, scope_rows, file_rows = _validate_manifest(parsed["manifest.csv"], contents, issues)
-    empty_stats = {name: FileStats() for name in DATA_FILES}
-    if manifest is None:
-        summary = _summary(empty_stats)
-        return PackageValidationResult(False, None, None, None, 0, None, [], [], empty_stats, summary, issues.items, issues.total, issues.total - len(issues.items))
-    if any(error.error_code == "PACKAGE_DIGEST_MISMATCH" for error in issues.items):
-        summary = _summary(empty_stats)
-        return PackageValidationResult(False, manifest["batch_no"], manifest["format_version"], manifest["scope_export_id"], 0, None, [], [], empty_stats, summary, issues.items, issues.total, issues.total - len(issues.items))
-    scope_ids, snapshot, coverage = _validate_scope(
-        parsed["collector_scope.csv"], manifest, scope_rows, known_ots_ids, issues
-    )
-    actual_scope_sha = hashlib.sha256(contents["collector_scope.csv"]).hexdigest()
-    if manifest["scope_sha256"] != actual_scope_sha:
-        issues.add("PACKAGE_DIGEST_MISMATCH", "collector_scope.csv", "范围 SHA-256 与 manifest 不一致", field_name="scope_sha256", rejected_value=manifest["scope_sha256"])
-    stats, accepted = _classify_rows(parsed, limits, issues)
-    _validate_references(accepted, scope_ids, stats, issues)
-    summary = _summary(stats)
-    normalized_manifest: dict[str, object] = {
-        "format_version": manifest["format_version"],
-        "batch_no": manifest["batch_no"],
-        "generated_at": manifest["generated_at"],
-        "producer_version": manifest["producer_version"],
-        "scope_export_id": manifest["scope_export_id"],
-        "scope_sha256": manifest["scope_sha256"],
-        "files": {name: row["file_sha256"] for name, row in file_rows.items()},
-        "scope_snapshot": snapshot,
-    }
+    parsed = {name: _decode_csv(name, contents[name], limits, issues) for name in CSV_FIELDS}
+    manifest, window_start, window_end = _validate_manifest(parsed["manifest.csv"], contents, issues)
+    stats, records = _classify(parsed["nvd_cves.csv"], existing or {}, limits, issues)
+    file_stats = {"nvd_cves.csv": stats}
+    summary = _summary(file_stats)
+    is_valid = manifest is not None and issues.total == 0
     return PackageValidationResult(
-        issues.total == 0,
-        manifest["batch_no"],
-        manifest["format_version"],
-        manifest["scope_export_id"],
-        len(scope_ids),
-        normalized_manifest,
-        snapshot,
-        coverage,
-        stats,
-        summary,
-        issues.items,
-        issues.total,
-        issues.total - len(issues.items),
+        is_valid=is_valid,
+        batch_no=str(manifest["batch_no"]) if manifest else None,
+        format_version=str(manifest["format_version"]) if manifest else None,
+        source_name=str(manifest["source_name"]) if manifest else None,
+        source_release=str(manifest["source_release"]) if manifest else None,
+        window_start=window_start,
+        window_end=window_end,
+        manifest=manifest,
+        file_stats=file_stats,
+        summary=summary,
+        errors=issues.items,
+        total_error_count=issues.total,
+        truncated_error_count=issues.total - len(issues.items),
+        records=records,
+        can_import=is_valid,
     )
 
 
@@ -673,14 +809,5 @@ def errors_csv(errors: list[ValidationIssue]) -> bytes:
     writer = csv.writer(output, lineterminator="\r\n")
     writer.writerow(("error_code", "file_name", "row_number", "field", "reason", "rejected_value"))
     for error in errors:
-        writer.writerow(
-            (
-                error.error_code,
-                error.file_name,
-                error.row_number or "",
-                error.field or "",
-                error.reason,
-                error.rejected_value or "",
-            )
-        )
+        writer.writerow((error.error_code, error.file_name, error.row_number or "", error.field or "", error.reason, error.rejected_value or ""))
     return output.getvalue().encode("utf-8")

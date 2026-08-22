@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ImportPackageApiError,
+  confirmImportPackage,
   downloadPackageErrors,
   getImportPackage,
   validateImportPackage,
@@ -18,12 +19,15 @@ const validated = {
   package_file_name: 'ots_intelligence_20260822_010203.zip',
   package_sha256: 'a'.repeat(64),
   status: 'validated',
-  scope_export_id: '2ef57421-4978-47b2-897c-3b8dfe7e1ea0',
-  scope_count: 1,
-  classification_basis: 'package_structure_v1',
+  source_name: 'nvd',
+  source_release: 'fkie-cad/nvd-json-data-feeds@2026-08-22',
+  window_start: '2026-08-21T00:00:00+00:00',
+  window_end: '2026-08-22T00:00:00+00:00',
+  classification_basis: 'vulnerability_current_facts_v1',
   final_import_diff: false,
-  can_import: false,
-  summary: { total: 7, new: 7, update: 0, duplicate: 0, conflict: 0, error: 0 },
+  can_import: true,
+  internal_matching_pending: false,
+  summary: { total: 1, new: 1, update: 0, duplicate: 0, conflict: 0, error: 0 },
   file_stats: {},
   errors: [],
   total_error_count: 0,
@@ -60,6 +64,16 @@ describe('import package API client', () => {
 
     await expect(getImportPackage(12)).resolves.toEqual(validated)
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/import-packages/12', { credentials: 'include' })
+  })
+
+  it('confirms a validated batch using the generated contract', async () => {
+    const succeeded = { ...validated, status: 'succeeded', can_import: false, final_import_diff: true, internal_matching_pending: true }
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(succeeded), { status: 200 }))
+
+    await expect(confirmImportPackage(12)).resolves.toEqual(succeeded)
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/import-packages/12/confirm', {
+      method: 'POST', credentials: 'include',
+    })
   })
 
   it('downloads the stable error filename', async () => {

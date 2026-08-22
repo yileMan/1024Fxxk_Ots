@@ -106,10 +106,12 @@ OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允�
 `admin` 可使用以下同步接口校验格式版本 `1.0` 的离线 ZIP；完整生成契约和最小样例见
 `doc/OTS-离线数据包契约-V1.0.md` 与 `doc/samples/ots_intelligence_20260822_010203.zip`：
 
-格式 `1.0` 根目录只包含 `manifest.csv`、`collector_scope.csv` 和一行一个 CVE 的
-`nvd_cves.csv`。复杂 NVD 字段使用 JSON 数组列；KEV/EOL 暂不接收且不放置空占位文件。
+格式 `1.0` 根目录只包含 `manifest.csv` 和一行一个 CVE 的 `nvd_cves.csv`。每行保存来源标识、
+状态、描述、全部 CVSS/CWE/参考、原始 configuration 和归一化受影响软件/版本范围；不包含
+`collector_scope.csv`、`matched_ots_json` 或内部 OTS ID。KEV/EOL 暂不接收且不放置空占位文件。
 
-- `POST /api/v1/import-packages/validate`：`multipart/form-data` 的单个 `file`，新批次返回 201，整包摘要或批次号重复时返回既有结果和 200。
+- `POST /api/v1/import-packages/validate`：`multipart/form-data` 的单个 `file`；相同整包摘要返回既有结果和 200，相同批次号但内容不同返回 `PACKAGE_BATCH_CONFLICT`。
+- `POST /api/v1/import-packages/{batch_id}/confirm`：管理员确认后事务写入/更新 `vulnerability`、提交一条 `batch_upsert` 审计并将批次置为 `succeeded`；不执行内部 OTS 匹配。
 - `GET /api/v1/import-packages/{batch_id}`：读取批次状态与只读预览。
 - `GET /api/v1/import-packages/{batch_id}/errors`：仅失败批次下载规范错误 CSV。
 
@@ -123,11 +125,19 @@ OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允�
 `OTS_IMPORT_MAX_COMPRESSION_RATIO`、`OTS_IMPORT_MAX_CSV_ROWS`、
 `OTS_IMPORT_MAX_FIELD_BYTES` 和 `OTS_IMPORT_MAX_ERRORS` 收紧限制；默认值见根目录 `.env.example`。
 单字段默认上限为 1 MiB，以容纳 NVD 大型 configuration；总解压 200 MiB 和 10,000 行上限保持不变。
-校验在请求内同步完成，代表性 10,000 个 CVE 测试耗时 0.902 秒、峰值内存 51.31 MiB；反向代理的请求体
-上限应不低于应用上传上限，上传端点超时应覆盖本环境实测并保留五分钟验收目标。
+校验和确认在请求内同步完成，自动化测试对 10,000 个 CVE 记录耗时和峰值内存并保留五分钟验收目标；
+反向代理的请求体上限应不低于应用上传上限。
 
-OTS-07 只写既有 `import_batch`，不新增迁移，不写 `audit_log` 或领域表。回滚时先回滚前端路由和
-后端 API，保留既有批次行及已验证归档；仅删除经确认未被批次引用的临时文件，不删除历史或归档数据。
+OTS-07 新增 `010_vulnerability.sql` 和对应回滚说明。回滚时先关闭确认入口；若第 9、10 张下游表已引用
+漏洞则禁止删除第 8 张表。已成功导入的来源事实、批次和归档不能当作临时文件清理。
+
+根据旧最近一日包重新生成测试样例：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\generate_ots07_samples.py `
+  --source ..\doc\samples\ots_intelligence_20260822_000009.zip `
+  --output-dir ..\doc\samples
+```
 
 ## 测试
 

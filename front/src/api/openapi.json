@@ -1799,6 +1799,48 @@
         }
       }
     },
+    "/api/v1/import-packages/{batch_id}/confirm": {
+      "post": {
+        "tags": [
+          "package-contract-validation"
+        ],
+        "summary": "Confirm Import Package",
+        "operationId": "confirm_import_package_api_v1_import_packages__batch_id__confirm_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPackageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/import-packages/{batch_id}": {
       "get": {
         "tags": [
@@ -2122,7 +2164,7 @@
             "type": "string",
             "title": "Status"
           },
-          "scope_export_id": {
+          "source_name": {
             "anyOf": [
               {
                 "type": "string"
@@ -2131,11 +2173,40 @@
                 "type": "null"
               }
             ],
-            "title": "Scope Export Id"
+            "title": "Source Name"
           },
-          "scope_count": {
-            "type": "integer",
-            "title": "Scope Count"
+          "source_release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Release"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start"
+          },
+          "window_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window End"
           },
           "classification_basis": {
             "type": "string",
@@ -2148,6 +2219,10 @@
           "can_import": {
             "type": "boolean",
             "title": "Can Import"
+          },
+          "internal_matching_pending": {
+            "type": "boolean",
+            "title": "Internal Matching Pending"
           },
           "summary": {
             "$ref": "#/components/schemas/PackageSummaryResponse"
@@ -2187,11 +2262,14 @@
           "package_file_name",
           "package_sha256",
           "status",
-          "scope_export_id",
-          "scope_count",
+          "source_name",
+          "source_release",
+          "window_start",
+          "window_end",
           "classification_basis",
           "final_import_diff",
           "can_import",
+          "internal_matching_pending",
           "summary",
           "file_stats",
           "errors",
@@ -2447,9 +2525,7 @@
           },
           "samples": {
             "items": {
-              "additionalProperties": {
-                "type": "string"
-              },
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",

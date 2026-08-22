@@ -15,7 +15,7 @@
 
 - ZIP 文件名匹配 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。
 - ZIP 根目录必须恰好包含 `manifest.csv` 和 `nvd_cves.csv` 两个普通文件；不得包含目录、未知/重复文件、大小写变体、绝对路径、反斜杠路径、`..` 路径或符号链接。
-- CSV 使用 UTF-8 无 BOM和标准双引号转义。记录分隔符使用 CRLF；被双引号包围的字段内部兼容 LF 或 CRLF，并在解析后归一化为 LF。
+- CSV 使用 UTF-8 无 BOM 和标准双引号转义。记录分隔符使用 CRLF；被双引号包围的字段内部兼容 LF 或 CRLF，并在解析后归一化为 LF。
 - 默认限制：上传包 50 MiB、成员 2 个、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、`nvd_cves.csv` 最多 10,000 条数据记录、单字段 UTF-8 最多 1 MiB（1,048,576 字节）。
 
 | 文件 | 固定表头 |
@@ -33,7 +33,7 @@
 | `batch_no` | 必填，UTF-8 不超过 100 字节 |
 | `generated_at` | 含时区 ISO 8601 时间，推荐 UTC `Z` |
 | `producer_version` | 数据包生成程序版本 |
-| `source_name` | 固定来源名称，NVD 包使用 `NVD` |
+| `source_name` | 固定来源名称，NVD 包使用小写 `nvd` |
 | `source_release` | 来源发布标识，例如上游仓库提交或快照标识 |
 | `window_start`、`window_end` | 本包覆盖的来源时间窗口，含时区且开始时间不晚于结束时间 |
 | `file_name` | `file` 记录固定为 `nvd_cves.csv`；`package` 记录为空 |
@@ -113,7 +113,11 @@ OTS-07 不创建或更新第 9 张表 `vulnerability_ots_match` 和第 10 张表
 
 ## 7. 样例与版本说明
 
-当前 `doc/samples` 下已有 ZIP 是旧三文件探索样例，包含 `collector_scope.csv` 或旧 `matched_ots_json` 规则，不符合本次修订后的格式 `1.0`，不得继续作为合规验收包。OTS-07 实现阶段必须从最近一天完整 NVD 数据重新生成两文件样例，并同时提供最小合规包、非法包和大字段边界包。
+`doc/samples/ots_intelligence_20260822_010203.zip` 是单 CVE 最小合规包；
+`ots_intelligence_20260822_120000.zip` 是从旧最近一日输入完整转换得到的 1,215 条真实 NVD 包；
+`120001` 是非法 JSON 错误包；`120002` 是 1 MiB 字段边界包。各包摘要、预期结果、解压参考目录和
+重复生成命令见 `doc/samples/README.md`。旧 `ots_intelligence_20260822_000009.zip` 仅作为三文件
+转换源和不兼容测试，不再是合规包。
 
 若确认启用 KEV/EOL，OTS-09 必须提出 `1.1` 或后续格式及兼容策略；不得改变本契约 `1.0` 的两文件集合和字段语义。
 

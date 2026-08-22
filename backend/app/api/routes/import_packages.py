@@ -6,8 +6,11 @@ from app.api.authorization import require_admin
 from app.schemas.import_packages import ImportPackageResponse
 from app.services.authentication import PublicUser
 from app.services.import_packages import (
+    ImportPackageBatchConflictError,
+    ImportPackageConflictError,
     ImportPackageErrorsNotAvailableError,
     ImportPackageNotFoundError,
+    ImportPackageStateError,
     ImportPackageUploadTooLargeError,
 )
 
@@ -44,7 +47,50 @@ async def validate_import_package(
             413,
             detail={"code": "PACKAGE_TOO_LARGE", "message": "上传文件超过大小限制"},
         ) from error
+    except ImportPackageBatchConflictError as error:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "PACKAGE_BATCH_CONFLICT",
+                "message": "相同批次号对应不同数据包",
+                "existing_batch_id": error.batch_id,
+                "existing_sha256_prefix": error.existing_sha_prefix,
+                "incoming_sha256_prefix": error.incoming_sha_prefix,
+            },
+        ) from error
     response.status_code = 201 if created else 200
+    return ImportPackageResponse.model_validate(result)
+
+
+@router.post(
+    "/import-packages/{batch_id}/confirm",
+    response_model=ImportPackageResponse,
+)
+def confirm_import_package(
+    batch_id: int,
+    request: Request,
+    admin: PublicUser = Depends(require_admin),
+) -> ImportPackageResponse:
+    try:
+        result = _service(request).confirm(batch_id, admin.id)
+    except ImportPackageNotFoundError as error:
+        _not_found(error)
+    except ImportPackageStateError as error:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "PACKAGE_BATCH_NOT_VALIDATED",
+                "message": "只有已通过校验的批次可以确认导入",
+            },
+        ) from error
+    except ImportPackageConflictError as error:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "PACKAGE_IMPORT_CONFLICT",
+                "message": "预览后漏洞事实已变化，请使用新批次重新校验",
+            },
+        ) from error
     return ImportPackageResponse.model_validate(result)
 
 

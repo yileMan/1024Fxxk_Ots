@@ -3,8 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.imports import ImportBatch
-from app.models.ots import OtsComponent
+from app.models.imports import ImportBatch, Vulnerability
 
 
 class ImportPackageRepository:
@@ -19,5 +18,14 @@ class ImportPackageRepository:
     def get_by_batch_no(self, session: Session, batch_no: str) -> ImportBatch | None:
         return session.scalar(select(ImportBatch).where(ImportBatch.batch_no == batch_no))
 
-    def list_ots_ids(self, session: Session) -> set[int]:
-        return set(session.scalars(select(OtsComponent.id)).all())
+    def list_vulnerabilities(
+        self, session: Session, cve_ids: set[str]
+    ) -> dict[str, Vulnerability]:
+        if not cve_ids:
+            return {}
+        return {
+            item.cve_id: item
+            for item in session.scalars(
+                select(Vulnerability).where(Vulnerability.cve_id.in_(cve_ids))
+            )
+        }

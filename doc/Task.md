@@ -231,7 +231,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：后端 pytest 53 项通过且覆盖率 92%，含 MySQL 8.0.39 临时库迁移/回滚和 200 OTS 性能验证；前端 Vitest 69 项通过且语句覆盖率 97.38%、函数覆盖率 82.68%，系统 Chrome Playwright 12 项通过；类型检查、生产构建、OpenAPI 重复生成一致性与 OpenSpec 严格校验通过。
 
-#### [~] OTS-07 `ots-07-package-contract-and-validation`（复杂度：L，依赖：OTS-06，仅复用其 `import_batch` 表）
+#### [x] OTS-07 `ots-07-package-contract-and-validation`（复杂度：L，依赖：OTS-06，仅复用其 `import_batch` 表）
 
 **目标**：固定 NVD 原始事实的两文件 ZIP/CSV 契约，完成上传、校验、真实数据库预览和事务确认导入。
 
@@ -243,7 +243,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-003、FR-EXCH-008～014、FR-VULN-001～003、FR-VULN-006，NFR 12.3。
 
-**当前状态**：已有三文件校验和预览实现可部分复用，但其范围快照、`matched_ots_json` 必填和“暂不正式导入”边界与新规格冲突，不能作为新版完成证据；以当前 OpenSpec 的重新验收结果为准。
+**完成证据**：后端 pytest 103 项通过且总覆盖率 93%，核心导入服务覆盖率 83%、契约校验服务 90%，包含 MySQL 8.x 迁移/事务和 10,000 CVE 性能验证（预检与确认导入 49.52 秒、峰值 136.44 MiB）；前端 Vitest 80 项通过且语句覆盖率 96.89%，系统 Chrome Playwright 17 项通过；类型检查、生产构建、OpenAPI 重复生成一致性和 OpenSpec 全量严格校验通过。`doc/samples` 已提供最小合规、1,215 CVE 完整日包、非法 JSON 和精确 1 MiB 字段边界包，并由脚本验证确定性生成。
 
 #### [ ] OTS-08 `ots-08-internal-ots-vulnerability-matching`（复杂度：L，依赖：OTS-04/07）
 

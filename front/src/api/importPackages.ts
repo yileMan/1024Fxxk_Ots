@@ -32,6 +32,15 @@ export async function getImportPackage(batchId: number): Promise<ImportPackageRe
   return response.json() as Promise<ImportPackageResult>
 }
 
+export async function confirmImportPackage(batchId: number): Promise<ImportPackageResult> {
+  const response = await fetch(`/api/v1/import-packages/${batchId}/confirm`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (!response.ok) throw await errorFrom(response)
+  return response.json() as Promise<ImportPackageResult>
+}
+
 function responseFileName(response: Response): string {
   const disposition = response.headers.get('content-disposition') ?? ''
   return /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? 'package_validation_errors.csv'

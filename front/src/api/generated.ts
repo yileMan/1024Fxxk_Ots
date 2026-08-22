@@ -507,6 +507,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/import-packages/{batch_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Import Package */
+        post: operations["confirm_import_package_api_v1_import_packages__batch_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import-packages/{batch_id}": {
         parameters: {
             query?: never;
@@ -627,16 +644,22 @@ export interface components {
             package_sha256: string;
             /** Status */
             status: string;
-            /** Scope Export Id */
-            scope_export_id: string | null;
-            /** Scope Count */
-            scope_count: number;
+            /** Source Name */
+            source_name: string | null;
+            /** Source Release */
+            source_release: string | null;
+            /** Window Start */
+            window_start: string | null;
+            /** Window End */
+            window_end: string | null;
             /** Classification Basis */
             classification_basis: string;
             /** Final Import Diff */
             final_import_diff: boolean;
             /** Can Import */
             can_import: boolean;
+            /** Internal Matching Pending */
+            internal_matching_pending: boolean;
             summary: components["schemas"]["PackageSummaryResponse"];
             /** File Stats */
             file_stats: {
@@ -751,7 +774,7 @@ export interface components {
             error: number;
             /** Samples */
             samples: {
-                [key: string]: string;
+                [key: string]: unknown;
             }[];
         };
         /** PackageSummaryResponse */
@@ -2276,6 +2299,37 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPackageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_import_package_api_v1_import_packages__batch_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
