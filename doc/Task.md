@@ -241,6 +241,8 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-008、FR-EXCH-012、FR-EXCH-013、FR-EXCH-014，NFR 12.3。
 
+**实现证据**：后端 pytest 100 项通过且总覆盖率 90%，数据包校验器 85%、批次服务 86%；前端 Vitest 78 项通过且语句覆盖率 97.19%，导入页面 95%；系统 Chrome Playwright 15 项、类型检查、生产构建和 MySQL 8.x 纵向验证通过。10,000 行合规包实测 0.259 秒、峰值 6.35 MiB。契约、样例、API 与测试证据见 `doc/OTS-离线数据包契约-V1.0.md`；当前只证明包内一致性与 OTS 可识别性，不构成历史签发或数字签名证明，且未开放正式导入。
+
 #### [ ] OTS-08 `ots-08-vulnerability-input-package-preview`（复杂度：L，依赖：OTS-07）
 
 **目标**：接收并预览外部数据服务提供的漏洞事实、评分、引用、受影响范围和 OTS/CVE 候选匹配输入。

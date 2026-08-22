@@ -101,6 +101,30 @@ OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允�
 及后续外键依赖时执行，详见 `migrations/009_import_batch.rollback.md`。相关自动化证据位于
 `tests/test_collector_scope.py` 和 `tests/test_migrations.py`。
 
+## 离线数据包校验
+
+`admin` 可使用以下同步接口校验格式版本 `1.0` 的离线 ZIP；完整生成契约和最小样例见
+`doc/OTS-离线数据包契约-V1.0.md` 与 `doc/samples/ots_intelligence_20260822_010203.zip`：
+
+- `POST /api/v1/import-packages/validate`：`multipart/form-data` 的单个 `file`，新批次返回 201，整包摘要或批次号重复时返回既有结果和 200。
+- `GET /api/v1/import-packages/{batch_id}`：读取批次状态与只读预览。
+- `GET /api/v1/import-packages/{batch_id}/errors`：仅失败批次下载规范错误 CSV。
+
+默认临时目录为 `backend/var/imports/incoming`，校验成功归档到
+`backend/var/imports/archive`；临时名和归档相对路径由服务端生成，API 不返回服务器路径。失败、重复或
+请求异常会删除临时 ZIP；失败原包不归档。归档目录应限制为应用账户读写并与数据库做同一恢复点备份，
+不得作为公开静态目录。清理归档前必须先确认对应 `import_batch` 不再需要恢复。
+
+可通过 `OTS_IMPORT_TEMP_DIR`、`OTS_IMPORT_ARCHIVE_DIR`、`OTS_IMPORT_MAX_UPLOAD_BYTES`、
+`OTS_IMPORT_MAX_MEMBER_BYTES`、`OTS_IMPORT_MAX_TOTAL_BYTES`、
+`OTS_IMPORT_MAX_COMPRESSION_RATIO`、`OTS_IMPORT_MAX_CSV_ROWS`、
+`OTS_IMPORT_MAX_FIELD_BYTES` 和 `OTS_IMPORT_MAX_ERRORS` 收紧限制；默认值见根目录 `.env.example`。
+校验在请求内同步完成，代表性 10,000 行测试耗时 0.259 秒、峰值内存 6.35 MiB；反向代理的请求体
+上限应不低于应用上传上限，上传端点超时应覆盖本环境实测并保留五分钟验收目标。
+
+OTS-07 只写既有 `import_batch`，不新增迁移，不写 `audit_log` 或领域表。回滚时先回滚前端路由和
+后端 API，保留既有批次行及已验证归档；仅删除经确认未被批次引用的临时文件，不删除历史或归档数据。
+
 ## 测试
 
 ```powershell
