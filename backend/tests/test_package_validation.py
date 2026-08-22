@@ -229,6 +229,8 @@ def test_rejects_unsupported_version() -> None:
     ("field", "value"),
     [
         ("cvss_json", "{"),
+        ("cvss_json", "[NaN]"),
+        ("configurations_json", "[" * 1100 + "]" * 1100),
         ("cwes_json", json_value({"cwe": "CWE-79"})),
         ("references_json", "null"),
         ("configurations_json", json_value({"nodes": []})),
