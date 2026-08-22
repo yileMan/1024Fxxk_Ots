@@ -81,7 +81,7 @@ test('损坏包展示精确错误并下载有界清单', async ({ page }) => {
   })
   await page.getByRole('button', { name: '上传并开始校验' }).click()
   await expect(page.getByRole('heading', { name: '校验未通过' })).toBeVisible()
-  await expect(page.getByText('nvd_cves.csv')).toBeVisible()
+  await expect(page.locator('.error-ledger').getByText('nvd_cves.csv')).toBeVisible()
   await expect(page.getByText('第 2 行')).toBeVisible()
   await page.getByRole('button', { name: '下载错误清单 CSV' }).click()
   await expect(page.getByText('已下载 package_validation_errors.csv')).toBeVisible()

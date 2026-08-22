@@ -47,6 +47,9 @@ npm run api:check
 `localStorage` 或 `sessionStorage`。页面和客户端实现位于 `src/pages/ImportPackagePage.vue` 与
 `src/api/importPackages.ts`，完整纵向测试位于 `e2e/import-packages.spec.ts`。
 
+当前格式 `1.0` 固定为 `manifest.csv`、`collector_scope.csv`、`nvd_cves.csv` 三文件，页面只预览
+一行一个 CVE 的 NVD 分类和候选 OTS 证据。KEV/EOL 未启用，也不会在前端显示空占位区域。
+
 本项目不自动下载 Playwright Chromium。E2E 优先使用系统 Chrome：
 
 ```powershell

@@ -233,21 +233,21 @@ openspec validate <change-id> --strict --no-interactive
 
 **目标**：固定版本化 ZIP/CSV 契约，并实现导入向导的上传、校验和预览骨架。
 
-**后端/数据**：复用 OTS-06 已创建的完整 `import_batch` 表并实现批次写入；定义 manifest 与各 CSV Schema；ZIP 路径穿越、文件/字段大小、表头、编码、摘要、引用关系、范围 ID 和范围外 OTS 校验；错误清单下载。
+**后端/数据**：复用 OTS-06 已创建的完整 `import_batch` 表并实现批次写入；格式 `1.0` 固定 `manifest.csv`、`collector_scope.csv`、一行一个 CVE 的 `nvd_cves.csv` 三文件；校验 ZIP 安全、大小、表头、编码、JSON 列、摘要、范围 ID 和候选 OTS；错误清单下载。KEV/EOL 不占位，确认启用时升级格式版本。
 
 **前端**：数据包导入四步向导的“上传 → 校验预览”；显示新增/更新/重复/冲突/错误分类和文件级错误；暂不执行正式写入。
 
-**验收**：恶意 ZIP、摘要不符、未知文件、范围外 OTS、无匹配 CVE 和错误引用均被拒绝；错误精确到文件/行/字段。
+**验收**：恶意 ZIP、摘要不符、未知文件、非法 JSON、范围外 OTS 和无候选匹配 CVE 均被拒绝；错误精确到文件/行/字段。
 
 **需求映射**：FR-EXCH-008、FR-EXCH-012、FR-EXCH-013、FR-EXCH-014，NFR 12.3。
 
-**实现证据**：后端 pytest 100 项通过且总覆盖率 90%，数据包校验器 85%、批次服务 86%；前端 Vitest 78 项通过且语句覆盖率 97.19%，导入页面 95%；系统 Chrome Playwright 15 项、类型检查、生产构建和 MySQL 8.x 纵向验证通过。10,000 行合规包实测 0.259 秒、峰值 6.35 MiB。契约、样例、API 与测试证据见 `doc/OTS-离线数据包契约-V1.0.md`；当前只证明包内一致性与 OTS 可识别性，不构成历史签发或数字签名证明，且未开放正式导入。
+**实现证据**：后端 pytest 108 项通过且总覆盖率 91%，三文件校验器 89%、批次服务 86%；前端 Vitest 78 项通过且语句覆盖率 97.19%，导入页面 95%；系统 Chrome Playwright 15 项、类型检查、生产构建、OpenAPI 重复生成和 MySQL 8.x 纵向验证通过。10,000 个 CVE 合规包实测 0.902 秒、峰值 51.31 MiB。契约、样例、API 与测试证据见 `doc/OTS-离线数据包契约-V1.0.md`；当前只证明包内一致性与 OTS 可识别性，不构成历史签发或数字签名证明，且未开放正式导入。
 
 #### [ ] OTS-08 `ots-08-vulnerability-input-package-preview`（复杂度：L，依赖：OTS-07）
 
 **目标**：接收并预览外部数据服务提供的漏洞事实、评分、引用、受影响范围和 OTS/CVE 候选匹配输入。
 
-**后端**：固定 `vulnerabilities.csv`、`affected_ranges.csv`、`cvss_scores.csv`、`cwes.csv`、`references.csv` 和 `matches.csv` 的输入 Schema；校验来源字段、候选匹配依据、范围关联和逐 OTS 覆盖结果；使用外部服务样例包做契约集成测试。
+**后端**：在 `nvd_cves.csv` 固定标量列基础上，定义 `cvss_json`、`cwes_json`、`references_json`、`configurations_json` 和 `matched_ots_json` 的领域 Schema；校验来源字段、候选匹配依据、范围关联和逐 OTS 覆盖结果；使用外部服务样例包做契约集成测试。
 
 **前端**：导入预览增加漏洞来源、CVSS、CWE、引用、受影响范围和候选匹配统计/样例；明确“候选不等于受影响”。
 
@@ -255,11 +255,11 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-003、FR-EXCH-006、FR-EXCH-007、FR-EXCH-015、FR-EXCH-017、FR-MATCH-001。
 
-#### [ ] OTS-09 `ots-09-kev-eol-input-preview`（复杂度：M，依赖：OTS-07/08）
+#### [ ] OTS-09 `ots-09-kev-eol-input-preview`（条件任务，复杂度：M，依赖：OTS-07/08）
 
-**目标**：接收并预览外部数据服务提供的 KEV 与 EOL 候选输入。
+**目标**：仅在确认需要 KEV/EOL 后，升级离线包格式并接收、预览相应候选输入；未确认前不启动、不在 `1.0` 中放置空文件。
 
-**后端**：固定 `kev.csv`、`lifecycle.csv` 和 manifest 中来源版本、逐 OTS 状态、生命周期候选的输入 Schema；校验 CVE/OTS 引用、来源链接、缺失值和冲突结构。
+**后端**：提出 `1.1` 或后续格式，固定 KEV/EOL 文件和 manifest 来源版本、逐 OTS 状态、生命周期候选 Schema；校验 CVE/OTS 引用、来源链接、缺失值和冲突结构。
 
 **前端**：导入预览增加 KEV 和 EOL 候选区域，展示来源、日期、冲突和“待确认”标识，不把缺失数据解释为未 EOL。
 
@@ -267,7 +267,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-004、FR-EXCH-005、FR-EXCH-007、FR-EXCH-015、FR-VULN-004、FR-EOL-002、FR-EOL-003。
 
-#### [ ] OTS-10 `ots-10-transactional-import-and-task-generation`（复杂度：XL，依赖：OTS-03/04/07/08/09）
+#### [ ] OTS-10 `ots-10-transactional-import-and-task-generation`（复杂度：XL，依赖：OTS-03/04/07/08；若启用 KEV/EOL 再依赖 OTS-09）
 
 **目标**：事务导入漏洞与候选匹配，并为相关产品版本直接生成独立评估任务。
 
@@ -453,7 +453,7 @@ openspec validate <change-id> --strict --no-interactive
 | B1 | OTS-01 → OTS-02 → OTS-03 | 顺序执行，用户和人员分配有强依赖 |
 | B2 | OTS-04；随后 OTS-05 | OTS-04 后半段可与 OTS-05 的 design 并行，代码不并行改授权层 |
 | B3 | OTS-06 → OTS-07 | 顺序执行，先固定范围再固定包契约 |
-| B4 | OTS-08 与 OTS-09 | 可并行开发漏洞与 KEV/EOL 输入 Schema/预览，共用 manifest 契约需单一负责人 |
+| B4 | OTS-08；OTS-09 条件启动 | 先完成 NVD JSON 领域预览；只有确认 KEV/EOL 后才以新格式版本启动 OTS-09 |
 | B5 | OTS-10 | 不并行，属于高风险事务与任务生成核心 |
 | B6 | OTS-11 → OTS-12 | 顺序执行，先只读事实和待办，再开放编辑 |
 | B7 | OTS-13 | 单独完成 CVSS v3.1 计算器和回归测试 |

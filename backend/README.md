@@ -106,6 +106,9 @@ OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允�
 `admin` 可使用以下同步接口校验格式版本 `1.0` 的离线 ZIP；完整生成契约和最小样例见
 `doc/OTS-离线数据包契约-V1.0.md` 与 `doc/samples/ots_intelligence_20260822_010203.zip`：
 
+格式 `1.0` 根目录只包含 `manifest.csv`、`collector_scope.csv` 和一行一个 CVE 的
+`nvd_cves.csv`。复杂 NVD 字段使用 JSON 数组列；KEV/EOL 暂不接收且不放置空占位文件。
+
 - `POST /api/v1/import-packages/validate`：`multipart/form-data` 的单个 `file`，新批次返回 201，整包摘要或批次号重复时返回既有结果和 200。
 - `GET /api/v1/import-packages/{batch_id}`：读取批次状态与只读预览。
 - `GET /api/v1/import-packages/{batch_id}/errors`：仅失败批次下载规范错误 CSV。
@@ -119,7 +122,7 @@ OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允�
 `OTS_IMPORT_MAX_MEMBER_BYTES`、`OTS_IMPORT_MAX_TOTAL_BYTES`、
 `OTS_IMPORT_MAX_COMPRESSION_RATIO`、`OTS_IMPORT_MAX_CSV_ROWS`、
 `OTS_IMPORT_MAX_FIELD_BYTES` 和 `OTS_IMPORT_MAX_ERRORS` 收紧限制；默认值见根目录 `.env.example`。
-校验在请求内同步完成，代表性 10,000 行测试耗时 0.259 秒、峰值内存 6.35 MiB；反向代理的请求体
+校验在请求内同步完成，代表性 10,000 个 CVE 测试耗时 0.902 秒、峰值内存 51.31 MiB；反向代理的请求体
 上限应不低于应用上传上限，上传端点超时应覆盖本环境实测并保留五分钟验收目标。
 
 OTS-07 只写既有 `import_batch`，不新增迁移，不写 `audit_log` 或领域表。回滚时先回滚前端路由和

@@ -102,16 +102,18 @@ flowchart TD
 #### NVD
 
 - 外部服务提供 CVE ID、状态、发布时间、最后修改时间、描述、CWE、受影响范围、参考链接及来源 CVSS；
-- 名称、版本和官方网站只能生成候选匹配，不能自动形成产品受影响结论；匹配方式、依据和可选置信度写入 `matches.csv`，导入后供各产品负责人评估时参考。
+- 名称、版本和官方网站只能生成候选匹配，不能自动形成产品受影响结论；匹配方式、依据和可选置信度写入 `nvd_cves.csv` 的 `matched_ots_json`，导入后供各产品负责人评估时参考。
 
 #### CISA KEV
 
+- V1.0 离线包暂不接收 KEV；确认启用后必须升级包格式版本，不保留空占位文件；
 - 外部服务仅提供已经与范围内 OTS 形成候选匹配的 KEV 记录；
 - KEV 记录包含加入日期、要求处置日期、勒索活动标记和官方处置说明；
 - KEV 新增或内容变化在导入后触发相关记录待复核。
 
 #### EOL
 
+- V1.0 离线包暂不接收 EOL；确认启用后必须升级包格式版本，不保留空占位文件；
 - 外部服务按 OTS 名称和版本提供可用的生命周期候选信息；
 - 导入结果只作为候选信息；
 - 审核人确认后才更新 OTS 的 `is_eol` 当前结论；
@@ -128,16 +130,9 @@ flowchart TD
 | --- | --- |
 | collector_scope.csv | 本批次实际使用的原始采集范围快照 |
 | manifest.csv | 包格式版本、批次号、生成时间、外部数据服务版本、范围导出 ID、范围文件摘要、各文件摘要和逐 OTS 采集结果 |
-| vulnerabilities.csv | CVE 基础事实及来源时间 |
-| affected_ranges.csv | CVE、CPE 和受影响版本范围 |
-| cvss_scores.csv | 来源提供的 CVSS v3.1 分数、向量和严重度 |
-| cwes.csv | CVE 与 CWE 关联 |
-| references.csv | CVE 参考链接及标签 |
-| kev.csv | CISA KEV 信息 |
-| lifecycle.csv | OTS 版本线的 EOL 候选信息 |
-| matches.csv | CVE 与范围内 OTS 的候选匹配及匹配依据 |
+| nvd_cves.csv | 一行一个 CVE；稳定标量列加 CVSS、CWE、参考、configuration 和候选 OTS 的 JSON 数组列 |
 
-所有 CSV 使用 UTF-8、固定表头、ISO 8601 时间和稳定主键。包格式设置独立版本号；管理平台只接受兼容版本。`vulnerabilities.csv` 中的每个 CVE 必须至少在 `matches.csv` 中关联一个范围内 OTS；CVE 的评分、CWE、引用、KEV 和受影响范围文件只能引用这些 CVE。
+所有 CSV 使用 UTF-8、固定表头、ISO 8601 时间和稳定主键。包格式设置独立版本号；管理平台只接受兼容版本。格式 `1.0` 根目录固定为以上三个文件，只接收 NVD 数据，不包含 KEV/EOL。`nvd_cves.csv` 每行对应一个 CVE；其 `matched_ots_json` 必须至少包含一个范围内 OTS 候选匹配，其余 JSON 列保留 NVD 的一对多信息。
 
 ### 3.4 导入处理
 
@@ -152,10 +147,9 @@ flowchart TD
 
 - `batch_no` 相同的包重复上传时直接提示已导入，不重复生成任务；
 - 校验 `collector_scope.csv` 摘要、`scope_export_id` 和 `manifest.csv` 一致；
-- `matches.csv` 中的每个 OTS ID 必须存在于范围快照且仍能在管理平台识别；范围外 OTS 关联直接拒绝导入；
+- `nvd_cves.csv.matched_ots_json` 中的每个 OTS ID 必须存在于范围快照且仍能在管理平台识别；范围外 OTS 关联直接拒绝导入；
 - 无任何范围内 OTS 候选匹配的 CVE 不得导入；
-- CVE、评分、KEV 和受影响范围更新到漏洞当前来源事实，并重算内容哈希；
-- EOL 候选在导入确认时展示，确认后才更新 OTS 当前结论；
+- CVE 及其 NVD JSON 来源事实更新到漏洞当前来源事实，并重算内容哈希；
 - 来源合法更新可改变当前展示值和候选匹配信息，但不得覆盖产品评估和审核信息；
 - 已提交或已审核的产品评估永不被导入覆盖；
 - 人工维护数据与导入数据冲突时进入冲突清单，由管理员处理；

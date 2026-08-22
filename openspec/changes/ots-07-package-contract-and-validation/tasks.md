@@ -15,13 +15,13 @@
 ## 3. 前端与纵向预览
 
 - [x] 3.1 更新导入预览测试与页面文案，只展示 `nvd_cves.csv` CVE 分类并继续明确候选匹配和未正式写入
-- [ ] 3.2 更新系统 Chrome Playwright 合规包和失败包夹具，完成管理员上传、预览、错误下载及非管理员拒绝纵向场景
-- [ ] 3.3 重新生成 OpenAPI 并执行漂移检查，确认响应模型、错误 CSV 和下载行为保持兼容
+- [x] 3.2 更新系统 Chrome Playwright 合规包和失败包夹具，完成管理员上传、预览、错误下载及非管理员拒绝纵向场景
+- [x] 3.3 重新生成 OpenAPI 并执行漂移检查，确认响应模型、错误 CSV 和下载行为保持兼容
 
 ## 4. 样例、文档与验收
 
-- [ ] 4.1 重建三文件最小合规 ZIP，更新外部数据包契约、后端/前端说明和 `doc/Task.md` 追溯证据
-- [ ] 4.2 明确 `1.0` 只接收 NVD，KEV/EOL 不占位且未来必须升级格式版本；同步修订 OTS-08～10 边界
-- [ ] 4.3 使用 10,000 个 CVE 合规包记录耗时与峰值内存，确认五分钟目标、错误/样例上限和零互联网访问
-- [ ] 4.4 运行后端 pytest/覆盖率、前端 Vitest/覆盖率、类型检查、生产构建及完整系统 Chrome Playwright，确认新增代码覆盖率不低于 80%
-- [ ] 4.5 执行 `openspec validate ots-07-package-contract-and-validation --strict --no-interactive` 并确认全部任务完成
+- [x] 4.1 重建三文件最小合规 ZIP，更新外部数据包契约、后端/前端说明和 `doc/Task.md` 追溯证据
+- [x] 4.2 明确 `1.0` 只接收 NVD，KEV/EOL 不占位且未来必须升级格式版本；同步修订 OTS-08～10 边界
+- [x] 4.3 使用 10,000 个 CVE 合规包记录耗时与峰值内存，确认五分钟目标、错误/样例上限和零互联网访问
+- [x] 4.4 运行后端 pytest/覆盖率、前端 Vitest/覆盖率、类型检查、生产构建及完整系统 Chrome Playwright，确认新增代码覆盖率不低于 80%
+- [x] 4.5 执行 `openspec validate ots-07-package-contract-and-validation --strict --no-interactive` 并确认全部任务完成
