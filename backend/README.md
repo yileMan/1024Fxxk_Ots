@@ -122,6 +122,7 @@ OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允�
 `OTS_IMPORT_MAX_MEMBER_BYTES`、`OTS_IMPORT_MAX_TOTAL_BYTES`、
 `OTS_IMPORT_MAX_COMPRESSION_RATIO`、`OTS_IMPORT_MAX_CSV_ROWS`、
 `OTS_IMPORT_MAX_FIELD_BYTES` 和 `OTS_IMPORT_MAX_ERRORS` 收紧限制；默认值见根目录 `.env.example`。
+单字段默认上限为 1 MiB，以容纳 NVD 大型 configuration；总解压 200 MiB 和 10,000 行上限保持不变。
 校验在请求内同步完成，代表性 10,000 个 CVE 测试耗时 0.902 秒、峰值内存 51.31 MiB；反向代理的请求体
 上限应不低于应用上传上限，上传端点超时应覆盖本环境实测并保留五分钟验收目标。
 

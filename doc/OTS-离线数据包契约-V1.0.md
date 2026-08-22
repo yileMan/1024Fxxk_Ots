@@ -8,7 +8,7 @@
 - ZIP 文件名必须匹配 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。
 - ZIP 根目录必须恰好包含 `manifest.csv`、`collector_scope.csv`、`nvd_cves.csv` 三个普通文件；不得包含目录、未知/重复文件、大小写变体、绝对/反斜杠/`..` 路径或符号链接。
 - 所有 CSV 必须使用 UTF-8 无 BOM、CRLF 换行和标准双引号转义；表头必须逐字、逐序一致。
-- 默认限制：上传包 50 MiB、成员 3 个、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 最多 10,000 条数据行、单字段 UTF-8 最多 64 KiB。
+- 默认限制：上传包 50 MiB、成员 3 个、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 最多 10,000 条数据行、单字段 UTF-8 最多 1 MiB（1,048,576 字节）。
 
 | 文件 | 固定表头 |
 | --- | --- |
@@ -96,6 +96,8 @@ OTS-07 没有领域目标表，因此 `update=0`、`classification_basis=package
 自动化证据位于 `backend/tests/test_package_validation.py`、
 `backend/tests/test_import_packages.py`、`front/src/pages/ImportPackagePage.test.ts` 和
 `front/e2e/import-packages.spec.ts`。10,000 个 CVE 实测校验 0.902 秒、峰值 51.31 MiB。
+
+`doc/samples/ots_intelligence_20260822_000009.zip` 是最近一日 1,215 条真实 NVD 记录的边界测试包；其中 `CVE-2019-10219.configurations_json` 为 71,123 字节，用于验证大型 configuration 不再因旧 64 KiB 上限被拒绝。该包没有 OTS 范围和候选匹配，预期仍在后续引用校验阶段失败，不属于最小合规样例。
 
 ## 6. 需求追溯与后续版本
 

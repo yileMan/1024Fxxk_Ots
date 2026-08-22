@@ -241,7 +241,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-008、FR-EXCH-012、FR-EXCH-013、FR-EXCH-014，NFR 12.3。
 
-**实现证据**：后端 pytest 108 项通过且总覆盖率 91%，三文件校验器 89%、批次服务 86%；前端 Vitest 78 项通过且语句覆盖率 97.19%，导入页面 95%；系统 Chrome Playwright 15 项、类型检查、生产构建、OpenAPI 重复生成和 MySQL 8.x 纵向验证通过。10,000 个 CVE 合规包实测 0.902 秒、峰值 51.31 MiB。契约、样例、API 与测试证据见 `doc/OTS-离线数据包契约-V1.0.md`；当前只证明包内一致性与 OTS 可识别性，不构成历史签发或数字签名证明，且未开放正式导入。
+**实现证据**：后端 pytest 109 项通过且总覆盖率 91%，三文件校验器 89%、批次服务 86%；前端 Vitest 78 项通过且语句覆盖率 97.19%，导入页面 95%；系统 Chrome Playwright 15 项、类型检查、生产构建、OpenAPI 重复生成和 MySQL 8.x 纵向验证通过。10,000 个 CVE 合规包实测 0.902 秒、峰值 51.31 MiB；最近一日 1,215 条真实 NVD 边界包确认 71,123 字节 configuration 在 1 MiB 字段上限内继续进入候选匹配校验。契约、样例、API 与测试证据见 `doc/OTS-离线数据包契约-V1.0.md`；当前只证明包内一致性与 OTS 可识别性，不构成历史签发或数字签名证明，且未开放正式导入。
 
 #### [ ] OTS-08 `ots-08-vulnerability-input-package-preview`（复杂度：L，依赖：OTS-07）
 
