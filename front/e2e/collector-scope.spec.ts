@@ -34,9 +34,9 @@ test('管理员从数据交换入口预览并下载采集范围', async ({ page 
   }))
 
   await page.goto('/system')
-  await page.getByRole('link', { name: '采集范围' }).click()
+  await page.getByRole('link', { name: '采集范围', exact: true }).click()
   await expect(page.getByRole('heading', { name: '采集范围' })).toBeVisible()
-  await expect(page.getByText('OpenSSL')).toBeVisible()
+  await expect(page.getByText('OpenSSL', { exact: true })).toBeVisible()
   await expect(page.getByText('首次采集')).toBeVisible()
   await page.getByRole('button', { name: '下载 collector_scope.csv' }).click()
   await expect(page.getByText(/9aa5f26f/)).toBeVisible()

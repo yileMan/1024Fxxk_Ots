@@ -16,8 +16,11 @@
       <RouterLink v-if="isAdmin" class="module-card" to="/system/users">
         <span>03</span><small>系统管理</small><h2>用户与角色</h2><p>维护账号、固定角色、密码与人员状态。</p><b>进入模块 ↗</b>
       </RouterLink>
+      <RouterLink v-if="isAdmin" class="module-card exchange" to="/system/data-exchange/collector-scope">
+        <span>04</span><small>离线数据交换</small><h2>采集范围</h2><p>预览实际在用 OTS、覆盖位置和范围变化，下载规范 CSV。</p><b>生成范围 ↗</b>
+      </RouterLink>
       <RouterLink class="module-card" to="/health">
-        <span>04</span><small>平台运行</small><h2>服务状态</h2><p>检查 API 与数据库可用性。</p><b>查看状态 ↗</b>
+        <span>05</span><small>平台运行</small><h2>服务状态</h2><p>检查 API 与数据库可用性。</p><b>查看状态 ↗</b>
       </RouterLink>
     </div>
   </main>
@@ -42,6 +45,7 @@ h1 { margin: 12px 0; color: var(--ink); font: 700 clamp(46px, 7vw, 76px)/1 var(-
 .module-card { min-height: 280px; padding: 30px; border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink); text-decoration: none; box-shadow: var(--shadow-card); transition: transform .2s; }
 .module-card:hover { transform: translateY(-4px); }
 .module-card.featured { color: var(--paper); background: var(--forest); }
+.module-card.exchange { border-top: 4px solid var(--brand-red); }
 .module-card > span { float: right; color: var(--amber); font: 700 44px var(--font-display); }
 .module-card small { color: var(--amber-dark); font-weight: 900; letter-spacing: .15em; }
 .featured small { color: var(--amber); }

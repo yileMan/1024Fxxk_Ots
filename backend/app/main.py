@@ -12,6 +12,7 @@ from app.api.routes.users import router as users_router
 from app.api.routes.products import router as products_router
 from app.api.routes.ots import router as ots_router
 from app.api.routes.scopes import router as scopes_router
+from app.api.routes.collector_scope import router as collector_scope_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
@@ -19,6 +20,7 @@ from app.services.users import UserManagementService
 from app.services.products import ProductManagementService
 from app.services.ots import OtsManagementService
 from app.services.scopes import ScopeAuthorizationService
+from app.services.collector_scope import CollectorScopeService
 
 logger = logging.getLogger("ots")
 
@@ -43,6 +45,9 @@ def create_app() -> FastAPI:
             application.state.database.session_factory,
         )
         application.state.scope_authorization_service = ScopeAuthorizationService(
+            application.state.database.session_factory,
+        )
+        application.state.collector_scope_service = CollectorScopeService(
             application.state.database.session_factory,
         )
 
@@ -100,6 +105,7 @@ def create_app() -> FastAPI:
     application.include_router(products_router, prefix="/api/v1")
     application.include_router(ots_router, prefix="/api/v1")
     application.include_router(scopes_router, prefix="/api/v1")
+    application.include_router(collector_scope_router, prefix="/api/v1")
 
     return application
 

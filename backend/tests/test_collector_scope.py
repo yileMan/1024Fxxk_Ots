@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from io import StringIO
+from pathlib import Path
 from uuid import UUID
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import create_engine, event, func, inspect, select, text
+from sqlalchemy.engine import make_url
 
 from app.main import create_app
+from app.infrastructure.settings import Settings
+from app.migrations import apply_migrations
 from app.models.imports import ImportBatch
 from app.models.ots import OtsComponent, ProductOts
 from app.models.user import AuditLog, Base
@@ -180,6 +186,13 @@ def test_scope_requires_admin_and_returns_empty_header_only_csv(client: TestClie
     assert exported.headers["x-content-sha256"] == hashlib.sha256(exported.content).hexdigest()
 
 
+def test_export_openapi_declares_csv_and_evidence_headers(client: TestClient) -> None:
+    response = client.app.openapi()["paths"]["/api/v1/collector-scope/export"]["get"]["responses"]["200"]
+
+    assert set(response["content"]) == {"text/csv"}
+    assert set(response["headers"]) >= {"X-Scope-Export-ID", "X-Content-SHA256", "Content-Disposition"}
+
+
 def test_scope_filters_inactive_relations_deduplicates_and_stays_read_only(client: TestClient) -> None:
     _, product_a, version_a, version_b = setup_scope(client)
     shared = create_ots(client, "Open,SSL", "3.0", "https://openssl.org/docs?x=1,2")
@@ -187,6 +200,9 @@ def test_scope_filters_inactive_relations_deduplicates_and_stays_read_only(clien
     attach_ots(client, int(version_a["id"]), int(shared["id"]))
     attach_ots(client, int(version_b["id"]), int(shared["id"]))
     disabled_relation = attach_ots(client, int(version_a["id"]), int(excluded["id"]))
+    active_payload = client.get("/api/v1/collector-scope").json()
+    assert active_payload["scope_count"] == 2
+    assert [item["ots_id"] for item in active_payload["items"]].count(shared["id"]) == 1
     disabled = client.post(
         f"/api/v1/products/{product_a['id']}/versions/{version_a['id']}/disable",
         json={"row_version": version_a["row_version"]},
@@ -323,3 +339,132 @@ def test_invalid_success_history_returns_stable_error_without_partial_csv(client
     assert exported.headers["content-type"].startswith("application/json")
     assert "x-content-sha256" not in exported.headers
 
+
+def test_representative_scope_uses_bounded_queries_under_three_seconds(client: TestClient) -> None:
+    _, _, version_a, _ = setup_scope(client)
+    created_at = datetime(2026, 8, 4, tzinfo=UTC)
+    with client.app.state.database.session_factory.begin() as session:
+        items = [
+            OtsComponent(
+                ots_name=f"component-{index:03d}",
+                ots_version="1.0",
+                official_website=f"https://component-{index:03d}.test",
+                is_eol=False,
+                row_version=1,
+            )
+            for index in range(200)
+        ]
+        session.add_all(items)
+        session.flush()
+        session.add_all(
+            ProductOts(
+                product_version_id=version_a["id"],
+                ots_component_id=item.id,
+                created_by=1,
+            )
+            for item in items
+        )
+        session.add(
+            ImportBatch(
+                batch_no="B-PERF",
+                format_version="1.0",
+                package_file_name="B-PERF.zip",
+                package_sha256="f" * 64,
+                status="succeeded",
+                manifest_json={"scope_snapshot": [{"ots_id": item.id} for item in items]},
+                scope_coverage_json=[
+                    {
+                        "ots_id": item.id,
+                        "status": "succeeded",
+                        "covered_to": "2026-08-04T00:00:00.000Z",
+                    }
+                    for item in items
+                ],
+                imported_by=1,
+                finished_at=created_at,
+                created_at=created_at,
+                updated_at=created_at,
+            )
+        )
+
+    selects = 0
+
+    def count_selects(_connection, _cursor, statement, _parameters, _context, _many) -> None:
+        nonlocal selects
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects += 1
+
+    event.listen(client.app.state.database.engine, "before_cursor_execute", count_selects)
+    started = time.perf_counter()
+    try:
+        snapshot = client.app.state.collector_scope_service.preview()
+    finally:
+        duration = time.perf_counter() - started
+        event.remove(client.app.state.database.engine, "before_cursor_execute", count_selects)
+
+    assert snapshot.scope_count == 200
+    assert selects == 2
+    assert duration < 3
+
+
+def test_mysql_import_batch_migration_and_collector_scope(monkeypatch) -> None:
+    configured_url = Settings.from_environment().database_url
+    assert configured_url is not None
+    url = make_url(configured_url)
+    database_name = f"ots06_test_{uuid4().hex}"
+    admin_engine = create_engine(url.set(database="mysql"))
+    test_engine = None
+    application = None
+    try:
+        with admin_engine.begin() as connection:
+            connection.execute(text(f"CREATE DATABASE `{database_name}` CHARACTER SET utf8mb4"))
+        test_url = url.set(database=database_name)
+        test_engine = create_engine(test_url)
+        assert apply_migrations(test_engine, Path(__file__).parents[1] / "migrations") == list(range(1, 10))
+        inspector = inspect(test_engine)
+        assert {column["name"] for column in inspector.get_columns("import_batch")} >= {
+            "batch_no", "scope_coverage_json", "manifest_json", "imported_by", "finished_at"
+        }
+        assert {item["name"] for item in inspector.get_indexes("import_batch")} >= {
+            "idx_import_status_time", "idx_import_covered_to", "uk_import_batch_no", "uk_import_package_sha"
+        }
+
+        monkeypatch.setenv("OTS_DATABASE_URL", test_url.render_as_string(hide_password=False))
+        application = create_app()
+        AuthenticationService(application.state.database.session_factory).initialize_admin(
+            "admin", "初始管理员", "admin-password"
+        )
+        with TestClient(application, raise_server_exceptions=False) as mysql_client:
+            _, _, version_a, _ = setup_scope(mysql_client)
+            ots = create_ots(mysql_client, "OpenSSL", "3.0", "https://openssl.org")
+            attach_ots(mysql_client, int(version_a["id"]), int(ots["id"]))
+            add_batch(
+                mysql_client,
+                batch_no="MYSQL-B-1",
+                created_at=datetime(2026, 8, 5, tzinfo=UTC),
+                scope_snapshot=[{"ots_id": ots["id"]}],
+                coverage=[{"ots_id": ots["id"], "status": "succeeded", "covered_to": "2026-08-05T00:00:00.000Z"}],
+            )
+            with mysql_client.app.state.database.session_factory() as session:
+                before_audits = session.scalar(select(func.count()).select_from(AuditLog))
+            response = mysql_client.get("/api/v1/collector-scope")
+            assert response.status_code == 200
+            assert response.json()["items"][0]["last_covered_time"] == "2026-08-05T00:00:00.000Z"
+            with mysql_client.app.state.database.session_factory() as session:
+                assert session.scalar(select(func.count()).select_from(AuditLog)) == before_audits
+
+        application.state.database.engine.dispose()
+        application = None
+        with test_engine.begin() as connection:
+            connection.execute(text("DELETE FROM import_batch"))
+            connection.execute(text("DROP TABLE import_batch"))
+        assert "app_user" in inspect(test_engine).get_table_names()
+        assert "import_batch" not in inspect(test_engine).get_table_names()
+    finally:
+        if application is not None:
+            application.state.database.engine.dispose()
+        if test_engine is not None:
+            test_engine.dispose()
+        with admin_engine.begin() as connection:
+            connection.execute(text(f"DROP DATABASE IF EXISTS `{database_name}`"))
+        admin_engine.dispose()

@@ -335,7 +335,7 @@ def test_mysql_scope_migration_and_audit_commit_together(monkeypatch) -> None:
         test_url = url.set(database=database_name)
         test_engine = create_engine(test_url)
         versions = apply_migrations(test_engine, Path(__file__).parents[1] / "migrations")
-        assert versions == list(range(1, 9))
+        assert versions == list(range(1, 10))
         monkeypatch.setenv("OTS_DATABASE_URL", test_url.render_as_string(hide_password=False))
         application = create_app()
         AuthenticationService(application.state.database.session_factory).initialize_admin(

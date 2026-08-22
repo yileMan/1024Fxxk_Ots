@@ -79,6 +79,28 @@ ots_name,ots_version,official_website,is_eol
 - `GET /api/v1/product-versions/{version_id}/ots/export`
 - `POST /api/v1/product-versions/{version_id}/ots/import`，请求体为 `text/csv`，文件名可通过 `X-File-Name` 传递
 
+## 采集范围导出
+
+管理员可通过 `GET /api/v1/collector-scope` 预览当前范围，通过
+`GET /api/v1/collector-scope/export` 下载 `collector_scope.csv`。范围只包含关联到启用产品和
+启用产品版本的 OTS，并按 OTS ID 去重；预览会与最近成功导入批次保存的范围快照比较。
+
+CSV 使用 UTF-8 无 BOM、CRLF 和固定列顺序：
+
+```csv
+scope_export_id,ots_id,ots_name,ots_version,official_website,last_covered_time
+```
+
+每次下载生成新的 UUID v4 `scope_export_id`。响应头 `X-Scope-Export-ID` 返回该 ID，
+`X-Content-SHA256` 返回对实际响应字节计算的小写十六进制 SHA-256。每个 OTS 的
+`last_covered_time` 从成功批次 `scope_coverage_json` 中独立选择最近一次 `succeeded`；
+后续 `failed/not_run` 不推进时间，从未成功时 CSV 保持空字段。
+
+数据库升级由 `migrations/009_import_batch.sql` 完整创建 11 表基线中的 `import_batch`；
+OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允许在表为空、没有 OTS-07
+及后续外键依赖时执行，详见 `migrations/009_import_batch.rollback.md`。相关自动化证据位于
+`tests/test_collector_scope.py` 和 `tests/test_migrations.py`。
+
 ## 测试
 
 ```powershell

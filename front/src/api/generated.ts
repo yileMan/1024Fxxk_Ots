@@ -456,10 +456,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collector-scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Collector Scope */
+        get: operations["preview_collector_scope_api_v1_collector_scope_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collector-scope/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Collector Scope */
+        get: operations["export_collector_scope_api_v1_collector_scope_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CollectorScopeBaselineResponse */
+        CollectorScopeBaselineResponse: {
+            /** Available */
+            available: boolean;
+            /** Batch No */
+            batch_no: string | null;
+            /** Finished At */
+            finished_at: string | null;
+        };
+        /** CollectorScopeChangesResponse */
+        CollectorScopeChangesResponse: {
+            /** Added Ots Ids */
+            added_ots_ids: number[];
+            /** Removed Ots Ids */
+            removed_ots_ids: number[];
+            /** Added Count */
+            added_count: number;
+            /** Removed Count */
+            removed_count: number;
+        };
+        /** CollectorScopeItemResponse */
+        CollectorScopeItemResponse: {
+            /** Ots Id */
+            ots_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Official Website */
+            official_website: string;
+            /** Last Covered Time */
+            last_covered_time: string | null;
+            /** Is Initial Collection */
+            is_initial_collection: boolean;
+        };
+        /** CollectorScopePreviewResponse */
+        CollectorScopePreviewResponse: {
+            /** Scope Count */
+            scope_count: number;
+            /** Items */
+            items: components["schemas"]["CollectorScopeItemResponse"][];
+            comparison_baseline: components["schemas"]["CollectorScopeBaselineResponse"];
+            changes: components["schemas"]["CollectorScopeChangesResponse"];
+        };
         /** CsvImportResultResponse */
         CsvImportResultResponse: {
             /** Created Ots */
@@ -1993,6 +2071,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScopeSummaryResponse"];
+                };
+            };
+        };
+    };
+    preview_collector_scope_api_v1_collector_scope_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectorScopePreviewResponse"];
+                };
+            };
+        };
+    };
+    export_collector_scope_api_v1_collector_scope_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 规范采集范围 CSV */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "X-Scope-Export-ID"?: string;
+                    "X-Content-SHA256"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
         };

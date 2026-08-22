@@ -215,11 +215,11 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M2：外部数据输入与离线交换
 
-#### [ ] OTS-06 `ots-06-collector-scope-export`（复杂度：M，依赖：OTS-04/05）
+#### [x] OTS-06 `ots-06-collector-scope-export`（复杂度：M，依赖：OTS-04/05）
 
 **目标**：从实际在用 OTS 生成去重采集范围 CSV。
 
-**后端**：实现 `/api/v1/collector-scope`；按启用产品/版本查询；跨产品按 OTS ID 去重；生成 `scope_export_id`、规范 CSV 和 SHA-256；从成功批次 JSON 读取逐 OTS 最近覆盖时间。
+**后端/数据**：提前创建完整 `import_batch` 基础表；实现 `/api/v1/collector-scope`；按启用产品/版本查询；跨产品按 OTS ID 去重；生成 `scope_export_id`、规范 CSV 和 SHA-256；从成功批次 JSON 读取逐 OTS 最近覆盖时间。OTS-06 对该表只读，不保存导出记录。
 
 **前端**：数据交换－采集范围页；展示范围数量、OTS、最后覆盖时间和范围变化提示；管理员下载 CSV。
 
@@ -227,11 +227,13 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-001、FR-EXCH-002、FR-EXCH-016、FR-EXCH-017。
 
+**完成证据**：后端 pytest 53 项通过且覆盖率 92%，含 MySQL 8.0.39 临时库迁移/回滚和 200 OTS 性能验证；前端 Vitest 69 项通过且语句覆盖率 97.38%、函数覆盖率 82.68%，系统 Chrome Playwright 12 项通过；类型检查、生产构建、OpenAPI 重复生成一致性与 OpenSpec 严格校验通过。
+
 #### [ ] OTS-07 `ots-07-package-contract-and-validation`（复杂度：L，依赖：OTS-06）
 
 **目标**：固定版本化 ZIP/CSV 契约，并实现导入向导的上传、校验和预览骨架。
 
-**后端/数据**：创建 `import_batch`；定义 manifest 与各 CSV Schema；ZIP 路径穿越、文件/字段大小、表头、编码、摘要、引用关系、范围 ID 和范围外 OTS 校验；错误清单下载。
+**后端/数据**：复用 OTS-06 已创建的完整 `import_batch` 表并实现批次写入；定义 manifest 与各 CSV Schema；ZIP 路径穿越、文件/字段大小、表头、编码、摘要、引用关系、范围 ID 和范围外 OTS 校验；错误清单下载。
 
 **前端**：数据包导入四步向导的“上传 → 校验预览”；显示新增/更新/重复/冲突/错误分类和文件级错误；暂不执行正式写入。
 

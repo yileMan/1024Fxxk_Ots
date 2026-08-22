@@ -10,6 +10,7 @@ import UserAdminPage from './pages/UserAdminPage.vue'
 import ProductAdminPage from './pages/ProductAdminPage.vue'
 import OtsAdminPage from './pages/OtsAdminPage.vue'
 import MyProductsPage from './pages/MyProductsPage.vue'
+import CollectorScopePage from './pages/CollectorScopePage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -22,6 +23,7 @@ export const router = createRouter({
     { path: '/system/products', component: ProductAdminPage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/my-products', component: MyProductsPage, meta: { requiresAuthentication: true } },
     { path: '/system/ots', component: OtsAdminPage, meta: { requiresAuthentication: true, requiresAdmin: true } },
+    { path: '/system/data-exchange/collector-scope', component: CollectorScopePage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/forbidden', component: ForbiddenPage, meta: { requiresAuthentication: true } },
     { path: '/:pathMatch(.*)*', component: NotFoundPage },
   ],

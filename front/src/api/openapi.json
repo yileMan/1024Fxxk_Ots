@@ -1696,10 +1696,216 @@
           }
         }
       }
+    },
+    "/api/v1/collector-scope": {
+      "get": {
+        "tags": [
+          "collector-scope-export"
+        ],
+        "summary": "Preview Collector Scope",
+        "operationId": "preview_collector_scope_api_v1_collector_scope_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectorScopePreviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/collector-scope/export": {
+      "get": {
+        "tags": [
+          "collector-scope-export"
+        ],
+        "summary": "Export Collector Scope",
+        "operationId": "export_collector_scope_api_v1_collector_scope_export_get",
+        "responses": {
+          "200": {
+            "description": "规范采集范围 CSV",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Scope-Export-ID": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Content-SHA256": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "CollectorScopeBaselineResponse": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "batch_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch No"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "batch_no",
+          "finished_at"
+        ],
+        "title": "CollectorScopeBaselineResponse"
+      },
+      "CollectorScopeChangesResponse": {
+        "properties": {
+          "added_ots_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Added Ots Ids"
+          },
+          "removed_ots_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Removed Ots Ids"
+          },
+          "added_count": {
+            "type": "integer",
+            "title": "Added Count"
+          },
+          "removed_count": {
+            "type": "integer",
+            "title": "Removed Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "added_ots_ids",
+          "removed_ots_ids",
+          "added_count",
+          "removed_count"
+        ],
+        "title": "CollectorScopeChangesResponse"
+      },
+      "CollectorScopeItemResponse": {
+        "properties": {
+          "ots_id": {
+            "type": "integer",
+            "title": "Ots Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "official_website": {
+            "type": "string",
+            "title": "Official Website"
+          },
+          "last_covered_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Covered Time"
+          },
+          "is_initial_collection": {
+            "type": "boolean",
+            "title": "Is Initial Collection"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ots_id",
+          "ots_name",
+          "ots_version",
+          "official_website",
+          "last_covered_time",
+          "is_initial_collection"
+        ],
+        "title": "CollectorScopeItemResponse"
+      },
+      "CollectorScopePreviewResponse": {
+        "properties": {
+          "scope_count": {
+            "type": "integer",
+            "title": "Scope Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CollectorScopeItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "comparison_baseline": {
+            "$ref": "#/components/schemas/CollectorScopeBaselineResponse"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/CollectorScopeChangesResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope_count",
+          "items",
+          "comparison_baseline",
+          "changes"
+        ],
+        "title": "CollectorScopePreviewResponse"
+      },
       "CsvImportResultResponse": {
         "properties": {
           "created_ots": {
