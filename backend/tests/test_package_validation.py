@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import time
+import tracemalloc
 from dataclasses import replace
 from io import StringIO
 
@@ -203,6 +205,10 @@ def test_rejects_scope_and_reference_violations(mutator, expected_code: str, fie
     assert result.is_valid is False
     assert expected_code in error_codes(result)
     assert any(error.field == field and error.row_number is not None for error in result.errors)
+    if expected_code == "PACKAGE_SCOPE_INVALID" and field == "ots_id":
+        affected_file = "lifecycle.csv" if rows["lifecycle.csv"] else "matches.csv"
+        assert result.file_stats[affected_file].new == 0
+        assert result.file_stats[affected_file].error == 1
 
 
 def test_rejects_scope_snapshot_ots_unknown_to_platform() -> None:
@@ -277,3 +283,30 @@ def test_error_output_is_bounded_and_download_contract_is_stable() -> None:
     assert content.startswith(b"error_code,file_name,row_number,field,reason,rejected_value\r\n")
     parsed = list(csv.DictReader(StringIO(content.decode("utf-8"))))
     assert len(parsed) == 5
+
+
+def test_ten_thousand_domain_rows_validate_under_five_minutes_with_bounded_memory() -> None:
+    rows = base_rows()
+    rows["cwes.csv"] = [
+        {"cve_id": "CVE-2026-0001", "cwe_id": f"CWE-{index + 1}"}
+        for index in range(10_000)
+    ]
+    package = build_package(rows=rows)
+
+    tracemalloc.start()
+    started = time.perf_counter()
+    try:
+        result = validate_package(
+            package,
+            "ots_intelligence_20260822_010203.zip",
+            {1},
+        )
+        duration = time.perf_counter() - started
+        _, peak_memory = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert result.is_valid is True
+    assert result.file_stats["cwes.csv"].new == 10_000
+    assert duration < 300
+    assert peak_memory < 256 * 1024 * 1024
