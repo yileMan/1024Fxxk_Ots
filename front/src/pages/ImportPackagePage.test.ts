@@ -24,7 +24,7 @@ function response(status: 'validated' | 'failed') {
       ? { total: 7, new: 6, update: 0, duplicate: 1, conflict: 0, error: 0 }
       : { total: 7, new: 5, update: 0, duplicate: 0, conflict: 0, error: 2 },
     file_stats: {
-      'vulnerabilities.csv': {
+      'nvd_cves.csv': {
         total: 1, new: status === 'validated' ? 1 : 0, update: 0, duplicate: 0,
         conflict: 0, error: status === 'validated' ? 0 : 1,
         samples: status === 'validated' ? [{ cve_id: 'CVE-2026-0001', status: 'published' }] : [],
@@ -32,10 +32,10 @@ function response(status: 'validated' | 'failed') {
     },
     errors: status === 'failed' ? [{
       error_code: 'PACKAGE_SCOPE_INVALID',
-      file_name: 'matches.csv',
+      file_name: 'nvd_cves.csv',
       row_number: 2,
-      field: 'ots_id',
-      reason: '候选匹配引用范围外 OTS',
+      field: 'matched_ots_json',
+      reason: '候选匹配包含范围外 OTS',
       rejected_value: '999',
     }] : [],
     total_error_count: status === 'failed' ? 2 : 0,
@@ -71,6 +71,8 @@ describe('ImportPackagePage', () => {
     expect(wrapper.text()).toContain('校验预览')
     expect(wrapper.text()).toContain('确认导入')
     expect(wrapper.text()).toContain('查看结果')
+    expect(wrapper.text()).toContain('固定三文件根目录')
+    expect(wrapper.text()).toContain('仅接收 NVD')
     expect(wrapper.get('[data-step="confirm"]').attributes('aria-disabled')).toBe('true')
     expect(wrapper.get('[data-step="result"]').attributes('aria-disabled')).toBe('true')
   })
@@ -88,7 +90,7 @@ describe('ImportPackagePage', () => {
     expect(wrapper.text()).toContain('6')
     expect(wrapper.text()).toContain('重复')
     expect(wrapper.text()).toContain('1')
-    expect(wrapper.text()).toContain('vulnerabilities.csv')
+    expect(wrapper.text()).toContain('nvd_cves.csv')
     expect(wrapper.text()).toContain('CVE-2026-0001')
     expect(wrapper.get('[data-step="confirm"]').attributes('aria-disabled')).toBe('true')
   })
@@ -123,9 +125,9 @@ describe('ImportPackagePage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('校验未通过')
-    expect(wrapper.text()).toContain('matches.csv')
+    expect(wrapper.text()).toContain('nvd_cves.csv')
     expect(wrapper.text()).toContain('第 2 行')
-    expect(wrapper.text()).toContain('ots_id')
+    expect(wrapper.text()).toContain('matched_ots_json')
     expect(wrapper.text()).toContain('另有 1 项未在页面展示')
     await wrapper.get('button[data-action="download-errors"]').trigger('click')
     await flushPromises()

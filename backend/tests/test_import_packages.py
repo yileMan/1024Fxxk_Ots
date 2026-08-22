@@ -21,6 +21,7 @@ from tests.package_fixtures import (
     build_package,
     build_zip_with_member,
     build_zip_with_symlink,
+    json_value,
 )
 from uuid import uuid4
 
@@ -114,7 +115,7 @@ def test_duplicate_batch_number_with_different_package_returns_existing_batch(cl
     login(client)
     first = client.post("/api/v1/import-packages/validate", files=package_upload(build_package()))
     rows = base_rows()
-    rows["vulnerabilities.csv"][0]["description"] = "内容不同但批次号相同"
+    rows["nvd_cves.csv"][0]["description"] = "内容不同但批次号相同"
     second = client.post(
         "/api/v1/import-packages/validate",
         files=package_upload(build_package(rows=rows)),
@@ -131,7 +132,9 @@ def test_duplicate_batch_number_with_different_package_returns_existing_batch(cl
 def test_failed_validation_persists_bounded_errors_and_downloads_csv(client: TestClient) -> None:
     login(client)
     rows = base_rows()
-    rows["matches.csv"][0]["ots_id"] = 999
+    rows["nvd_cves.csv"][0]["matched_ots_json"] = json_value(
+        [{"ots_id": 999, "match_method": "cpe", "match_evidence": "x", "confidence": 0.8}]
+    )
     response = client.post(
         "/api/v1/import-packages/validate",
         files=package_upload(build_package(rows=rows)),
@@ -140,9 +143,9 @@ def test_failed_validation_persists_bounded_errors_and_downloads_csv(client: Tes
     assert response.status_code == 201
     payload = response.json()
     assert payload["status"] == "failed"
-    assert payload["errors"][0]["file_name"] == "matches.csv"
+    assert payload["errors"][0]["file_name"] == "nvd_cves.csv"
     assert payload["errors"][0]["row_number"] == 2
-    assert payload["errors"][0]["field"] == "ots_id"
+    assert payload["errors"][0]["field"] == "matched_ots_json"
     assert payload["total_error_count"] >= 1
 
     download = client.get(f"/api/v1/import-packages/{payload['id']}/errors")
@@ -180,7 +183,7 @@ def test_unsafe_zip_still_leaves_identifiable_failed_batch_and_no_temp_file(clie
     [
         (build_zip_with_member("../manifest.csv"), "PACKAGE_ZIP_UNSAFE"),
         (build_zip_with_symlink(), "PACKAGE_ZIP_UNSAFE"),
-        (build_package(override_files={"cwes.csv": b"x" * 1_000_000}), "PACKAGE_TOO_LARGE"),
+        (build_package(override_files={"nvd_cves.csv": b"x" * 1_000_000}), "PACKAGE_TOO_LARGE"),
     ],
 )
 def test_malicious_zip_is_rejected_vertically_without_temp_residue(

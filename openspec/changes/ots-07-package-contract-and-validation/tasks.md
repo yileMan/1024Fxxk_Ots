@@ -1,9 +1,9 @@
 ## 1. 三文件契约测试
 
-- [ ] 1.1 将确定性最小夹具改为 `manifest.csv`、`collector_scope.csv`、`nvd_cves.csv` 三文件，并验证相同输入生成稳定字节
-- [ ] 1.2 先编写精确文件集合与 manifest 测试，拒绝旧十文件包、KEV/EOL 占位文件、缺失/未知文件及非两个 file 摘要记录
-- [ ] 1.3 先编写 `nvd_cves.csv` 固定表头、基础字段、五个 JSON 数组字段、一行一个 CVE、重复/冲突及 64 KiB 字段限制测试
-- [ ] 1.4 先编写 `matched_ots_json` 对象结构、非空候选、范围外 OTS、不可识别范围 OTS 和候选语义测试
+- [x] 1.1 将确定性最小夹具改为 `manifest.csv`、`collector_scope.csv`、`nvd_cves.csv` 三文件，并验证相同输入生成稳定字节
+- [x] 1.2 先编写精确文件集合与 manifest 测试，拒绝旧十文件包、KEV/EOL 占位文件、缺失/未知文件及非两个 file 摘要记录
+- [x] 1.3 先编写 `nvd_cves.csv` 固定表头、基础字段、五个 JSON 数组字段、一行一个 CVE、重复/冲突及 64 KiB 字段限制测试
+- [x] 1.4 先编写 `matched_ots_json` 对象结构、非空候选、范围外 OTS、不可识别范围 OTS 和候选语义测试
 
 ## 2. 后端契约收敛
 

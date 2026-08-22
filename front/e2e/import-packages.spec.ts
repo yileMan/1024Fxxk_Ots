@@ -15,7 +15,7 @@ const validated = {
   can_import: false,
   summary: { total: 7, new: 7, update: 0, duplicate: 0, conflict: 0, error: 0 },
   file_stats: {
-    'vulnerabilities.csv': {
+    'nvd_cves.csv': {
       total: 1, new: 1, update: 0, duplicate: 0, conflict: 0, error: 0,
       samples: [{ cve_id: 'CVE-2026-0001', status: 'published' }],
     },
@@ -32,8 +32,8 @@ const failed = {
   status: 'failed',
   summary: { total: 7, new: 5, update: 0, duplicate: 0, conflict: 0, error: 2 },
   errors: [{
-    error_code: 'PACKAGE_SCOPE_INVALID', file_name: 'matches.csv', row_number: 2,
-    field: 'ots_id', reason: '候选匹配引用范围外 OTS', rejected_value: '999',
+    error_code: 'PACKAGE_SCOPE_INVALID', file_name: 'nvd_cves.csv', row_number: 2,
+    field: 'matched_ots_json', reason: '候选匹配包含范围外 OTS', rejected_value: '999',
   }],
   total_error_count: 2,
   truncated_error_count: 1,
@@ -53,6 +53,8 @@ test('管理员上传合规包并查看只读校验预览', async ({ page }) => 
   await page.goto('/system')
   await page.getByRole('link', { name: '数据包导入', exact: true }).click()
   await expect(page.getByRole('heading', { name: '数据包导入' })).toBeVisible()
+  await expect(page.getByText('固定三文件根目录')).toBeVisible()
+  await expect(page.getByText('仅接收 NVD')).toBeVisible()
   await page.locator('input[type="file"]').setInputFiles({
     name: 'ots_intelligence_20260822_010203.zip',
     mimeType: 'application/zip',
@@ -79,7 +81,7 @@ test('损坏包展示精确错误并下载有界清单', async ({ page }) => {
   })
   await page.getByRole('button', { name: '上传并开始校验' }).click()
   await expect(page.getByRole('heading', { name: '校验未通过' })).toBeVisible()
-  await expect(page.getByText('matches.csv')).toBeVisible()
+  await expect(page.getByText('nvd_cves.csv')).toBeVisible()
   await expect(page.getByText('第 2 行')).toBeVisible()
   await page.getByRole('button', { name: '下载错误清单 CSV' }).click()
   await expect(page.getByText('已下载 package_validation_errors.csv')).toBeVisible()

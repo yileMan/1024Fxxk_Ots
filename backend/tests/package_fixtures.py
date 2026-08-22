@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
+from collections.abc import Callable
 from io import BytesIO, StringIO
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
@@ -31,57 +33,25 @@ CSV_FIELDS = {
         "covered_to",
         "error_message",
     ),
-    "vulnerabilities.csv": (
+    "nvd_cves.csv": (
         "cve_id",
         "status",
         "published_at",
         "last_modified_at",
         "description",
-        "source",
-    ),
-    "affected_ranges.csv": (
-        "cve_id",
-        "cpe",
-        "version_start_including",
-        "version_start_excluding",
-        "version_end_including",
-        "version_end_excluding",
-    ),
-    "cvss_scores.csv": (
-        "cve_id",
-        "source",
-        "cvss_version",
-        "base_score",
-        "base_severity",
-        "vector",
-    ),
-    "cwes.csv": ("cve_id", "cwe_id"),
-    "references.csv": ("cve_id", "url", "tags"),
-    "kev.csv": (
-        "cve_id",
-        "date_added",
-        "due_date",
-        "known_ransomware_campaign_use",
-        "required_action",
-    ),
-    "lifecycle.csv": (
-        "ots_id",
-        "cycle",
-        "release_date",
-        "eol_date",
-        "status",
-        "source_url",
-    ),
-    "matches.csv": (
-        "cve_id",
-        "ots_id",
-        "match_method",
-        "match_evidence",
-        "confidence",
+        "cvss_json",
+        "cwes_json",
+        "references_json",
+        "configurations_json",
+        "matched_ots_json",
     ),
 }
 
 SCOPE_EXPORT_ID = "2ef57421-4978-47b2-897c-3b8dfe7e1ea0"
+
+
+def json_value(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
 def csv_bytes(file_name: str, rows: list[dict[str, object]]) -> bytes:
@@ -90,6 +60,58 @@ def csv_bytes(file_name: str, rows: list[dict[str, object]]) -> bytes:
     writer.writeheader()
     writer.writerows(rows)
     return output.getvalue().encode("utf-8")
+
+
+def nvd_row(cve_id: str = "CVE-2026-0001", *, ots_id: int = 1) -> dict[str, object]:
+    return {
+        "cve_id": cve_id,
+        "status": "published",
+        "published_at": "2026-08-01T00:00:00Z",
+        "last_modified_at": "2026-08-02T00:00:00Z",
+        "description": "测试漏洞",
+        "cvss_json": json_value(
+            [
+                {
+                    "source": "nvd",
+                    "version": "3.1",
+                    "base_score": 7.5,
+                    "base_severity": "HIGH",
+                    "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+                }
+            ]
+        ),
+        "cwes_json": json_value(["CWE-79"]),
+        "references_json": json_value(
+            [{"url": f"https://example.test/{cve_id}", "tags": ["advisory"]}]
+        ),
+        "configurations_json": json_value(
+            [
+                {
+                    "nodes": [
+                        {
+                            "operator": "OR",
+                            "cpe_match": [
+                                {
+                                    "criteria": "cpe:2.3:a:openssl:openssl:*:*:*:*:*:*:*:*",
+                                    "vulnerable": True,
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ]
+        ),
+        "matched_ots_json": json_value(
+            [
+                {
+                    "ots_id": ots_id,
+                    "match_method": "cpe",
+                    "match_evidence": "vendor/product/version",
+                    "confidence": 0.95,
+                }
+            ]
+        ),
+    }
 
 
 def base_rows() -> dict[str, list[dict[str, object]]]:
@@ -104,51 +126,7 @@ def base_rows() -> dict[str, list[dict[str, object]]]:
                 "last_covered_time": "2026-08-01T00:00:00.000Z",
             }
         ],
-        "vulnerabilities.csv": [
-            {
-                "cve_id": "CVE-2026-0001",
-                "status": "published",
-                "published_at": "2026-08-01T00:00:00Z",
-                "last_modified_at": "2026-08-02T00:00:00Z",
-                "description": "测试漏洞",
-                "source": "nvd",
-            }
-        ],
-        "affected_ranges.csv": [
-            {
-                "cve_id": "CVE-2026-0001",
-                "cpe": "cpe:2.3:a:openssl:openssl:*:*:*:*:*:*:*:*",
-                "version_start_including": "3.0.0",
-                "version_start_excluding": "",
-                "version_end_including": "3.0.1",
-                "version_end_excluding": "",
-            }
-        ],
-        "cvss_scores.csv": [
-            {
-                "cve_id": "CVE-2026-0001",
-                "source": "nvd",
-                "cvss_version": "3.1",
-                "base_score": "7.5",
-                "base_severity": "HIGH",
-                "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-            }
-        ],
-        "cwes.csv": [{"cve_id": "CVE-2026-0001", "cwe_id": "CWE-79"}],
-        "references.csv": [
-            {"cve_id": "CVE-2026-0001", "url": "https://example.test/CVE-2026-0001", "tags": "advisory"}
-        ],
-        "kev.csv": [],
-        "lifecycle.csv": [],
-        "matches.csv": [
-            {
-                "cve_id": "CVE-2026-0001",
-                "ots_id": 1,
-                "match_method": "cpe",
-                "match_evidence": "vendor/product/version",
-                "confidence": "0.95",
-            }
-        ],
+        "nvd_cves.csv": [nvd_row()],
     }
 
 
@@ -161,6 +139,7 @@ def build_package(
     mutate_files: dict[str, bytes] | None = None,
     omit_files: set[str] | None = None,
     extra_files: dict[str, bytes] | None = None,
+    manifest_mutator: Callable[[list[dict[str, object]]], None] | None = None,
 ) -> bytes:
     package_rows = rows or base_rows()
     files = {
@@ -198,6 +177,8 @@ def build_package(
             "covered_to": "2026-08-22T00:00:00Z",
         },
     ]
+    if manifest_mutator is not None:
+        manifest_mutator(manifest_rows)
     files["manifest.csv"] = csv_bytes("manifest.csv", manifest_rows)
     files.update(mutate_files or {})
     for name in omit_files or set():
