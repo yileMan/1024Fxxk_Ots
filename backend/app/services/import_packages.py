@@ -86,6 +86,7 @@ class ImportPackageService:
             )
             if not created:
                 return self._response(batch, duplicate=True), False
+            archived_path: Path | None = None
             try:
                 with self._session_factory() as session:
                     known_ots_ids = self._repository.list_ots_ids(session)
@@ -108,10 +109,18 @@ class ImportPackageService:
                 archive_relative: str | None = None
                 if result.is_valid:
                     archive_relative = f"{batch.id}/package.zip"
-                    archive_path = self._settings.import_archive_dir / archive_relative
-                    archive_path.parent.mkdir(parents=True, exist_ok=True)
-                    os.replace(temporary_path, archive_path)
-                batch = self._finish_batch(batch.id, result, archive_relative)
+                    archived_path = self._settings.import_archive_dir / archive_relative
+                    archived_path.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(temporary_path, archived_path)
+                try:
+                    batch = self._finish_batch(batch.id, result, archive_relative)
+                except IntegrityError:
+                    self._cleanup_archive(archived_path)
+                    existing_batch = self._existing_by_batch_no(result.batch_no or "")
+                    if existing_batch is not None and existing_batch.id != batch.id:
+                        self._delete_placeholder(batch.id)
+                        return self._response(existing_batch, duplicate=True), False
+                    raise
                 logger.info(
                     "package_validation_completed batch_id=%s status=%s errors=%s",
                     batch.id,
@@ -121,6 +130,8 @@ class ImportPackageService:
                 return self._response(batch, duplicate=False), True
             except Exception:
                 logger.exception("package_validation_failed batch_id=%s", batch.id)
+                self._cleanup_archive(archived_path)
+                self._mark_internal_failure(batch.id)
                 raise
         finally:
             await upload.close()
@@ -184,6 +195,40 @@ class ImportPackageService:
             batch = self._repository.get_by_id(session, batch_id)
             if batch is not None and batch.status == "uploaded":
                 session.delete(batch)
+
+    def _mark_internal_failure(self, batch_id: int) -> None:
+        try:
+            with self._session_factory.begin() as session:
+                batch = self._repository.get_by_id(session, batch_id)
+                if batch is None or batch.status != "uploaded":
+                    return
+                issue = ValidationIssue(
+                    "INTERNAL_ERROR",
+                    "package.zip",
+                    None,
+                    None,
+                    "校验服务异常终止",
+                    None,
+                )
+                batch.status = "failed"
+                batch.format_version = "unknown"
+                batch.error_json = {
+                    "items": [asdict(issue)],
+                    "total_count": 1,
+                    "truncated_count": 0,
+                }
+        except Exception:
+            logger.exception("package_failure_state_update_failed batch_id=%s", batch_id)
+
+    @staticmethod
+    def _cleanup_archive(archive_path: Path | None) -> None:
+        if archive_path is None:
+            return
+        archive_path.unlink(missing_ok=True)
+        try:
+            archive_path.parent.rmdir()
+        except OSError:
+            pass
 
     def _finish_batch(
         self,

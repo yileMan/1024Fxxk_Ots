@@ -16,7 +16,12 @@ from app.models.imports import ImportBatch
 from app.models.ots import OtsComponent
 from app.models.user import AuditLog, Base
 from app.services.authentication import AuthenticationService
-from tests.package_fixtures import base_rows, build_package
+from tests.package_fixtures import (
+    base_rows,
+    build_package,
+    build_zip_with_member,
+    build_zip_with_symlink,
+)
 from uuid import uuid4
 
 
@@ -167,6 +172,31 @@ def test_unsafe_zip_still_leaves_identifiable_failed_batch_and_no_temp_file(clie
     assert payload["status"] == "failed"
     assert payload["batch_no"].startswith("upload:")
     assert payload["errors"][0]["error_code"] == "PACKAGE_STRUCTURE_INVALID"
+    assert list(client.app.state.settings.import_temp_dir.glob("*")) == []
+
+
+@pytest.mark.parametrize(
+    ("package", "expected_code"),
+    [
+        (build_zip_with_member("../manifest.csv"), "PACKAGE_ZIP_UNSAFE"),
+        (build_zip_with_symlink(), "PACKAGE_ZIP_UNSAFE"),
+        (build_package(override_files={"cwes.csv": b"x" * 1_000_000}), "PACKAGE_TOO_LARGE"),
+    ],
+)
+def test_malicious_zip_is_rejected_vertically_without_temp_residue(
+    client: TestClient,
+    package: bytes,
+    expected_code: str,
+) -> None:
+    login(client)
+    response = client.post(
+        "/api/v1/import-packages/validate",
+        files=package_upload(package),
+    )
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "failed"
+    assert response.json()["errors"][0]["error_code"] == expected_code
     assert list(client.app.state.settings.import_temp_dir.glob("*")) == []
 
 

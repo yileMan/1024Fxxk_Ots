@@ -300,8 +300,10 @@ def _decode_csv(
             if extra:
                 issues.add("PACKAGE_CSV_INVALID", file_name, "CSV 数据列数超过表头", row_number=row_number)
                 continue
+            row_invalid = False
             for field_name, value in normalized.items():
                 if len(value.encode("utf-8")) > limits.max_field_bytes:
+                    row_invalid = True
                     issues.add(
                         "PACKAGE_CSV_INVALID",
                         file_name,
@@ -311,6 +313,8 @@ def _decode_csv(
                         rejected_value=value,
                     )
             normalized["__row_number__"] = str(row_number)
+            if row_invalid:
+                normalized["__invalid__"] = "1"
             rows.append(normalized)
         return rows
     except csv.Error:
@@ -574,9 +578,9 @@ def _classify_rows(
             file_stats = stats[file_name]
             file_stats.total += 1
             before = issues.total
-            row_valid = _validate_common_fields(file_name, row, issues)
+            row_valid = row.get("__invalid__") != "1" and _validate_common_fields(file_name, row, issues)
             key = tuple(row[field_name] for field_name in FILE_KEYS[file_name])
-            canonical = tuple(sorted((field_name, value) for field_name, value in row.items() if field_name != "__row_number__"))
+            canonical = tuple(sorted((field_name, value) for field_name, value in row.items() if not field_name.startswith("__")))
             if key in seen:
                 if seen[key] == canonical:
                     file_stats.duplicate += 1
@@ -598,7 +602,7 @@ def _classify_rows(
             file_stats.new += 1
             accepted[file_name].append(row)
             if len(file_stats.samples) < limits.max_samples_per_file:
-                file_stats.samples.append({key: value for key, value in row.items() if key != "__row_number__"})
+                file_stats.samples.append({key: value for key, value in row.items() if not key.startswith("__")})
     return stats, accepted
 
 
@@ -608,31 +612,39 @@ def _validate_references(
     stats: dict[str, FileStats],
     issues: _IssueCollector,
 ) -> None:
+    def mark_error(file_name: str, row: dict[str, str]) -> None:
+        file_stats = stats[file_name]
+        file_stats.new = max(0, file_stats.new - 1)
+        file_stats.error += 1
+        sample = {key: value for key, value in row.items() if not key.startswith("__")}
+        if sample in file_stats.samples:
+            file_stats.samples.remove(sample)
+
     vulnerability_ids = {row["cve_id"] for row in accepted["vulnerabilities.csv"]}
     matched_cves: set[str] = set()
     for row in accepted["matches.csv"]:
         ots_id = int(row["ots_id"])
         if ots_id not in scope_ids:
-            stats["matches.csv"].error += 1
+            mark_error("matches.csv", row)
             issues.add("PACKAGE_SCOPE_INVALID", "matches.csv", "候选匹配引用范围外 OTS", row_number=_row_number(row), field_name="ots_id", rejected_value=ots_id)
         elif row["cve_id"] not in vulnerability_ids:
-            stats["matches.csv"].error += 1
+            mark_error("matches.csv", row)
             issues.add("PACKAGE_REFERENCE_INVALID", "matches.csv", "候选匹配引用不存在的 CVE", row_number=_row_number(row), field_name="cve_id", rejected_value=row["cve_id"])
         else:
             matched_cves.add(row["cve_id"])
     for row in accepted["vulnerabilities.csv"]:
         if row["cve_id"] not in matched_cves:
-            stats["vulnerabilities.csv"].error += 1
+            mark_error("vulnerabilities.csv", row)
             issues.add("PACKAGE_REFERENCE_INVALID", "vulnerabilities.csv", "CVE 没有任何范围内 OTS 候选匹配", row_number=_row_number(row), field_name="cve_id", rejected_value=row["cve_id"])
     for file_name in ("affected_ranges.csv", "cvss_scores.csv", "cwes.csv", "references.csv", "kev.csv"):
         for row in accepted[file_name]:
             if row["cve_id"] not in matched_cves:
-                stats[file_name].error += 1
+                mark_error(file_name, row)
                 issues.add("PACKAGE_REFERENCE_INVALID", file_name, "记录引用不存在或无范围内匹配的 CVE", row_number=_row_number(row), field_name="cve_id", rejected_value=row["cve_id"])
     for row in accepted["lifecycle.csv"]:
         ots_id = int(row["ots_id"])
         if ots_id not in scope_ids:
-            stats["lifecycle.csv"].error += 1
+            mark_error("lifecycle.csv", row)
             issues.add("PACKAGE_SCOPE_INVALID", "lifecycle.csv", "生命周期记录引用范围外 OTS", row_number=_row_number(row), field_name="ots_id", rejected_value=ots_id)
 
 
