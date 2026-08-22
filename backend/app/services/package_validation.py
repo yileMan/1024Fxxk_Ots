@@ -67,6 +67,10 @@ JSON_FIELDS = (
 )
 
 
+def _reject_json_constant(value: str) -> object:
+    raise ValueError(f"非标准 JSON 常量: {value}")
+
+
 @dataclass(frozen=True)
 class PackageLimits:
     max_upload_bytes: int = 50 * 1024 * 1024
@@ -477,8 +481,8 @@ def _validate_common_fields(
     parsed_json: dict[str, list[object]] = {}
     for field_name in JSON_FIELDS:
         try:
-            value = json.loads(row[field_name])
-        except json.JSONDecodeError:
+            value = json.loads(row[field_name], parse_constant=_reject_json_constant)
+        except (json.JSONDecodeError, ValueError, RecursionError):
             invalid(field_name, "字段不是合法 JSON")
             continue
         if not isinstance(value, list):
