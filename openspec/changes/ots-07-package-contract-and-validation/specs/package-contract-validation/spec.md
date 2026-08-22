@@ -5,10 +5,10 @@
 ## ADDED Requirements
 
 ### Requirement: 接受唯一的版本化数据包结构
-系统 SHALL 仅接受文件名符合 `ots_intelligence_YYYYMMDD_HHMMSS.zip` 且格式版本受支持的 ZIP 数据包。格式版本 `1.0` 的 ZIP 根目录 MUST 且只能包含 `collector_scope.csv`、`manifest.csv`、`vulnerabilities.csv`、`affected_ranges.csv`、`cvss_scores.csv`、`cwes.csv`、`references.csv`、`kev.csv`、`lifecycle.csv` 和 `matches.csv`；没有业务记录的领域文件仍 MUST 以规范表头空文件存在。
+系统 SHALL 仅接受文件名符合 `ots_intelligence_YYYYMMDD_HHMMSS.zip` 且格式版本受支持的 ZIP 数据包。格式版本 `1.0` 的 ZIP 根目录 MUST 且只能包含 `manifest.csv`、`collector_scope.csv` 和 `nvd_cves.csv`。`nvd_cves.csv` MUST 一行表示一个 NVD CVE；格式 `1.0` MUST NOT 包含 KEV、EOL 或拆分后的漏洞子文件，未来数据源只能通过新的格式版本引入。
 
 #### Scenario: 上传完整兼容包
-- **GIVEN** 管理员选择名称合法、包含全部十个根目录文件且 manifest 声明 `format_version=1.0` 的 ZIP
+- **GIVEN** 管理员选择名称合法、包含三个固定根目录文件且 manifest 声明 `format_version=1.0` 的 ZIP
 - **WHEN** 系统接收数据包
 - **THEN** 系统创建或返回对应上传批次并继续执行内容校验
 
@@ -41,7 +41,7 @@
 - **THEN** 系统拒绝整个数据包且不跟随链接、不读取包外文件
 
 ### Requirement: 固定 CSV 编码、表头与公共字段规则
-格式版本 `1.0` 的所有 CSV MUST 使用 UTF-8 无 BOM、逗号分隔、双引号转义和 CRLF 换行，MUST 使用契约规定的精确表头顺序，且不得包含未声明列、重复表头、NUL 字节或超过字段长度上限的值。时间字段 MUST 使用带时区的 ISO 8601/RFC 3339，标识符、枚举、数值和空值 MUST 按各文件 Schema 校验；系统 SHALL NOT 自动映射历史或相似列名。
+格式版本 `1.0` 的所有 CSV MUST 使用 UTF-8 无 BOM、逗号分隔、双引号转义和 CRLF 换行，MUST 使用契约规定的精确表头顺序，且不得包含未声明列、重复表头、NUL 字节或超过字段长度上限的值。`nvd_cves.csv` 的固定表头 MUST 为 `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json`；其中五个 `*_json` 字段 MUST 是合法 JSON，`cvss_json`、`cwes_json`、`references_json`、`configurations_json` MUST 为数组，`matched_ots_json` MUST 为非空对象数组。时间字段 MUST 使用带时区的 ISO 8601/RFC 3339，标识符、枚举、数值和空值 MUST 按 Schema 校验；系统 SHALL NOT 自动映射历史或相似列名。
 
 #### Scenario: 合规 CSV 字节与表头
 - **GIVEN** 所有 CSV 使用规范编码、换行、转义、精确表头和有效字段值
@@ -58,8 +58,13 @@
 - **WHEN** 系统校验该行
 - **THEN** 系统记录实际文件、数据行号、字段和原因，且不把该行计为可写入记录
 
+#### Scenario: 非法或不兼容的 JSON 列
+- **GIVEN** `nvd_cves.csv` 某个 JSON 字段无法解析、不是规定的数组结构，或候选匹配对象缺少必填字段
+- **WHEN** 系统校验该 CVE 行
+- **THEN** 系统把错误定位到 `nvd_cves.csv` 的物理行和对应 JSON 字段，不接受该行
+
 ### Requirement: 验证 manifest、范围快照和文件摘要一致性
-`manifest.csv` MUST 包含且只包含一个 `package` 记录、每个非 manifest 文件一个 `file` 记录，以及 `collector_scope.csv` 中每个 OTS 一个 `scope_result` 记录。所有 manifest 记录 MUST 使用同一 `batch_no`、`format_version`、`scope_export_id` 与范围摘要；系统 MUST 验证范围 CSV 内唯一导出 ID、manifest 导出 ID 和 SHA-256 一致，MUST 对每个非 manifest 文件实际字节计算 SHA-256 并与 manifest 小写十六进制摘要逐一比较，并 MUST 验证包文件名时间与生成时间格式有效但不得把文件名当作可信来源。
+`manifest.csv` MUST 包含且只包含一个 `package` 记录、`collector_scope.csv` 与 `nvd_cves.csv` 各一个 `file` 记录，以及 `collector_scope.csv` 中每个 OTS 一个 `scope_result` 记录。所有 manifest 记录 MUST 使用同一 `batch_no`、`format_version`、`scope_export_id` 与范围摘要；系统 MUST 验证范围 CSV 内唯一导出 ID、manifest 导出 ID 和 SHA-256 一致，MUST 对两个非 manifest 文件实际字节计算 SHA-256 并与 manifest 小写十六进制摘要逐一比较，并 MUST 验证包文件名时间与生成时间格式有效但不得把文件名当作可信来源。
 
 #### Scenario: manifest 与文件完全一致
 - **GIVEN** manifest 的批次元数据、范围导出 ID、范围摘要、文件清单和各 SHA-256 均与 ZIP 内实际字节一致
@@ -94,28 +99,23 @@
 - **WHEN** 管理员再次上传
 - **THEN** 系统返回既有批次 ID、当前状态和稳定重复提示，不重复校验或新建记录
 
-### Requirement: 校验范围内 OTS 与跨文件引用闭包
-系统 MUST 验证 `collector_scope.csv` 每行使用同一个 manifest `scope_export_id`，OTS ID 不重复且能在管理平台识别；`matches.csv` 的每个 OTS ID MUST 存在于该范围快照。每个 `vulnerabilities.csv` CVE MUST 至少被一条有效 match 关联到范围内 OTS，且 `affected_ranges.csv`、`cvss_scores.csv`、`cwes.csv`、`references.csv` 和 `kev.csv` 只能引用已声明并具有范围内候选匹配的 CVE；`lifecycle.csv` 只能引用范围快照中的 OTS。候选匹配 MUST 始终标记为候选，不得形成产品受影响结论。
+### Requirement: 校验范围内 OTS 与 CVE 候选匹配
+系统 MUST 验证 `collector_scope.csv` 每行使用同一个 manifest `scope_export_id`，OTS ID 不重复且能在管理平台识别。`nvd_cves.csv` 每行 MUST 使用唯一且规范的 `cve_id`，其 `matched_ots_json` MUST 至少包含一个候选匹配对象；每个对象 MUST 提供正整数 `ots_id`、非空 `match_method`、非空 `match_evidence` 和可空的 0～1 `confidence`，且 `ots_id` MUST 存在于该范围快照。候选匹配 MUST 始终标记为候选，不得形成产品受影响结论。
 
-#### Scenario: 合法引用闭包
-- **GIVEN** 所有领域记录的父键存在，每个 CVE 至少有一个范围内 OTS match，且生命周期记录仅引用范围 OTS
-- **WHEN** 系统执行跨文件校验
-- **THEN** 系统接受引用闭包并按文件和实体统计可预览记录
+#### Scenario: 合法候选匹配
+- **GIVEN** 每个 NVD CVE 的 `matched_ots_json` 至少包含一个结构合法且指向范围内 OTS 的候选匹配
+- **WHEN** 系统执行范围与候选匹配校验
+- **THEN** 系统接受该 CVE 并按 `nvd_cves.csv` 统计可预览记录
 
 #### Scenario: 范围外或不可识别 OTS
-- **GIVEN** match 或 lifecycle 引用不在范围快照中的 OTS，或范围快照 OTS 已无法由平台识别
+- **GIVEN** `matched_ots_json` 引用不在范围快照中的 OTS，或范围快照 OTS 已无法由平台识别
 - **WHEN** 系统执行范围校验
-- **THEN** 系统拒绝整个数据包，并把错误定位到引用文件、行和 `ots_id`
+- **THEN** 系统拒绝整个数据包，并把错误定位到 `nvd_cves.csv` 的行和 `matched_ots_json`
 
 #### Scenario: 无匹配 CVE
-- **GIVEN** vulnerabilities 中某 CVE 没有任何有效 match 指向范围内 OTS
-- **WHEN** 系统完成 match 校验
+- **GIVEN** `nvd_cves.csv` 某 CVE 的候选匹配为空，或所有候选匹配均不指向范围内 OTS
+- **WHEN** 系统完成候选匹配校验
 - **THEN** 系统拒绝该包并把错误定位到该 CVE 记录，不允许把无关漏洞作为普通新增项预览
-
-#### Scenario: 子文件悬空引用
-- **GIVEN** 评分、CWE、引用、KEV 或受影响范围记录引用不存在或无范围内 match 的 CVE
-- **WHEN** 系统校验跨文件外键
-- **THEN** 系统拒绝该包，并把每个错误定位到子文件、行及 `cve_id`
 
 ### Requirement: 提供只读分类预览而不执行正式导入
 系统 SHALL 在校验阶段提供按文件及全包汇总的 `new`、`update`、`duplicate`、`conflict` 和 `error` 数量，并提供有限样例。OTS-07 的分类 MUST 表示包内结构与当前可识别主键的预校验结果；在 OTS-08～10 增加完整领域持久化前，系统 MUST 明确标记该预览不等同于最终导入差异，且确认导入动作 MUST 保持不可用。查看或刷新预览 SHALL NOT 改变批次状态或业务数据。
@@ -139,7 +139,7 @@
 每个校验错误 MUST 包含稳定错误码、文件名、可空数据行号、可空字段、原因及不泄露敏感内容的截断错误值；文件级错误的行号和字段 SHALL 为空。系统 SHALL 为失败批次提供 UTF-8 无 BOM、CRLF 的 `package_validation_errors.csv` 下载，固定列为 `error_code,file_name,row_number,field,reason,rejected_value`，并 SHALL 在 API 与数据库 JSON 中限制错误数量和单值长度，同时保留“已截断”总数。
 
 #### Scenario: 行字段错误可定位
-- **GIVEN** 多个 CSV 的不同数据行存在字段和引用错误
+- **GIVEN** 范围 CSV 或 NVD CVE 行存在字段、JSON 或候选匹配错误
 - **WHEN** 校验完成并返回错误
 - **THEN** 每个错误分别包含真实 ZIP 文件名、以表头下一行为 2 的数据行号、字段名和稳定原因
 
@@ -172,10 +172,10 @@
 - **THEN** 页面显示可重试错误且不把旧结果显示为本次成功，服务端不留下不可识别的部分业务写入
 
 ### Requirement: 校验过程保持内网、可观测和可验证
-校验过程 MUST NOT 主动访问互联网、执行包内内容或保存外部 API Key。系统 SHALL 使用关联 ID 记录批次 ID、阶段、耗时、文件和错误码等非敏感结构化信息；对于不超过 10,000 条领域数据行且满足大小限制的合规包，校验能力 MUST 提供可重复的性能验证证据，并 SHALL 保持新增后端与前端代码覆盖率不低于 80%。
+校验过程 MUST NOT 主动访问互联网、执行包内内容或保存外部 API Key。系统 SHALL 使用关联 ID 记录批次 ID、阶段、耗时、文件和错误码等非敏感结构化信息；对于不超过 10,000 个 CVE 且满足大小限制的合规包，校验能力 MUST 提供可重复的性能验证证据，并 SHALL 保持新增后端与前端代码覆盖率不低于 80%。
 
 #### Scenario: 合规大包性能验证
-- **GIVEN** 合规数据包包含不超过 10,000 条领域数据行并处于约定资源上限内
+- **GIVEN** 合规数据包包含不超过 10,000 个 NVD CVE 并处于约定资源上限内
 - **WHEN** 在项目规定的代表性环境执行校验
 - **THEN** 校验在五分钟目标内完成，统计可重复且不发生互联网请求
 

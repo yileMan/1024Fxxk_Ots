@@ -4,19 +4,19 @@
 
 ## What Changes
 
-- 定义版本化 `ots_intelligence_YYYYMMDD_HHMMSS.zip` 包级契约、`manifest.csv`、原始 `collector_scope.csv` 快照、允许的领域 CSV 文件集合及公共编码、表头、时间、摘要和引用约束。
+- 定义版本化 `ots_intelligence_YYYYMMDD_HHMMSS.zip` 三文件包级契约：`manifest.csv`、原始 `collector_scope.csv` 快照和一行一个 CVE 的 `nvd_cves.csv`，并固定公共编码、表头、时间、JSON 列、摘要和范围引用约束。
 - 新增管理员专用的数据包上传、校验状态查询、预览和错误清单下载 API；上传后复用既有 `import_batch` 表记录 `uploaded`/`validated`/`failed` 批次、manifest、统计和错误，不创建新业务表。
 - 在读取 CSV 前校验 ZIP 路径、文件类型、文件数量、单文件大小、解压总大小和压缩比；拒绝路径穿越、压缩炸弹、重复/未知文件、非 UTF-8 内容、错误表头、超长字段和摘要不一致。
-- 校验批次号、格式版本、范围导出 ID、范围快照摘要、manifest 文件摘要、跨 CSV 引用、范围外 OTS 以及没有任何范围内 OTS 候选匹配的 CVE；错误统一定位到文件、行、字段和原因并可导出。
+- 校验批次号、格式版本、范围导出 ID、范围快照摘要、manifest 文件摘要、`nvd_cves.csv` 嵌套 JSON 结构、范围外 OTS 以及没有任何范围内 OTS 候选匹配的 CVE；错误统一定位到文件、行、字段和原因并可导出。
 - 新增“数据交换－数据包导入”四步向导骨架，本 change 交付“上传 → 校验预览”两步及后续步骤的禁用占位；展示新增、更新、重复、冲突、错误和文件级问题，暂不执行正式业务写入。
 - 提供合规最小样例包和恶意/损坏包契约测试，覆盖 `FR-EXCH-008`、`FR-EXCH-012`、`FR-EXCH-013`、`FR-EXCH-014` 与 NFR 12.3。
-- 非目标：不访问 NVD、CISA KEV 或 EOL 网络服务，不实现外部匹配算法，不写入漏洞、候选匹配、EOL 或评估数据，不推进逐 OTS 覆盖时间，不生成评估任务，也不实现管理员确认后的正式导入；这些分别属于 OTS-08～10。
+- 非目标：不访问 NVD 网络服务，不实现外部匹配算法，不接收 KEV/EOL 文件，不写入漏洞、候选匹配或评估数据，不推进逐 OTS 覆盖时间，不生成评估任务，也不实现管理员确认后的正式导入。KEV/EOL 若确认启用，必须在后续 change 以新格式版本引入，不在 `1.0` 中保留空占位文件。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `package-contract-validation`: 定义离线 ZIP/CSV 数据包的版本化包级契约、安全上传、范围与引用校验、批次校验预览、错误清单以及管理员导入向导骨架。
+- `package-contract-validation`: 定义仅包含 NVD 输入的三文件离线 ZIP/CSV 数据包版本化契约、安全上传、范围与 JSON 引用校验、批次校验预览、错误清单以及管理员导入向导骨架。
 
 ### Modified Capabilities
 
@@ -28,5 +28,5 @@
 - 后端：新增包契约常量/Schema、安全 ZIP 读取与 CSV 校验服务、批次 Repository，以及数据包上传、详情/预览和错误清单下载路由；继续使用现有认证、管理员依赖和统一错误响应。
 - 前端：在现有“数据交换”导航下新增数据包导入页面、四步向导骨架、上传/校验/预览/错误下载交互；API 类型从 OpenAPI 生成。
 - 文件：仅在服务端受控目录临时处理或归档原始 ZIP，不向客户端回显服务器路径；失败和取消清理临时文件，归档策略不引入对象存储。
-- 测试与契约：增加 ZIP 安全、CSV 字节和表头、摘要、引用与范围、批次状态、权限、前端各状态及纵向上传预览场景；保持 10,000 行数据包五分钟目标的可验证基础。
-- 依赖：直接依赖 `ots-06-collector-scope-export` 的 `collector_scope.csv` 字节契约和既有 `import_batch` 表；为 OTS-08、OTS-09 和 OTS-10 提供后续扩展点，但不提前实现其领域写入行为。
+- 测试与契约：增加三文件 ZIP 安全、CSV 字节和表头、嵌套 JSON、摘要、候选匹配与范围、批次状态、权限、前端各状态及纵向上传预览场景；保持 10,000 个 CVE 数据包五分钟目标的可验证基础。
+- 依赖：直接依赖 `ots-06-collector-scope-export` 的 `collector_scope.csv` 字节契约和既有 `import_batch` 表；为 OTS-08 和 OTS-10 提供后续扩展点。OTS-09 的 KEV/EOL 输入必须先明确是否启用并升级格式版本。

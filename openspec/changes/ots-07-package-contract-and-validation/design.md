@@ -11,21 +11,21 @@
 - 固定 `1.0` 包级文件集合、CSV 物理 Schema、manifest 结构和兼容策略，使外部数据服务可独立生成契约样例。
 - 在任何 CSV 业务解析前建立双层 ZIP 资源限制和路径安全检查。
 - 复用 `import_batch` 形成 `uploaded → validated|failed` 的可恢复校验状态，并为后续正式导入保留同一批次 ID。
-- 以可组合的通用校验管线完成字节、Schema、摘要、引用、范围和包内重复/冲突分类；后续 change 在其后追加领域语义校验。
+- 以单行 CVE 与规范 JSON 列完成 NVD 字节、Schema、摘要、范围候选匹配和包内重复/冲突分类；后续 change 在其后追加领域语义校验。
 - 通过 OpenAPI 生成前端类型，交付管理员四步向导的前两步和错误清单下载。
 
 **Non-Goals:**
 
-- 不验证 NVD/KEV/EOL 数据是否真实，不访问其网络服务，也不实现候选匹配算法。
+- 不验证 NVD 数据是否真实，不访问其网络服务，也不实现候选匹配算法；`1.0` 不接收 KEV/EOL。
 - 不把校验通过记录写入 `vulnerability`、`vulnerability_ots_match`、`product_assessment` 或 `audit_log`，不推进 `last_covered_time`。
 - 不提供确认导入端点、后台队列、多 worker、对象存储、病毒扫描服务或 ZIP 数字签名。
 - 不把 OTS-07 的包内结构分类承诺为最终数据库差异；完整领域对比由 OTS-08～10 在同一预览模型上扩展。
 
 ## Decisions
 
-### 1. `1.0` 使用固定十文件根目录契约
+### 1. `1.0` 使用固定三文件根目录契约
 
-ZIP 文件名固定为 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。根目录恰好包含十个普通文件；`kev.csv`、`lifecycle.csv` 等无数据时仍包含表头，以避免“缺失表示无数据”与“生成失败”的歧义。未知文件、目录、大小写变体和重复规范化名称均拒绝。版本升级只通过新的 `format_version` 进入显式解析器，不对旧列名做启发式映射。
+ZIP 文件名固定为 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。根目录恰好包含 `manifest.csv`、`collector_scope.csv` 和 `nvd_cves.csv` 三个普通文件。未知文件、目录、大小写变体和重复规范化名称均拒绝。KEV/EOL 是否启用尚未确定，因此 `1.0` 不提供空占位文件；若后续启用，必须通过新的 `format_version` 进入显式解析器，不在同一版本中静默增加文件或映射旧列名。
 
 各 CSV `1.0` 固定表头如下：
 
@@ -33,25 +33,18 @@ ZIP 文件名固定为 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。根目录恰好�
 | --- | --- |
 | `collector_scope.csv` | `scope_export_id,ots_id,ots_name,ots_version,official_website,last_covered_time` |
 | `manifest.csv` | `record_type,format_version,batch_no,generated_at,producer_version,scope_export_id,scope_sha256,file_name,file_sha256,ots_id,collection_status,covered_from,covered_to,error_message` |
-| `vulnerabilities.csv` | `cve_id,status,published_at,last_modified_at,description,source` |
-| `affected_ranges.csv` | `cve_id,cpe,version_start_including,version_start_excluding,version_end_including,version_end_excluding` |
-| `cvss_scores.csv` | `cve_id,source,cvss_version,base_score,base_severity,vector` |
-| `cwes.csv` | `cve_id,cwe_id` |
-| `references.csv` | `cve_id,url,tags` |
-| `kev.csv` | `cve_id,date_added,due_date,known_ransomware_campaign_use,required_action` |
-| `lifecycle.csv` | `ots_id,cycle,release_date,eol_date,status,source_url` |
-| `matches.csv` | `cve_id,ots_id,match_method,match_evidence,confidence` |
+| `nvd_cves.csv` | `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json` |
 
-OTS-07 固定这些物理列、主键/父键和公共类型；OTS-08/09 在不改变 `1.0` 表头的前提下补齐领域取值规则、展示和样例契约。若其实施证明字段不足，必须先提出新格式版本或更新本 change 工件，不能静默增列。
+`nvd_cves.csv` 一行对应一个 CVE，`cve_id` 是业务键。`cvss_json`、`cwes_json`、`references_json` 和 `configurations_json` 使用规范 JSON 数组保存 NVD 的一对多结构；`matched_ots_json` 使用非空对象数组保存外部采集工具基于范围得到的候选关系，每个对象固定为 `{ots_id,match_method,match_evidence,confidence}`。JSON 使用紧凑 UTF-8、对象键按契约名称输出；数组顺序属于内容的一部分，接收端不替生成端重排。单字段仍受 64 KiB 上限约束，超过上限的异常复杂 CVE 必须作为生成失败报告，而不能产生无界包。
 
-替代方案“领域 change 各自追加任意 CSV 列”会使一个 `format_version` 对应多种不兼容表头，因此不采用。替代方案“JSON manifest + CSV 数据”更易表达层次，但与系统方案明确的 `manifest.csv` 不一致。
+采用 JSON 列而非五张规范化 NVD 子表，是因为当前交换边界只需要“一行一个 CVE”的完整输入，目标领域表尚未实现，提前拆表增加生成、校验和人工排错成本。替代方案“整行只放原始 NVD JSON”虽然更少列，但会把关键批次预览字段完全隐藏在不稳定的上游结构中；保留稳定标量列与五个明确 JSON 列可以兼顾简单性和可校验性。
 
 ### 2. manifest 使用三种行类型避免摘要循环
 
 `manifest.csv` 采用统一表头和以下行规则：
 
 - `package`：恰好一行，填写 `format_version`、`batch_no`、`generated_at`、`producer_version`、`scope_export_id`、`scope_sha256`；文件和 OTS 专属列为空。
-- `file`：对除 `manifest.csv` 外九个文件各一行，填写 `file_name` 与实际字节 SHA-256；公共批次列与 package 行一致。
+- `file`：对 `collector_scope.csv` 和 `nvd_cves.csv` 各一行，填写 `file_name` 与实际字节 SHA-256；公共批次列与 package 行一致。
 - `scope_result`：对范围 CSV 每个 OTS 恰好一行，填写 `ots_id`、`collection_status`、覆盖区间与可空错误摘要；公共批次列一致。
 
 不要求 manifest 自己的摘要，避免文件包含自身摘要导致循环。`collection_status` 仅允许 `succeeded/failed/not_run`；只有 `succeeded` 可提供 `covered_to`，`failed/not_run` 必须提供简短原因且不能推进覆盖。本 change 将这些结果保存到 `scope_coverage_json`，但只有 OTS-10 正式导入成功后才可让整个批次进入 `succeeded` 并成为下次范围导出的覆盖来源。
@@ -60,7 +53,7 @@ OTS-07 固定这些物理列、主键/父键和公共类型；OTS-08/09 在不�
 
 ### 3. 受限内存/临时文件流水线，不调用通用解压
 
-上传请求先以流式方式写入应用控制的临时目录并同步计算整包 SHA-256，文件名只作为元数据保存，实际临时名由服务生成。默认上限固定为：上传 ZIP 50 MiB、10 个成员、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 10,000 条数据行、单字段 UTF-8 后 64 KiB、错误明细 1,000 条、错误值 256 个字符。设置允许向下收紧，不允许在同一 `format_version` 下放宽到无法满足五分钟目标的数量级。
+上传请求先以流式方式写入应用控制的临时目录并同步计算整包 SHA-256，文件名只作为元数据保存，实际临时名由服务生成。默认上限固定为：上传 ZIP 50 MiB、3 个成员、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 10,000 条数据行、单字段 UTF-8 后 64 KiB、错误明细 1,000 条、错误值 256 个字符。设置允许向下收紧，不允许在同一 `format_version` 下放宽到无法满足五分钟目标的数量级。
 
 使用 ZIP central directory 先检查条目名、Unix mode/符号链接、声明大小和压缩比，再逐成员通过有字节计数上限的 reader 读取；不调用将成员路径直接映射到文件系统的 `extract`/`extractall`。实际读取字节超过声明或上限时立即失败。CSV 可逐行解析；需要跨文件引用的稳定键集合和有限样例保存在内存，V1 10,000 行规模无需新增 staging 表。
 
@@ -73,10 +66,10 @@ OTS-07 固定这些物理列、主键/父键和公共类型；OTS-08/09 在不�
 1. 请求权限、扩展名、上传流大小、整包 SHA-256；
 2. ZIP 可读性、路径/类型、精确文件集合、声明与实际资源限制；
 3. `manifest.csv` 自身编码、表头、行类型与公共元数据；
-4. 九个非 manifest 文件逐字节 SHA-256；
+4. 两个非 manifest 文件逐字节 SHA-256；
 5. 全部 CSV 编码、CRLF、表头、字段长度、行数和基础类型；
 6. 范围 ID/摘要/OTS 可识别性、manifest scope_result 完整性；
-7. 领域主键、包内重复/冲突和跨文件引用闭包；
+7. CVE 主键、JSON 结构、包内重复/冲突和候选 OTS 范围闭包；
 8. 统计、有限样例与规范 JSON 持久化。
 
 公共错误对象为 `{error_code,file_name,row_number,field,reason,rejected_value}`；行号使用文件物理行号，表头为第 1 行。安全错误不回显攻击路径原文之外的服务器信息，所有 rejected value 截断并去除控制字符。API 返回最多 100 条用于页面，数据库保存最多 1,000 条及 `total_count/truncated_count`；下载从同一持久化错误对象生成，不重新解析恶意包。
@@ -107,9 +100,9 @@ V1 上限和五分钟目标允许单请求同步完成，省去后台任务/轮�
 
 ### 8. 预览分类先表达包内结构，后续领域 change 扩展同一模型
 
-每个文件输出 `{new,update,duplicate,conflict,error,total}`：包内首次出现且基础/引用校验通过的唯一键计为 `new`；相同键与规范化内容相同的后续行计为 `duplicate`；相同键内容不同计为 `conflict`；基础或引用失败计为 `error`。当前数据库尚无漏洞表，因此 `update` 为 0，并在响应 `classification_basis=package_structure_v1` 与 `final_import_diff=false` 中明确说明。
+`nvd_cves.csv` 输出 `{new,update,duplicate,conflict,error,total}`：首次出现且基础、JSON 和范围校验通过的 `cve_id` 计为 `new`；相同 `cve_id` 与整行规范内容相同的后续行计为 `duplicate`；相同 `cve_id` 内容不同计为 `conflict`；基础、JSON 或范围失败计为 `error`。当前数据库尚无漏洞表，因此 `update` 为 0，并在响应 `classification_basis=package_structure_v1` 与 `final_import_diff=false` 中明确说明。
 
-OTS-08/09 在不破坏响应字段的前提下增加领域预览和数据库对比；OTS-10 才把确认动作能力置为 true。这样前端骨架和错误展示可先纵向验收，同时避免伪造对尚不存在目标表的“更新”判断。
+OTS-08 在不破坏响应字段的前提下增加 NVD 领域预览和数据库对比；OTS-10 才把确认动作能力置为 true。OTS-09 若确认接收 KEV/EOL，必须先提出新格式版本，不能改变 `1.0` 的三文件集合。
 
 ### 9. 前端四步向导由服务端能力驱动
 
@@ -119,7 +112,7 @@ OTS-08/09 在不破坏响应字段的前提下增加领域预览和数据库对�
 
 ### 10. 测试按契约夹具分层且验证无业务副作用
 
-测试构造确定性的最小合规包，再通过单一变异生成缺文件、未知文件、路径穿越、伪装符号链接、声明/实际超限、摘要篡改、BOM/编码/表头/字段错误、范围外 OTS、无 match CVE 和悬空引用。后端单元测试覆盖纯解析器，API/Repository 集成测试覆盖权限、状态、唯一键竞争、临时清理和 JSON；MySQL 测试验证现有表约束且确认表数不增加。前端组件测试覆盖所有向导状态，Playwright 使用系统 Chrome 完成“管理员上传合规包 → 查看预览”和“上传损坏包 → 下载错误清单”纵向场景。
+测试构造确定性的三文件最小合规包，再通过单一变异生成缺文件、未知文件、路径穿越、伪装符号链接、声明/实际超限、摘要篡改、BOM/编码/表头/字段错误、非法 JSON、范围外 OTS、空候选匹配和 CVE 重复/冲突。后端单元测试覆盖纯解析器，API/Repository 集成测试覆盖权限、状态、唯一键竞争、临时清理和 JSON；MySQL 测试验证现有表约束且确认表数不增加。前端组件测试覆盖所有向导状态，Playwright 使用系统 Chrome 完成“管理员上传合规三文件包 → 查看预览”和“上传损坏包 → 下载错误清单”纵向场景。
 
 每个写批次测试同时快照漏洞/候选/评估（若测试库已有）与 `audit_log`，验证均未改变；性能夹具包含不超过 10,000 条领域行并记录耗时、峰值内存和错误上限行为。
 
@@ -127,14 +120,14 @@ OTS-08/09 在不破坏响应字段的前提下增加领域预览和数据库对�
 
 - [范围导出未落库，manifest 与范围快照可能由同一外部方同时伪造] → 明确本 change 只验证包内一致性和 OTS 可识别性；人工离线介质是信任边界。若未来要求签发真实性，需单独变更 OTS-06 持久化或签名方案。
 - [同步校验接近五分钟可能超过代理默认超时] → 文档固定上传端点超时与大小设置，先用代表性 10,000 行包测量；不以引入队列掩盖部署配置问题。
-- [在内存保存引用集合可能随恶意唯一键增长] → 文件大小、行数、字段长度和条目数在构建集合前受限，错误明细与样例也有硬上限。
+- [JSON 单元格可能包含深层或超大上游结构] → 在解析前执行 64 KiB 字段限制，解析后仅接受规定的顶层数组和候选对象字段，不递归执行任何内容。
 - [失败批次保留但失败原包被删除，无法事后重新提取全部错误] → 首次校验聚合到 1,000 条并保存总数；安全上优先不持久保存恶意包，用户可修复后重新上传。
-- [固定全部领域表头可能被 OTS-08/09 证明不足] → 实施前用外部服务合规样例做契约评审；需要增列时显式升级 `format_version` 或先更新 OpenSpec，不在 `1.0` 下漂移。
+- [未来确认需要 KEV/EOL] → 由 OTS-09 提出 `1.1` 或后续格式并提供迁移说明；`1.0` 继续稳定接收仅 NVD 三文件包。
 - [批次占位号短暂存在] → 占位前缀是保留命名空间且只在未完成事务外可见；查询 API按批次 ID返回上传状态，不向用户承诺占位值为外部批次号。
 
 ## Migration Plan
 
-1. 先提交契约常量、样例包生成器和纯校验器测试；在无数据库写入下验证所有安全与引用场景。
+1. 先把十文件测试夹具替换为三文件夹具并提交 RED 证据，再修改契约常量和纯校验器，验证安全、JSON 与范围场景。
 2. 增加现有 `import_batch` Repository、受控目录设置和三个管理员 API；不新增 SQL 迁移，使用 MySQL 验证唯一键竞争、状态 JSON 和 11 表数量。
 3. 重新生成 OpenAPI TypeScript 类型，部署向导前两步与错误清单下载；以系统 Chrome 验证管理员和越权旅程。
 4. 使用 10,000 行合规包记录性能证据，并复核进程、代理上传大小/超时与归档目录权限。
