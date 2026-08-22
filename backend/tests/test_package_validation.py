@@ -215,6 +215,31 @@ def test_rejects_field_byte_limit() -> None:
     assert any(error.field == "description" for error in result.errors)
 
 
+def test_default_field_limit_accepts_one_mib_and_rejects_larger_value() -> None:
+    rows = base_rows()
+    rows["nvd_cves.csv"][0]["description"] = "x" * (1024 * 1024)
+
+    accepted = validate_package(
+        build_package(rows=rows),
+        "ots_intelligence_20260822_010203.zip",
+        {1},
+        limits=replace(DEFAULT_LIMITS, max_compression_ratio=10_000),
+    )
+
+    assert accepted.is_valid is True
+
+    rows["nvd_cves.csv"][0]["description"] += "x"
+    rejected = validate_package(
+        build_package(rows=rows),
+        "ots_intelligence_20260822_010203.zip",
+        {1},
+        limits=replace(DEFAULT_LIMITS, max_compression_ratio=10_000),
+    )
+
+    assert rejected.is_valid is False
+    assert any(error.field == "description" for error in rejected.errors)
+
+
 def test_rejects_unsupported_version() -> None:
     result = validate_package(
         build_package(format_version="2.0"),

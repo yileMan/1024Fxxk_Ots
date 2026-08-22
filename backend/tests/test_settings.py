@@ -41,7 +41,7 @@ def test_import_package_settings_have_safe_defaults_and_environment_overrides(tm
     assert settings.import_max_total_bytes == 200 * 1024 * 1024
     assert settings.import_max_compression_ratio == 100
     assert settings.import_max_csv_rows == 10_000
-    assert settings.import_max_field_bytes == 64 * 1024
+    assert settings.import_max_field_bytes == 1024 * 1024
     assert settings.import_max_errors == 1_000
 
 
