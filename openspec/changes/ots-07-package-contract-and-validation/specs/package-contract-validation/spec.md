@@ -41,7 +41,7 @@
 - **THEN** 系统拒绝整个数据包且不跟随链接、不读取包外文件
 
 ### Requirement: 固定 CSV 编码、表头与公共字段规则
-格式版本 `1.0` 的所有 CSV MUST 使用 UTF-8 无 BOM、逗号分隔、双引号转义和 CRLF 换行，MUST 使用契约规定的精确表头顺序，且不得包含未声明列、重复表头、NUL 字节或超过字段长度上限的值。`nvd_cves.csv` 的固定表头 MUST 为 `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json`；其中五个 `*_json` 字段 MUST 是合法 JSON，`cvss_json`、`cwes_json`、`references_json`、`configurations_json` MUST 为数组，`matched_ots_json` MUST 为非空对象数组。时间字段 MUST 使用带时区的 ISO 8601/RFC 3339，标识符、枚举、数值和空值 MUST 按 Schema 校验；系统 SHALL NOT 自动映射历史或相似列名。
+格式版本 `1.0` 的所有 CSV MUST 使用 UTF-8 无 BOM、逗号分隔、双引号转义和 CRLF 换行，MUST 使用契约规定的精确表头顺序，且不得包含未声明列、重复表头、NUL 字节或 UTF-8 编码后超过 1 MiB（1,048,576 字节）的字段值。`nvd_cves.csv` 的固定表头 MUST 为 `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json`；其中五个 `*_json` 字段 MUST 是合法 JSON，`cvss_json`、`cwes_json`、`references_json`、`configurations_json` MUST 为数组，`matched_ots_json` MUST 为非空对象数组。时间字段 MUST 使用带时区的 ISO 8601/RFC 3339，标识符、枚举、数值和空值 MUST 按 Schema 校验；系统 SHALL NOT 自动映射历史或相似列名。
 
 #### Scenario: 合规 CSV 字节与表头
 - **GIVEN** 所有 CSV 使用规范编码、换行、转义、精确表头和有效字段值
@@ -57,6 +57,11 @@
 - **GIVEN** 某数据行含 NUL、非法时间/枚举/标识符/数值、无法完成 CSV 转义解析或超过字段长度上限的值
 - **WHEN** 系统校验该行
 - **THEN** 系统记录实际文件、数据行号、字段和原因，且不把该行计为可写入记录
+
+#### Scenario: 接收真实的大型 NVD configuration
+- **GIVEN** 某个 `configurations_json` 字段 UTF-8 编码后大于 64 KiB 但不超过 1 MiB，且 JSON 与其余字段均符合契约
+- **WHEN** 系统校验该 CVE 行
+- **THEN** 系统不得仅因字段超过 64 KiB 拒绝该行，并继续执行 JSON、候选匹配和范围校验
 
 #### Scenario: 非法或不兼容的 JSON 列
 - **GIVEN** `nvd_cves.csv` 某个 JSON 字段无法解析、不是规定的数组结构，或候选匹配对象缺少必填字段

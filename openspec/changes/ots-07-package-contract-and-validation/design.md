@@ -35,7 +35,7 @@ ZIP 文件名固定为 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。根目录恰好�
 | `manifest.csv` | `record_type,format_version,batch_no,generated_at,producer_version,scope_export_id,scope_sha256,file_name,file_sha256,ots_id,collection_status,covered_from,covered_to,error_message` |
 | `nvd_cves.csv` | `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json` |
 
-`nvd_cves.csv` 一行对应一个 CVE，`cve_id` 是业务键。`cvss_json`、`cwes_json`、`references_json` 和 `configurations_json` 使用规范 JSON 数组保存 NVD 的一对多结构；`matched_ots_json` 使用非空对象数组保存外部采集工具基于范围得到的候选关系，每个对象固定为 `{ots_id,match_method,match_evidence,confidence}`。JSON 使用紧凑 UTF-8、对象键按契约名称输出；数组顺序属于内容的一部分，接收端不替生成端重排。单字段仍受 64 KiB 上限约束，超过上限的异常复杂 CVE 必须作为生成失败报告，而不能产生无界包。
+`nvd_cves.csv` 一行对应一个 CVE，`cve_id` 是业务键。`cvss_json`、`cwes_json`、`references_json` 和 `configurations_json` 使用规范 JSON 数组保存 NVD 的一对多结构；`matched_ots_json` 使用非空对象数组保存外部采集工具基于范围得到的候选关系，每个对象固定为 `{ots_id,match_method,match_evidence,confidence}`。JSON 使用紧凑 UTF-8、对象键按契约名称输出；数组顺序属于内容的一部分，接收端不替生成端重排。单字段受 1 MiB 上限约束，以容纳 NVD 对大量下游产品枚举形成的 configuration；超过上限的异常复杂 CVE 必须作为生成失败报告，而不能产生无界包。
 
 采用 JSON 列而非五张规范化 NVD 子表，是因为当前交换边界只需要“一行一个 CVE”的完整输入，目标领域表尚未实现，提前拆表增加生成、校验和人工排错成本。替代方案“整行只放原始 NVD JSON”虽然更少列，但会把关键批次预览字段完全隐藏在不稳定的上游结构中；保留稳定标量列与五个明确 JSON 列可以兼顾简单性和可校验性。
 
@@ -53,7 +53,7 @@ ZIP 文件名固定为 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。根目录恰好�
 
 ### 3. 受限内存/临时文件流水线，不调用通用解压
 
-上传请求先以流式方式写入应用控制的临时目录并同步计算整包 SHA-256，文件名只作为元数据保存，实际临时名由服务生成。默认上限固定为：上传 ZIP 50 MiB、3 个成员、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 10,000 条数据行、单字段 UTF-8 后 64 KiB、错误明细 1,000 条、错误值 256 个字符。设置允许向下收紧，不允许在同一 `format_version` 下放宽到无法满足五分钟目标的数量级。
+上传请求先以流式方式写入应用控制的临时目录并同步计算整包 SHA-256，文件名只作为元数据保存，实际临时名由服务生成。默认上限固定为：上传 ZIP 50 MiB、3 个成员、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 10,000 条数据行、单字段 UTF-8 后 1 MiB、错误明细 1,000 条、错误值 256 个字符。单字段上限用于容纳真实 NVD configuration，仍由 200 MiB 总解压上限约束整包最坏资源消耗；设置允许向下收紧，不允许在同一 `format_version` 下放宽到无法满足五分钟目标的数量级。
 
 使用 ZIP central directory 先检查条目名、Unix mode/符号链接、声明大小和压缩比，再逐成员通过有字节计数上限的 reader 读取；不调用将成员路径直接映射到文件系统的 `extract`/`extractall`。实际读取字节超过声明或上限时立即失败。CSV 可逐行解析；需要跨文件引用的稳定键集合和有限样例保存在内存，V1 10,000 行规模无需新增 staging 表。
 
@@ -120,7 +120,7 @@ OTS-08 在不破坏响应字段的前提下增加 NVD 领域预览和数据库�
 
 - [范围导出未落库，manifest 与范围快照可能由同一外部方同时伪造] → 明确本 change 只验证包内一致性和 OTS 可识别性；人工离线介质是信任边界。若未来要求签发真实性，需单独变更 OTS-06 持久化或签名方案。
 - [同步校验接近五分钟可能超过代理默认超时] → 文档固定上传端点超时与大小设置，先用代表性 10,000 行包测量；不以引入队列掩盖部署配置问题。
-- [JSON 单元格可能包含深层或超大上游结构] → 在解析前执行 64 KiB 字段限制，解析后仅接受规定的顶层数组和候选对象字段，不递归执行任何内容。
+- [JSON 单元格可能包含深层或超大上游结构] → 在解析前执行 1 MiB 字段限制，并保留 200 MiB 总解压与 10,000 行限制；解析后仅接受规定的顶层数组和候选对象字段，不递归执行任何内容。
 - [失败批次保留但失败原包被删除，无法事后重新提取全部错误] → 首次校验聚合到 1,000 条并保存总数；安全上优先不持久保存恶意包，用户可修复后重新上传。
 - [未来确认需要 KEV/EOL] → 由 OTS-09 提出 `1.1` 或后续格式并提供迁移说明；`1.0` 继续稳定接收仅 NVD 三文件包。
 - [批次占位号短暂存在] → 占位前缀是保留命名空间且只在未完成事务外可见；查询 API按批次 ID返回上传状态，不向用户承诺占位值为外部批次号。
