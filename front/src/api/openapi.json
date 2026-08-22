@@ -1757,10 +1757,150 @@
           }
         }
       }
+    },
+    "/api/v1/import-packages/validate": {
+      "post": {
+        "tags": [
+          "package-contract-validation"
+        ],
+        "summary": "Validate Import Package",
+        "operationId": "validate_import_package_api_v1_import_packages_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_validate_import_package_api_v1_import_packages_validate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPackageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-packages/{batch_id}": {
+      "get": {
+        "tags": [
+          "package-contract-validation"
+        ],
+        "summary": "Get Import Package",
+        "operationId": "get_import_package_api_v1_import_packages__batch_id__get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPackageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-packages/{batch_id}/errors": {
+      "get": {
+        "tags": [
+          "package-contract-validation"
+        ],
+        "summary": "Download Import Package Errors",
+        "operationId": "download_import_package_errors_api_v1_import_packages__batch_id__errors_get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "数据包校验错误清单",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Body_validate_import_package_api_v1_import_packages_validate_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_validate_import_package_api_v1_import_packages_validate_post"
+      },
       "CollectorScopeBaselineResponse": {
         "properties": {
           "available": {
@@ -1955,6 +2095,111 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ImportPackageResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "batch_no": {
+            "type": "string",
+            "title": "Batch No"
+          },
+          "format_version": {
+            "type": "string",
+            "title": "Format Version"
+          },
+          "package_file_name": {
+            "type": "string",
+            "title": "Package File Name"
+          },
+          "package_sha256": {
+            "type": "string",
+            "title": "Package Sha256"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "scope_export_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Export Id"
+          },
+          "scope_count": {
+            "type": "integer",
+            "title": "Scope Count"
+          },
+          "classification_basis": {
+            "type": "string",
+            "title": "Classification Basis"
+          },
+          "final_import_diff": {
+            "type": "boolean",
+            "title": "Final Import Diff"
+          },
+          "can_import": {
+            "type": "boolean",
+            "title": "Can Import"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PackageSummaryResponse"
+          },
+          "file_stats": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PackageFileStatsResponse"
+            },
+            "type": "object",
+            "title": "File Stats"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/PackageValidationIssueResponse"
+            },
+            "type": "array",
+            "title": "Errors"
+          },
+          "total_error_count": {
+            "type": "integer",
+            "title": "Total Error Count"
+          },
+          "truncated_error_count": {
+            "type": "integer",
+            "title": "Truncated Error Count"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "batch_no",
+          "format_version",
+          "package_file_name",
+          "package_sha256",
+          "status",
+          "scope_export_id",
+          "scope_count",
+          "classification_basis",
+          "final_import_diff",
+          "can_import",
+          "summary",
+          "file_stats",
+          "errors",
+          "total_error_count",
+          "truncated_error_count",
+          "duplicate"
+        ],
+        "title": "ImportPackageResponse"
       },
       "LoginRequest": {
         "properties": {
@@ -2173,6 +2418,152 @@
           "row_version"
         ],
         "title": "OtsUpdateRequest"
+      },
+      "PackageFileStatsResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "new": {
+            "type": "integer",
+            "title": "New"
+          },
+          "update": {
+            "type": "integer",
+            "title": "Update"
+          },
+          "duplicate": {
+            "type": "integer",
+            "title": "Duplicate"
+          },
+          "conflict": {
+            "type": "integer",
+            "title": "Conflict"
+          },
+          "error": {
+            "type": "integer",
+            "title": "Error"
+          },
+          "samples": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Samples"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "new",
+          "update",
+          "duplicate",
+          "conflict",
+          "error",
+          "samples"
+        ],
+        "title": "PackageFileStatsResponse"
+      },
+      "PackageSummaryResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "new": {
+            "type": "integer",
+            "title": "New"
+          },
+          "update": {
+            "type": "integer",
+            "title": "Update"
+          },
+          "duplicate": {
+            "type": "integer",
+            "title": "Duplicate"
+          },
+          "conflict": {
+            "type": "integer",
+            "title": "Conflict"
+          },
+          "error": {
+            "type": "integer",
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "new",
+          "update",
+          "duplicate",
+          "conflict",
+          "error"
+        ],
+        "title": "PackageSummaryResponse"
+      },
+      "PackageValidationIssueResponse": {
+        "properties": {
+          "error_code": {
+            "type": "string",
+            "title": "Error Code"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "row_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Number"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "rejected_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error_code",
+          "file_name",
+          "row_number",
+          "field",
+          "reason",
+          "rejected_value"
+        ],
+        "title": "PackageValidationIssueResponse"
       },
       "PasswordResetRequest": {
         "properties": {

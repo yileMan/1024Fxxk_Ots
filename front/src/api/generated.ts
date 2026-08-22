@@ -490,10 +490,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/import-packages/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Import Package */
+        post: operations["validate_import_package_api_v1_import_packages_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-packages/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Import Package */
+        get: operations["get_import_package_api_v1_import_packages__batch_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-packages/{batch_id}/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Import Package Errors */
+        get: operations["download_import_package_errors_api_v1_import_packages__batch_id__errors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_validate_import_package_api_v1_import_packages_validate_post */
+        Body_validate_import_package_api_v1_import_packages_validate_post: {
+            /** File */
+            file: string;
+        };
         /** CollectorScopeBaselineResponse */
         CollectorScopeBaselineResponse: {
             /** Available */
@@ -556,6 +612,44 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ImportPackageResponse */
+        ImportPackageResponse: {
+            /** Id */
+            id: number;
+            /** Batch No */
+            batch_no: string;
+            /** Format Version */
+            format_version: string;
+            /** Package File Name */
+            package_file_name: string;
+            /** Package Sha256 */
+            package_sha256: string;
+            /** Status */
+            status: string;
+            /** Scope Export Id */
+            scope_export_id: string | null;
+            /** Scope Count */
+            scope_count: number;
+            /** Classification Basis */
+            classification_basis: string;
+            /** Final Import Diff */
+            final_import_diff: boolean;
+            /** Can Import */
+            can_import: boolean;
+            summary: components["schemas"]["PackageSummaryResponse"];
+            /** File Stats */
+            file_stats: {
+                [key: string]: components["schemas"]["PackageFileStatsResponse"];
+            };
+            /** Errors */
+            errors: components["schemas"]["PackageValidationIssueResponse"][];
+            /** Total Error Count */
+            total_error_count: number;
+            /** Truncated Error Count */
+            truncated_error_count: number;
+            /** Duplicate */
+            duplicate: boolean;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -640,6 +734,55 @@ export interface components {
             is_eol: boolean;
             /** Row Version */
             row_version: number;
+        };
+        /** PackageFileStatsResponse */
+        PackageFileStatsResponse: {
+            /** Total */
+            total: number;
+            /** New */
+            new: number;
+            /** Update */
+            update: number;
+            /** Duplicate */
+            duplicate: number;
+            /** Conflict */
+            conflict: number;
+            /** Error */
+            error: number;
+            /** Samples */
+            samples: {
+                [key: string]: string;
+            }[];
+        };
+        /** PackageSummaryResponse */
+        PackageSummaryResponse: {
+            /** Total */
+            total: number;
+            /** New */
+            new: number;
+            /** Update */
+            update: number;
+            /** Duplicate */
+            duplicate: number;
+            /** Conflict */
+            conflict: number;
+            /** Error */
+            error: number;
+        };
+        /** PackageValidationIssueResponse */
+        PackageValidationIssueResponse: {
+            /** Error Code */
+            error_code: string;
+            /** File Name */
+            file_name: string;
+            /** Row Number */
+            row_number: number | null;
+            /** Field */
+            field: string | null;
+            /** Reason */
+            reason: string;
+            /** Rejected Value */
+            rejected_value: string | null;
         };
         /** PasswordResetRequest */
         PasswordResetRequest: {
@@ -2114,6 +2257,101 @@ export interface operations {
                 };
                 content: {
                     "text/csv": string;
+                };
+            };
+        };
+    };
+    validate_import_package_api_v1_import_packages_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_import_package_api_v1_import_packages_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPackageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_import_package_api_v1_import_packages__batch_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPackageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_import_package_errors_api_v1_import_packages__batch_id__errors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 数据包校验错误清单 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
