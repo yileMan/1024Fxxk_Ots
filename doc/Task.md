@@ -229,7 +229,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：后端 pytest 53 项通过且覆盖率 92%，含 MySQL 8.0.39 临时库迁移/回滚和 200 OTS 性能验证；前端 Vitest 69 项通过且语句覆盖率 97.38%、函数覆盖率 82.68%，系统 Chrome Playwright 12 项通过；类型检查、生产构建、OpenAPI 重复生成一致性与 OpenSpec 严格校验通过。
 
-#### [ ] OTS-07 `ots-07-package-contract-and-validation`（复杂度：L，依赖：OTS-06）
+#### [~] OTS-07 `ots-07-package-contract-and-validation`（复杂度：L，依赖：OTS-06）
 
 **目标**：固定版本化 ZIP/CSV 契约，并实现导入向导的上传、校验和预览骨架。
 
