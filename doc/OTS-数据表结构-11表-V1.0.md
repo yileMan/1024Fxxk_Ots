@@ -32,12 +32,12 @@
 | 删除 OTS 情报分析员 | 表 1 删除 `intel_analyst` 固定角色；表 5 删除 `assigned_analyst_id`、外键和索引，OTS 只保留四项核心业务信息。 |
 | CVE 与 OTS 关联 | 表 8 不增加单一 OTS ID。一个 CVE 可影响多个 OTS，一个 OTS 也可对应多个 CVE，多对多关联由表 9 保存。 |
 | AI 建议 | 表 8 增加 `ai_analysis_suggestion`，仅保存通用辅助建议，不作为来源事实或正式结论。 |
-| 表 9 候选匹配 | 表名由 `vulnerability_ots_analysis` 调整为 `vulnerability_ots_match`，仅保存外部数据服务输入的 OTS/CVE 候选匹配、依据和来源批次，不再保存人工分析状态、分析内容或提交人。 |
+| 表 9 候选匹配 | 表名为 `vulnerability_ots_match`，仅保存平台根据第 8 张表受影响软件/版本范围与内部 OTS 计算出的候选匹配、依据和来源批次，不保存外部 `ots_id`、人工分析状态、分析内容或提交人。 |
 | 表 10 人员字段 | 删除重复的 `author_id`。`owner_id` 表示当前责任人，`submitted_by` 表示实际执行提交动作的人。 |
 | 表 11 审计范围 | 删除 `client_ip` 和恒定成功的 `result`，只记录已提交成功的数据库新增、更新、删除和批量写入。 |
-| 导入后直接评估 | 导入表 9 候选匹配后，系统按表 6 为相关产品版本直接创建表 10 待评估任务，并从表 4 取得 `owner_id`；不新增通知表，工作台按责任人和状态查询。 |
+| 匹配后生成评估 | 平台内部生成表 9 候选匹配后，系统按表 6 为相关产品版本创建表 10 待评估任务，并从表 4 取得 `owner_id`；不新增通知表，工作台按责任人和状态查询。 |
 | 跨产品评估参考 | 保留表 10 的跨产品查询；只展示相同 OTS/CVE 在其他产品中当前且已审核通过的摘要，不展示草稿、内部证据或审核意见。 |
-| 管理平台生成采集范围 | 不新增表或字段。范围由表 3、4、6、5 实时查询；表 7 现有 `manifest_json` 保存范围快照，`scope_coverage_json` 保存逐 OTS 状态和覆盖截止时间。 |
+| 管理平台生成采集范围 | 不新增表或字段。范围由表 3、4、6、5 实时查询；NVD `1.0` 不要求回传范围快照，表 7 的 `scope_coverage_json` 仅为后续按 OTS 采集格式保留。 |
 
 ## 1. `app_user`
 
@@ -202,7 +202,7 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 
 ## 7. `import_batch`
 
-保存离线数据包、实际使用的 OTS 采集范围快照、逐 OTS 覆盖结果、导入状态、统计和错误摘要。
+保存离线数据包、来源发布标识/时间窗口、可选逐 OTS 覆盖结果、导入状态、统计和错误摘要。
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | :---: | --- |
@@ -212,13 +212,13 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 | `package_file_name` | VARCHAR(255) | 是 | ZIP 文件名 |
 | `package_sha256` | CHAR(64) | 是 | 整包摘要 |
 | `archive_path` | VARCHAR(1000) | 否 | 原始包归档位置 |
-| `covered_from` | DATETIME(3) | 否 | 本批次成功 OTS 的整体最早覆盖开始时间 |
-| `covered_to` | DATETIME(3) | 否 | 本批次成功 OTS 的整体最晚覆盖截止时间；不能替代逐 OTS 覆盖信息 |
+| `covered_from` | DATETIME(3) | 否 | NVD `1.0` 为来源窗口开始时间；后续格式可定义其他覆盖含义 |
+| `covered_to` | DATETIME(3) | 否 | NVD `1.0` 为来源窗口结束时间；不能替代逐 OTS 覆盖信息 |
 | `status` | VARCHAR(32) | 是 | `uploaded`、`validated`、`importing`、`succeeded`、`failed` |
 | `result_json` | JSON | 否 | 新增、更新、重复、冲突统计 |
 | `error_json` | JSON | 否 | 文件、行号、字段和错误原因摘要 |
-| `scope_coverage_json` | JSON | 否 | 逐 OTS 采集结果：OTS ID、`succeeded/failed/not_run`、覆盖起止时间和错误摘要 |
-| `manifest_json` | JSON | 否 | 数据包说明、`scope_export_id`、范围文件 SHA-256、实际范围快照及各文件摘要 |
+| `scope_coverage_json` | JSON | 否 | 后续按 OTS 采集格式可用的逐 OTS 结果；NVD `1.0` 为空 |
+| `manifest_json` | JSON | 否 | 数据包说明、生产者、来源名称/发布标识、来源时间窗口及文件摘要 |
 | `imported_by` | BIGINT UNSIGNED | 是 | 导入人 ID |
 | `started_at` | DATETIME(3) | 否 | 开始时间 |
 | `finished_at` | DATETIME(3) | 否 | 结束时间 |
@@ -232,12 +232,11 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 - 唯一键：`uk_import_batch_no(batch_no)`、`uk_import_package_sha(package_sha256)`；
 - 普通索引：`idx_import_status_time(status, created_at)`、`idx_import_covered_to(covered_to)`；
 - 同一批次号或相同文件摘要不得重复导入；
-- 批次 `status=succeeded` 表示数据包已成功校验并提交数据库，不表示范围内每个 OTS 都采集成功；逐 OTS 成败必须以 `scope_coverage_json` 为准；
-- 批次完成校验后 `manifest_json` 必须存在，批次结束后 `scope_coverage_json` 必须存在；
-- `manifest_json` 中的范围快照至少保存 OTS ID、名称、版本、官方网站和导出时的上次覆盖截止时间；
-- `scope_coverage_json` 中只有 `succeeded` 的 OTS 可以写入新的成功覆盖截止时间，`failed` 和 `not_run` 必须保留错误或原因且不得推进覆盖；
-- 下一次导出某 OTS 时，从最近成功导入批次中取得该 OTS 最后的成功覆盖截止时间；从未成功采集时使用应用配置的初始回溯起点；
-- 在最多 200 个 OTS 的 V1 规模下，范围快照和逐 OTS 覆盖信息保存在 JSON 中即可，不新增采集范围表或覆盖状态表；
+- 批次 `status=succeeded` 表示数据包已成功校验且漏洞事实已提交数据库，不表示任何内部 OTS 已完成漏洞覆盖；
+- 批次完成校验后 `manifest_json` 必须存在；NVD `1.0` 的 `scope_coverage_json` 允许为空；
+- NVD `1.0` 的 `manifest_json` 保存来源名称、来源发布标识、来源时间窗口和文件摘要，不保存范围快照；
+- 若后续格式使用 `scope_coverage_json`，只有 `succeeded` 的 OTS 可以写入新的成功覆盖截止时间，`failed/not_run` 不得推进覆盖；
+- OTS-06 在没有后续格式逐 OTS 成功记录时导出的 `last_covered_time` 为空；不得使用 NVD 来源窗口伪造逐 OTS 覆盖；
 - 导入统计和错误明细摘要全部保存在 JSON 字段中，不拆分新的错误表；
 - 被第 8 张表引用的批次禁止删除，原始 ZIP 文件按归档策略保留。
 
@@ -249,14 +248,17 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 | --- | --- | :---: | --- |
 | `id` | BIGINT UNSIGNED | 是 | 主键 |
 | `cve_id` | VARCHAR(32) | 是 | CVE ID |
+| `source_identifier` | VARCHAR(200) | 是 | NVD/CNA 提供的来源标识 |
 | `source_status` | VARCHAR(32) | 是 | 来源当前状态 |
 | `description` | TEXT | 否 | NVD/CNA 等来源提供的原始漏洞描述 |
 | `ai_analysis_suggestion` | TEXT | 否 | AI 基于公开漏洞事实生成的通用辅助建议；可为空，不作为来源事实或产品结论 |
 | `published_at` | DATETIME(3) | 否 | 发布时间 |
 | `source_modified_at` | DATETIME(3) | 否 | 来源最后修改时间 |
 | `cwe_json` | JSON | 否 | CWE（通用弱点枚举）数组，通常来自 NVD `weaknesses` 数据，保存 CWE ID、说明及来源 |
-| `affected_ranges_json` | JSON | 否 | 受影响范围 |
+| `affected_ranges_json` | JSON | 是 | 归一化受影响软件、精确版本或版本区间数组；允许空数组 |
 | `references_json` | JSON | 否 | 参考链接数组 |
+| `cvss_json` | JSON | 是 | 来源提供的全部 CVSS 对象数组；允许空数组，标量 v3.1 字段只保存当前采用值 |
+| `configurations_json` | JSON | 是 | NVD 原始 configuration 数组，用于追溯和后续重算；允许空数组 |
 | `cvss31_score` | DECIMAL(3,1) | 否 | CVSS v3.1 基础分 |
 | `cvss31_severity` | VARCHAR(16) | 否 | CVSS v3.1 严重度 |
 | `cvss31_vector` | VARCHAR(500) | 否 | CVSS v3.1 向量 |
@@ -289,7 +291,7 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 
 ## 9. `vulnerability_ots_match`
 
-一行对应一个“OTS + CVE”候选关系，保存外部数据服务输入的匹配方式、依据、可选置信度和来源批次。该表由数据导入维护，不设置人工情报分析流程。
+一行对应一个“OTS + CVE”候选关系，保存平台内部匹配规则产生的匹配方式、依据、可选置信度和来源批次。该表由内部匹配流程维护，不设置人工情报分析流程。
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | :---: | --- |
@@ -298,7 +300,7 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 | `ots_component_id` | BIGINT UNSIGNED | 是 | OTS ID |
 | `match_method` | VARCHAR(32) | 是 | 匹配方式：`cpe`、`purl`、`name_version`、`vendor_advisory` 或 `combined` |
 | `match_basis` | TEXT | 是 | CVE 与 OTS 的候选关联依据，例如 CPE/purl、项目或厂商名称、受影响版本范围、官方公告或参考链接 |
-| `match_confidence` | DECIMAL(5,4) | 否 | 外部工具给出的可选置信度，范围 0.0000～1.0000；只用于排序，不代表产品受影响概率 |
+| `match_confidence` | DECIMAL(5,4) | 否 | 内部匹配规则给出的可选置信度，范围 0.0000～1.0000；只用于排序，不代表产品受影响概率 |
 | `match_evidence_json` | JSON | 否 | 结构化匹配证据，例如命中的 CPE、版本表达式、公告链接和规则版本 |
 | `first_seen_batch_id` | BIGINT UNSIGNED | 是 | 首次发现该候选关系的导入批次 ID |
 | `last_seen_batch_id` | BIGINT UNSIGNED | 是 | 最近更新或再次发现该候选关系的导入批次 ID |
@@ -317,10 +319,10 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 - 普通索引：`idx_match_ots(ots_component_id, vulnerability_id)`、`idx_match_last_batch(last_seen_batch_id, updated_at)`；
 - 表 10 通过 OTS ID 和 CVE ID 精确读取时使用唯一键 `uk_vulnerability_ots`，无需增加表 10 到表 9 的重复外键；
 - 一行只能表示一个“OTS + CVE”，不同 CVE 分别保存候选关系；
-- 本表记录只代表外部工具发现候选关联，不表示任何具体产品受影响；产品适用性结论只能写入第 10 张表；
+- 本表记录只代表平台根据来源范围发现候选关联，不表示任何具体产品受影响；产品适用性结论只能写入第 10 张表；
 - `match_method` 和 `match_basis` 必填；`match_confidence` 为空时页面显示“未提供”，不得自行推断；
 - CWE、CVSS、KEV、受影响范围和来源描述不在本表重复保存，页面通过 `vulnerability_id` 读取第 8 张表；
-- 本表无人工草稿、提交人或审核状态，数据包导入通过唯一键进行幂等新增或更新；
+- 本表无人工草稿、提交人或审核状态，内部匹配通过唯一键进行幂等新增或更新；
 - `match_content_sha256` 变化视为候选匹配依据实质变化，应触发相关产品评估待复评，但不得覆盖表 10 已有结论。
 
 ## 10. `product_assessment`
@@ -489,9 +491,9 @@ flowchart TB
 ## 关键事务规则
 
 1. 采集范围导出：只读查询第 3、4、6、5、7 张表，生成范围导出 ID、CSV 和文件摘要；不修改数据库，因此不写第 11 张表。
-2. 范围包导入：先校验第 7 张表 `manifest_json` 对应的范围快照和摘要；表 9 候选关联中的 OTS ID 必须属于该快照，每个表 8 CVE 至少有一条范围内表 9 候选关系；校验失败不得写入业务数据。
-3. 覆盖时间推进：导入成功后在第 7 张表 `scope_coverage_json` 分别保存各 OTS 结果，只有 `succeeded` 推进覆盖截止时间，`failed/not_run` 保持原值。
-4. 导入后生成评估待办：新增或更新第 8、9 张表后，按第 5、6、4 张表查找全部相关有效产品版本；缺少第 10 张表当前任务时创建 `status=pending` 的第 1 修订并写入第 4 张表 `owner_id`，已有完成结论且来源或匹配依据实质变化时创建 `status=reassess` 的新修订；所有写入在同一事务提交，提交后工作台按 `owner_id + status` 立即显示待办。
+2. NVD 事实包导入：校验第 7 张表 `manifest_json` 的来源窗口和文件摘要；在确认事务内重新分类并 upsert 第 8 张表。无 configuration、Rejected 或无内部 OTS 候选的 CVE 仍可导入；失败不得写入部分漏洞事实。
+3. 内部候选匹配：第 8 张表新增或受影响范围实质更新后，按公开软件身份、精确版本或版本区间与第 5 张表比较，幂等新增或更新第 9 张表；无匹配只保留漏洞事实。
+4. 匹配后生成评估待办：第 9 张表候选关系新增或实质更新后，按第 5、6、4 张表查找全部相关有效产品版本；缺少第 10 张表当前任务时创建 `status=pending` 的第 1 修订并写入第 4 张表 `owner_id`，已有完成结论且来源或匹配依据实质变化时创建 `status=reassess` 的新修订；提交后工作台按 `owner_id + status` 立即显示待办。
 5. 产品评估提交：校验当前用户是任务 `owner_id` 且仍具有相应产品范围，读取第 8 张表来源事实和第 9 张表候选匹配依据，再校验分析摘要、适用性依据、环境指标和处置内容；服务端重算产品环境评分，确认第 4 张表指定审核人与提交人不同后，将第 10 张表状态改为待审核并冻结该修订。
 6. 审核通过：校验当前用户是第 4 张表指定审核人且与提交人不同，将实际审核人、审核结论和时间写入第 10 张表，状态改为已完成。
 7. 审核退回：保留被审核修订，新增下一修订并切换 `is_current`；新旧切换在同一事务完成。

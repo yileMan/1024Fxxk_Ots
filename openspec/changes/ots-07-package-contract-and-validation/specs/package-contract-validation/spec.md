@@ -1,190 +1,140 @@
 ## Purpose
 
-为 OTS 信息维护平台建立可版本化、可追溯且能抵御恶意文件的离线 ZIP/CSV 数据包接收契约，使管理员在任何正式业务写入之前完成上传、结构与范围校验、分类预览和精确错误导出。
+为 OTS 信息维护平台建立可版本化、可安全校验且能事务导入原始 NVD 漏洞事实的离线 ZIP/CSV 契约，使受影响软件和版本范围先进入内网，再由后续能力匹配内部 OTS 并生成产品评估任务。
 
 ## ADDED Requirements
 
-### Requirement: 接受唯一的版本化数据包结构
-系统 SHALL 仅接受文件名符合 `ots_intelligence_YYYYMMDD_HHMMSS.zip` 且格式版本受支持的 ZIP 数据包。格式版本 `1.0` 的 ZIP 根目录 MUST 且只能包含 `manifest.csv`、`collector_scope.csv` 和 `nvd_cves.csv`。`nvd_cves.csv` MUST 一行表示一个 NVD CVE；格式 `1.0` MUST NOT 包含 KEV、EOL 或拆分后的漏洞子文件，未来数据源只能通过新的格式版本引入。
+### Requirement: 接受唯一的原始 NVD 两文件包
+系统 SHALL 仅接受文件名符合 `ots_intelligence_YYYYMMDD_HHMMSS.zip` 且格式版本受支持的 ZIP。格式 `1.0` 根目录 MUST 且只能包含 `manifest.csv` 和 `nvd_cves.csv` 两个普通文件；MUST NOT 包含 `collector_scope.csv`、`matched_ots_json`、KEV/EOL 占位文件或拆分后的漏洞子文件。`nvd_cves.csv` MUST 一行表示一个 CVE。
 
 #### Scenario: 上传完整兼容包
-- **GIVEN** 管理员选择名称合法、包含三个固定根目录文件且 manifest 声明 `format_version=1.0` 的 ZIP
+- **GIVEN** 管理员选择名称合法、恰好包含两个固定文件且 manifest 声明 `format_version=1.0` 的 ZIP
 - **WHEN** 系统接收数据包
-- **THEN** 系统创建或返回对应上传批次并继续执行内容校验
+- **THEN** 系统创建或返回上传批次并继续执行内容校验
 
-#### Scenario: 缺失、未知或嵌套文件
-- **GIVEN** ZIP 缺少必需文件、包含额外文件、目录项、重复文件名或将文件放在子目录
-- **WHEN** 系统检查包目录
-- **THEN** 系统拒绝该包并报告对应文件级错误，不解析领域记录
-
-#### Scenario: 不兼容格式版本
-- **GIVEN** manifest 声明缺失、格式非法或不是 `1.0` 的 `format_version`
-- **WHEN** 系统校验包版本
-- **THEN** 系统将批次标记为校验失败并返回稳定的不兼容版本错误，不尝试按相近版本猜测字段
+#### Scenario: 上传旧三文件包
+- **GIVEN** ZIP 包含 `collector_scope.csv` 或使用旧的 `matched_ots_json` 表头
+- **WHEN** 系统检查包目录和表头
+- **THEN** 系统以稳定的不兼容结构错误拒绝该包，不猜测或静默转换旧草案
 
 ### Requirement: 在解析前限制恶意 ZIP 和资源消耗
-系统 MUST 在读取 CSV 内容前拒绝绝对路径、驱动器路径、反斜杠路径、`.`/`..` 路径段、符号链接或其他非普通文件条目，并 MUST 对上传字节数、条目数、单文件解压大小、总解压大小、压缩比和 CSV 数据行数应用服务端上限。系统 SHALL 先检查 ZIP 元数据，再以受限流式读取验证实际字节数；不得依赖把成员直接解压到用户提供的路径。
+系统 MUST 在解析业务记录前拒绝绝对路径、驱动器路径、反斜杠路径、`.`/`..` 路径段、符号链接、目录、重复或其他非普通文件，并 MUST 对上传字节数、成员数、单成员解压大小、总解压大小、压缩比、CSV 行数和字段大小应用服务端上限。默认单字段 UTF-8 上限 MUST 为 1 MiB，其他上限沿用部署契约；系统不得把成员路径直接解压到用户提供的位置。
 
-#### Scenario: ZIP 路径穿越
-- **GIVEN** ZIP 成员名称为 `../manifest.csv`、`/manifest.csv`、`C:\manifest.csv` 或等价的逃逸路径
-- **WHEN** 系统检查成员路径
-- **THEN** 系统在写出任何成员前拒绝整个数据包，并返回不包含服务器绝对路径的文件安全错误
+#### Scenario: 路径穿越或压缩炸弹
+- **GIVEN** ZIP 含逃逸路径、伪装链接、超限声明大小、超限实际大小或异常压缩比
+- **WHEN** 系统执行安全预检查和受限读取
+- **THEN** 系统停止处理、清理本次临时内容并返回不泄露服务器路径的包级错误
 
-#### Scenario: 压缩炸弹或超限文件
-- **GIVEN** ZIP 的声明或实际解压大小、压缩比、文件数、单文件大小或 CSV 行数超过配置上限
-- **WHEN** 系统执行预检查或受限读取
-- **THEN** 系统立即停止处理，将批次记录为失败，清理本次临时内容且不返回部分预览
+#### Scenario: 大型 NVD configuration
+- **GIVEN** `configurations_json` 大于 64 KiB但不超过 1 MiB，且 ZIP 总量和其余内容符合契约
+- **WHEN** 系统解析该 CVE 行
+- **THEN** 系统继续执行 JSON 与领域校验，不得仅因超过旧 64 KiB 草案限制而拒绝
 
-#### Scenario: 伪装文件和符号链接
-- **GIVEN** 允许文件名对应的成员不是普通文件，或 ZIP 实际内容不是可解析的 CSV/ZIP
-- **WHEN** 系统识别成员类型与内容
-- **THEN** 系统拒绝整个数据包且不跟随链接、不读取包外文件
+### Requirement: 固定一行一个 CVE 的来源事实 Schema
+`nvd_cves.csv` MUST 使用 UTF-8 无 BOM、逗号分隔、双引号转义、CRLF 记录分隔符和精确表头 `cve_id,source_identifier,vuln_status,published_at,last_modified_at,description,affected_software_json,cvss_json,cwes_json,references_json,configurations_json`。双引号字段内部 MAY 包含 LF 或 CRLF；系统 MUST 区分字段内换行与记录分隔符。五个 `*_json` 字段 MUST 是合法标准 JSON 数组。时间 MUST 是含时区的 ISO 8601/RFC 3339；`cve_id` MUST 规范化为大写 `CVE-YYYY-NNNN...`。
 
-### Requirement: 固定 CSV 编码、表头与公共字段规则
-格式版本 `1.0` 的所有 CSV MUST 使用 UTF-8 无 BOM、逗号分隔、双引号转义和 CRLF 换行，MUST 使用契约规定的精确表头顺序，且不得包含未声明列、重复表头、NUL 字节或 UTF-8 编码后超过 1 MiB（1,048,576 字节）的字段值。`nvd_cves.csv` 的固定表头 MUST 为 `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json`；其中五个 `*_json` 字段 MUST 是合法 JSON，`cvss_json`、`cwes_json`、`references_json`、`configurations_json` MUST 为数组，`matched_ots_json` MUST 为非空对象数组。时间字段 MUST 使用带时区的 ISO 8601/RFC 3339，标识符、枚举、数值和空值 MUST 按 Schema 校验；系统 SHALL NOT 自动映射历史或相似列名。
+#### Scenario: 合规 CVE 行
+- **GIVEN** 一行包含规范 CVE ID、NVD 原始来源状态、来源标识、时间、描述以及五个合法 JSON 数组
+- **WHEN** 系统解析并校验该行
+- **THEN** 系统保留该 CVE 的来源事实并进入数据库差异分类
 
-#### Scenario: 合规 CSV 字节与表头
-- **GIVEN** 所有 CSV 使用规范编码、换行、转义、精确表头和有效字段值
-- **WHEN** 系统逐文件解析
-- **THEN** 系统按稳定行号产生记录并继续摘要、引用和范围校验
+#### Scenario: 描述包含合法字段内换行
+- **GIVEN** `description` 使用标准 CSV 双引号包裹且内部包含 LF 或 CRLF
+- **WHEN** 系统解析 CSV
+- **THEN** 系统接受该字段并将字段内换行规范化，不得误报记录分隔符错误
 
-#### Scenario: 非 UTF-8、BOM 或错误表头
-- **GIVEN** 任一 CSV 使用其他编码、带 BOM、缺列、多列、乱序列、重复列或相似但非规范的列名
-- **WHEN** 系统校验 CSV 契约
-- **THEN** 系统拒绝该包，并把错误定位到对应文件及表头字段
+#### Scenario: 非法编码、表头或 JSON
+- **GIVEN** CSV 带 BOM、不是 UTF-8、表头缺失/多余/乱序，或任一 JSON 字段不是标准 JSON 数组
+- **WHEN** 系统校验物理和字段契约
+- **THEN** 系统拒绝该包，并将错误定位到文件、物理行和字段
 
-#### Scenario: 非法字段和超长内容
-- **GIVEN** 某数据行含 NUL、非法时间/枚举/标识符/数值、无法完成 CSV 转义解析或超过字段长度上限的值
-- **WHEN** 系统校验该行
-- **THEN** 系统记录实际文件、数据行号、字段和原因，且不把该行计为可写入记录
+### Requirement: 明确表达受影响软件和版本
+`affected_software_json` 的每个对象 MUST 包含 `part`、`vendor`、`product`、`version`、`version_start_including`、`version_start_excluding`、`version_end_including`、`version_end_excluding`、`cpe`、`match_criteria_id` 和 `vulnerable`；可空版本边界 MUST 使用 JSON `null`。该数组 SHALL 由 NVD configuration/CPE 和可用的 CNA affected 信息规范化得到，MUST 保留精确版本、闭开区间、通配范围和易受影响标记。`configurations_json` MUST 同时保留 NVD 原始逻辑结构，避免扁平化后丢失 AND/OR 与环境条件。
 
-#### Scenario: 接收真实的大型 NVD configuration
-- **GIVEN** 某个 `configurations_json` 字段 UTF-8 编码后大于 64 KiB 但不超过 1 MiB，且 JSON 与其余字段均符合契约
-- **WHEN** 系统校验该 CVE 行
-- **THEN** 系统不得仅因字段超过 64 KiB 拒绝该行，并继续执行 JSON、候选匹配和范围校验
+#### Scenario: 一个 CVE 影响多个软件或版本范围
+- **GIVEN** NVD 为同一 CVE 提供多个产品、精确版本或版本区间
+- **WHEN** 外部生成端写入一行 CVE
+- **THEN** 所有范围均保存在同一行的 `affected_software_json` 数组中，不复制 CVE 主记录
 
-#### Scenario: 非法或不兼容的 JSON 列
-- **GIVEN** `nvd_cves.csv` 某个 JSON 字段无法解析、不是规定的数组结构，或候选匹配对象缺少必填字段
-- **WHEN** 系统校验该 CVE 行
-- **THEN** 系统把错误定位到 `nvd_cves.csv` 的物理行和对应 JSON 字段，不接受该行
+#### Scenario: Rejected 或尚无 applicability
+- **GIVEN** CVE 状态为 Rejected，或 NVD 尚未提供 configuration/affected 信息
+- **WHEN** `affected_software_json=[]` 且其他来源字段合法
+- **THEN** 系统接受并分类该 CVE，不要求内部 OTS 候选匹配
 
-### Requirement: 验证 manifest、范围快照和文件摘要一致性
-`manifest.csv` MUST 包含且只包含一个 `package` 记录、`collector_scope.csv` 与 `nvd_cves.csv` 各一个 `file` 记录，以及 `collector_scope.csv` 中每个 OTS 一个 `scope_result` 记录。所有 manifest 记录 MUST 使用同一 `batch_no`、`format_version`、`scope_export_id` 与范围摘要；系统 MUST 验证范围 CSV 内唯一导出 ID、manifest 导出 ID 和 SHA-256 一致，MUST 对两个非 manifest 文件实际字节计算 SHA-256 并与 manifest 小写十六进制摘要逐一比较，并 MUST 验证包文件名时间与生成时间格式有效但不得把文件名当作可信来源。
+### Requirement: 验证 manifest 与 NVD 文件一致性
+`manifest.csv` MUST 使用固定表头 `record_type,format_version,batch_no,generated_at,producer_version,source_name,source_release,window_start,window_end,file_name,file_sha256`，且只包含一个 `package` 记录和一个声明 `nvd_cves.csv` 的 `file` 记录。两行 MUST 使用相同公共元数据；`source_name` MUST 为 `nvd`，系统 MUST 验证实际文件 SHA-256、唯一批次号、来源发布标识和含时区的采集窗口。
 
-#### Scenario: manifest 与文件完全一致
-- **GIVEN** manifest 的批次元数据、范围导出 ID、范围摘要、文件清单和各 SHA-256 均与 ZIP 内实际字节一致
-- **WHEN** 系统验证 manifest
-- **THEN** 系统保存规范化 manifest 与实际范围快照，并继续记录级校验
+#### Scenario: manifest 与文件一致
+- **GIVEN** package/file 记录唯一、公共元数据一致且摘要匹配实际 `nvd_cves.csv`
+- **WHEN** 系统完成包级校验
+- **THEN** 系统保存规范化 manifest 并进入记录分类
 
-#### Scenario: 范围摘要或文件摘要不符
-- **GIVEN** `collector_scope.csv` 或任一领域 CSV 的实际字节摘要与 manifest 声明不同
-- **WHEN** 系统重新计算 SHA-256
-- **THEN** 系统拒绝整个数据包并报告具体文件的摘要不一致，不解析被篡改文件的业务含义
+#### Scenario: 摘要或窗口不合法
+- **GIVEN** manifest 摘要不符、记录重复、来源名错误或采集窗口结束早于开始
+- **WHEN** 系统校验 manifest
+- **THEN** 系统拒绝整个数据包且不产生漏洞业务写入
 
-#### Scenario: manifest 记录缺失或重复
-- **GIVEN** manifest 缺少 package/file/scope_result 记录、重复声明文件或 OTS、声明未知文件或未覆盖实际文件
-- **WHEN** 系统比对 manifest 与 ZIP 目录和范围快照
-- **THEN** 系统拒绝整个数据包，并将每项差异列为文件级或 manifest 行级错误
+### Requirement: 依据漏洞当前事实提供导入预览
+系统 SHALL 按 `cve_id` 和规范化来源内容哈希与 `vulnerability` 比较，提供 `new`、`update`、`duplicate`、`conflict`、`error` 分类及有限样例。数据库不存在的合法 CVE 为 `new`；内容哈希相同为 `duplicate`；来源修改时间更新且内容变化为 `update`；同一或更旧来源时间却内容不同为 `conflict`。任何 conflict/error MUST 阻止确认导入。
 
-### Requirement: 校验批次唯一性并保存可恢复状态
-系统 SHALL 复用 `import_batch` 保存上传和校验状态。首次接收合法 ZIP 外壳时状态为 `uploaded`；全部校验通过后状态为 `validated` 并保存 manifest、范围快照、逐 OTS 采集结果和预览统计；任一校验失败时状态为 `failed` 并保存有界错误摘要。相同 `batch_no` 或相同整包 SHA-256 再次上传时 MUST 返回已存在批次的稳定结果，不得创建第二条批次、正式导入数据、评估任务或审计记录。
+#### Scenario: 预览新增、更新和重复
+- **GIVEN** 数据包同时包含数据库未见 CVE、来源时间更新的已知 CVE和内容完全相同的已知 CVE
+- **WHEN** 管理员查看校验预览
+- **THEN** 系统分别显示 new/update/duplicate 数量、来源状态、受影响软件范围及评分摘要
 
-#### Scenario: 首次上传并校验成功
-- **GIVEN** 管理员上传此前未出现且全部校验通过的数据包
-- **WHEN** 校验完成
-- **THEN** 系统仅创建一条状态为 `validated` 的批次，关联当前管理员并返回批次预览
+#### Scenario: 旧来源覆盖新事实
+- **GIVEN** 数据包某 CVE 的来源修改时间早于或等于数据库当前值但内容哈希不同
+- **WHEN** 系统分类该行
+- **THEN** 系统标记 conflict 并禁用确认导入，不静默覆盖当前事实
 
-#### Scenario: 首次上传但校验失败
-- **GIVEN** 管理员上传此前未出现但内容校验失败的数据包
-- **WHEN** 校验终止
-- **THEN** 系统保留一条可识别的 `failed` 批次和有界错误摘要，不产生任何漏洞、候选匹配、覆盖推进、评估任务或 `audit_log`
+### Requirement: 管理员确认后事务导入漏洞事实
+系统 SHALL 提供管理员确认导入动作，将 new/update CVE 在单一数据库事务中新增或更新到 `vulnerability`，将批次更新为 `succeeded`，并写入一条 `batch_upsert` 审计摘要。导入 MUST 保存来源状态、来源标识、描述、时间、CWE、引用、全部 CVSS JSON、规范化受影响软件范围、原始 configuration、内容哈希和最近批次；同时按确定性来源优先规则选择一组 CVSS v3.1 当前展示字段。duplicate SHALL 不改写漏洞；Rejected SHALL 更新来源状态但不得物理删除记录。
 
-#### Scenario: 重复批次号或相同包摘要
-- **GIVEN** 数据库已有相同 `batch_no` 或 `package_sha256` 的批次
+#### Scenario: 确认导入成功
+- **GIVEN** 批次状态为 `validated`、无 conflict/error 且当前管理员确认导入
+- **WHEN** 系统提交导入事务
+- **THEN** new/update 漏洞事实、批次 succeeded 状态和审计摘要同时提交，返回实际新增/更新/重复数量
+
+#### Scenario: 导入中任一写入失败
+- **GIVEN** 批量写入、内容哈希、约束或审计写入中的任一步失败
+- **WHEN** 事务回滚
+- **THEN** 系统不留下部分漏洞或审计记录，将批次保持为可识别失败状态并允许使用新批次修复重试
+
+#### Scenario: 不提前执行内部匹配
+- **GIVEN** 漏洞事实导入成功且受影响软件范围中存在 Linux、OpenSSL 等产品和版本
+- **WHEN** OTS-07 完成事务
+- **THEN** 系统不创建 `vulnerability_ots_match` 或 `product_assessment`，这些行为分别由 OTS-08 和 OTS-10 实现
+
+### Requirement: 保持批次幂等和可恢复状态
+系统 SHALL 复用 `import_batch` 的 `uploaded → validated → importing → succeeded|failed` 状态。相同整包 SHA-256 重复上传 MUST 返回既有批次；相同可信 `batch_no` 但不同 SHA-256 MUST 返回批次冲突而不是旧错误回放或新建第二条业务批次。已 succeeded 批次重复确认 MUST 返回既有结果且不得重复更新漏洞或写审计。
+
+#### Scenario: 相同包重复上传
+- **GIVEN** 数据库已有相同 package SHA-256 的批次
 - **WHEN** 管理员再次上传
-- **THEN** 系统返回既有批次 ID、当前状态和稳定重复提示，不重复校验或新建记录
+- **THEN** 系统返回既有批次、状态和 duplicate 标记，不重新校验或写业务数据
 
-### Requirement: 校验范围内 OTS 与 CVE 候选匹配
-系统 MUST 验证 `collector_scope.csv` 每行使用同一个 manifest `scope_export_id`，OTS ID 不重复且能在管理平台识别。`nvd_cves.csv` 每行 MUST 使用唯一且规范的 `cve_id`，其 `matched_ots_json` MUST 至少包含一个候选匹配对象；每个对象 MUST 提供正整数 `ots_id`、非空 `match_method`、非空 `match_evidence` 和可空的 0～1 `confidence`，且 `ots_id` MUST 存在于该范围快照。候选匹配 MUST 始终标记为候选，不得形成产品受影响结论。
+#### Scenario: 同批次号不同内容
+- **GIVEN** 数据库已有相同 batch_no 但新上传包摘要不同
+- **WHEN** 系统解析到可信 batch_no
+- **THEN** 系统明确返回批次号冲突和两个摘要的非敏感提示，不返回旧批次错误作为本次校验结果
 
-#### Scenario: 合法候选匹配
-- **GIVEN** 每个 NVD CVE 的 `matched_ots_json` 至少包含一个结构合法且指向范围内 OTS 的候选匹配
-- **WHEN** 系统执行范围与候选匹配校验
-- **THEN** 系统接受该 CVE 并按 `nvd_cves.csv` 统计可预览记录
+### Requirement: 提供完整管理员导入向导和有界错误
+系统 SHALL 仅允许管理员上传、预览、确认导入、查看结果和下载错误清单。前端 SHALL 完整支持“上传数据包 → 校验预览 → 确认导入 → 查看结果”，展示来源状态、软件/版本范围、CVSS、分类和冲突；不得把候选匹配或产品受影响结论作为 OTS-07 结果。错误 MUST 包含稳定错误码、文件、可空物理行、字段、原因和截断值，并可下载 UTF-8 无 BOM、CRLF 的固定错误 CSV。
 
-#### Scenario: 范围外或不可识别 OTS
-- **GIVEN** `matched_ots_json` 引用不在范围快照中的 OTS，或范围快照 OTS 已无法由平台识别
-- **WHEN** 系统执行范围校验
-- **THEN** 系统拒绝整个数据包，并把错误定位到 `nvd_cves.csv` 的行和 `matched_ots_json`
+#### Scenario: 管理员完成四步导入
+- **GIVEN** 管理员上传合规包并通过预览确认
+- **WHEN** 事务导入成功
+- **THEN** 页面显示批次 succeeded、实际新增/更新/重复数量和“内部 OTS 匹配尚未执行”提示
 
-#### Scenario: 无匹配 CVE
-- **GIVEN** `nvd_cves.csv` 某 CVE 的候选匹配为空，或所有候选匹配均不指向范围内 OTS
-- **WHEN** 系统完成候选匹配校验
-- **THEN** 系统拒绝该包并把错误定位到该 CVE 记录，不允许把无关漏洞作为普通新增项预览
+#### Scenario: 非管理员或失败批次
+- **GIVEN** 用户未认证、非管理员，或包校验失败
+- **WHEN** 用户调用接口或操作页面
+- **THEN** 系统分别返回现有 401/403 或有界校验错误，且失败批次不能进入确认导入
 
-### Requirement: 提供只读分类预览而不执行正式导入
-系统 SHALL 在校验阶段提供按文件及全包汇总的 `new`、`update`、`duplicate`、`conflict` 和 `error` 数量，并提供有限样例。OTS-07 的分类 MUST 表示包内结构与当前可识别主键的预校验结果；在 OTS-08～10 增加完整领域持久化前，系统 MUST 明确标记该预览不等同于最终导入差异，且确认导入动作 MUST 保持不可用。查看或刷新预览 SHALL NOT 改变批次状态或业务数据。
+### Requirement: 导入保持内网、安全和可验证
+系统 MUST NOT 在校验或导入时访问互联网、执行包内内容或保存外部 API Key。系统 SHALL 对不超过 10,000 个 CVE 的合规包提供五分钟内可重复验证证据，并保持新增代码覆盖率不低于 80%。日志仅记录关联 ID、阶段、文件、数量、耗时和错误码，不记录原始包、完整描述、查询参数或服务器绝对路径。
 
-#### Scenario: 校验成功后查看预览
-- **GIVEN** 批次状态为 `validated`
-- **WHEN** 管理员查看预览
-- **THEN** 系统返回各分类总数、文件级统计、有限样例、范围 OTS 数量及“尚未正式写入”提示
-
-#### Scenario: 包内重复与冲突
-- **GIVEN** 同一文件或跨文件出现业务键与内容完全相同的重复记录，或同一业务键对应不同内容
-- **WHEN** 系统分类记录
-- **THEN** 系统分别计入 `duplicate` 与 `conflict`，冲突使批次校验失败且不得被静默覆盖
-
-#### Scenario: 尝试确认导入
-- **GIVEN** OTS-07 尚未交付正式导入能力
-- **WHEN** 管理员到达向导“确认导入”步骤或直接构造相关请求
-- **THEN** 前端保持动作禁用，API 不提供业务写入端点，数据库中不存在领域写入或覆盖时间推进
-
-### Requirement: 返回并导出精确且有界的错误清单
-每个校验错误 MUST 包含稳定错误码、文件名、可空数据行号、可空字段、原因及不泄露敏感内容的截断错误值；文件级错误的行号和字段 SHALL 为空。系统 SHALL 为失败批次提供 UTF-8 无 BOM、CRLF 的 `package_validation_errors.csv` 下载，固定列为 `error_code,file_name,row_number,field,reason,rejected_value`，并 SHALL 在 API 与数据库 JSON 中限制错误数量和单值长度，同时保留“已截断”总数。
-
-#### Scenario: 行字段错误可定位
-- **GIVEN** 范围 CSV 或 NVD CVE 行存在字段、JSON 或候选匹配错误
-- **WHEN** 校验完成并返回错误
-- **THEN** 每个错误分别包含真实 ZIP 文件名、以表头下一行为 2 的数据行号、字段名和稳定原因
-
-#### Scenario: 下载错误清单
-- **GIVEN** 批次状态为 `failed` 且当前管理员有权访问
-- **WHEN** 管理员下载错误清单
-- **THEN** 系统返回固定文件名与列顺序的 CSV，下载内容与批次错误摘要和截断统计一致且不写 `audit_log`
-
-#### Scenario: 错误量超过持久化上限
-- **GIVEN** 恶意或严重损坏的包产生超过错误明细上限的错误
-- **WHEN** 系统收集错误
-- **THEN** 系统停止追加明细、保存总错误数和截断数，响应大小保持有界且仍明确批次失败
-
-### Requirement: 仅允许管理员使用数据包导入向导
-系统 SHALL 仅允许已认证管理员上传、查询批次、查看预览和下载错误清单。前端 SHALL 在“数据交换”下提供“数据包导入”入口与四步向导，完整显示上传进度、校验中、成功预览、空分类、校验失败、权限拒绝、服务失败和重新选择文件状态；隐藏入口不得作为权限边界，页面不得显示服务器归档路径或把包内容持久化到浏览器存储。
-
-#### Scenario: 管理员完成上传与校验预览
-- **GIVEN** 管理员已登录并选择合规 ZIP
-- **WHEN** 上传和校验完成
-- **THEN** 向导从“上传数据包”进入“校验预览”，展示分类与文件级结果，并将后两步显示为未开放
-
-#### Scenario: 未登录或非管理员直接请求
-- **GIVEN** 用户未登录或不具有 `admin` 角色
-- **WHEN** 用户访问页面或直接调用任一数据包接口
-- **THEN** API 分别返回现有 `401` 或 `403` 稳定错误，前端跳转登录或显示无权限状态，且不泄露批次、文件名、摘要或错误详情
-
-#### Scenario: 上传或校验服务失败
-- **GIVEN** 网络中断、数据库失败或受控文件目录不可用
-- **WHEN** 管理员上传或读取预览
-- **THEN** 页面显示可重试错误且不把旧结果显示为本次成功，服务端不留下不可识别的部分业务写入
-
-### Requirement: 校验过程保持内网、可观测和可验证
-校验过程 MUST NOT 主动访问互联网、执行包内内容或保存外部 API Key。系统 SHALL 使用关联 ID 记录批次 ID、阶段、耗时、文件和错误码等非敏感结构化信息；对于不超过 10,000 个 CVE 且满足大小限制的合规包，校验能力 MUST 提供可重复的性能验证证据，并 SHALL 保持新增后端与前端代码覆盖率不低于 80%。
-
-#### Scenario: 合规大包性能验证
-- **GIVEN** 合规数据包包含不超过 10,000 个 NVD CVE 并处于约定资源上限内
-- **WHEN** 在项目规定的代表性环境执行校验
-- **THEN** 校验在五分钟目标内完成，统计可重复且不发生互联网请求
-
-#### Scenario: 日志不泄露敏感内容
-- **GIVEN** 包内字段包含长描述、URL 查询参数或恶意文本
-- **WHEN** 校验失败并写结构化日志
-- **THEN** 日志仅记录关联 ID、阶段、文件和错误码等元数据，不记录原始包、整行内容、服务器绝对路径或凭据
+#### Scenario: 最近一日真实 NVD 包
+- **GIVEN** 包含 Rejected、无 configuration、多软件范围和大型 configuration 的最近一日真实 NVD 包
+- **WHEN** 系统校验、预览并确认导入
+- **THEN** 系统在资源上限内完成，保留全部合规来源事实且不要求预先存在内部 OTS

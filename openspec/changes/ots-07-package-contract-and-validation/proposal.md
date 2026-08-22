@@ -1,22 +1,23 @@
 ## Why
 
-平台已经能够导出带 `scope_export_id` 和 SHA-256 的规范采集范围，但尚无可执行的离线回传包契约，也不能安全地接收、校验和预览 ZIP/CSV 数据包。OTS-07 依赖已归档的 OTS-06，先固定包级结构、安全边界、范围追溯和错误定位能力，为 OTS-08～10 的领域数据预览与正式事务导入提供稳定基础。
+现有 OTS-07 错把外部采集端当成内部 OTS 匹配执行者，要求数据包提前携带 `collector_scope.csv` 和内部 `ots_id`，导致完整 NVD 数据无法导入。平台的真实流程是先导入 CVE 及其受影响软件/版本来源事实，再由内网使用本地 OTS 名称、版本和标准标识形成候选匹配，最后为相关产品负责人创建评估任务。
 
 ## What Changes
 
-- 定义版本化 `ots_intelligence_YYYYMMDD_HHMMSS.zip` 三文件包级契约：`manifest.csv`、原始 `collector_scope.csv` 快照和一行一个 CVE 的 `nvd_cves.csv`，并固定公共编码、表头、时间、JSON 列、摘要和范围引用约束。
-- 新增管理员专用的数据包上传、校验状态查询、预览和错误清单下载 API；上传后复用既有 `import_batch` 表记录 `uploaded`/`validated`/`failed` 批次、manifest、统计和错误，不创建新业务表。
-- 在读取 CSV 前校验 ZIP 路径、文件类型、文件数量、单文件大小、解压总大小和压缩比；拒绝路径穿越、压缩炸弹、重复/未知文件、非 UTF-8 内容、错误表头、超长字段和摘要不一致。
-- 校验批次号、格式版本、范围导出 ID、范围快照摘要、manifest 文件摘要、`nvd_cves.csv` 嵌套 JSON 结构、范围外 OTS 以及没有任何范围内 OTS 候选匹配的 CVE；错误统一定位到文件、行、字段和原因并可导出。
-- 新增“数据交换－数据包导入”四步向导骨架，本 change 交付“上传 → 校验预览”两步及后续步骤的禁用占位；展示新增、更新、重复、冲突、错误和文件级问题，暂不执行正式业务写入。
-- 提供合规最小样例包和恶意/损坏包契约测试，覆盖 `FR-EXCH-008`、`FR-EXCH-012`、`FR-EXCH-013`、`FR-EXCH-014` 与 NFR 12.3。
-- 非目标：不访问 NVD 网络服务，不实现外部匹配算法，不接收 KEV/EOL 文件，不写入漏洞、候选匹配或评估数据，不推进逐 OTS 覆盖时间，不生成评估任务，也不实现管理员确认后的正式导入。KEV/EOL 若确认启用，必须在后续 change 以新格式版本引入，不在 `1.0` 中保留空占位文件。
+- **BREAKING**：重置尚未发布的格式 `1.0` 草案。ZIP 根目录由三文件改为 `manifest.csv`、`nvd_cves.csv` 两文件；删除 `collector_scope.csv`、范围摘要、逐 OTS 采集结果和 `matched_ots_json`，旧三文件测试包不再兼容。
+- 固定一行一个 CVE 的 `nvd_cves.csv`，保存 NVD 原始状态、来源标识、时间、描述、CVSS、CWE、引用、原始 configuration，以及从 CPE/CNA affected 信息规范化得到的受影响软件和精确版本/版本范围数组。
+- 允许 Rejected、尚未完成 NVD 分析、没有 configuration 或尚未匹配内部 OTS 的 CVE 进入数据包；缺少内部 OTS 候选关系不再是包校验错误。
+- 保留 ZIP/CSV 安全、1 MiB 字段、摘要、批次幂等、错误定位和管理员权限边界；分类预览改为与 `vulnerability` 当前来源事实比较得到 `new/update/duplicate/conflict/error`。
+- 完成导入向导四步闭环。管理员确认后，在一个事务内写入或更新 `vulnerability`、更新 `import_batch` 为 `succeeded` 并写一条 `batch_upsert` 审计摘要；失败整批回滚。
+- 新增第 8 张表 `vulnerability` 的编号化迁移和回滚；保留全部来源 CVSS 与 configuration JSON，同时选择一组 CVSS v3.1 当前展示值。
+- OTS-07 不创建 `vulnerability_ots_match` 或 `product_assessment`。OTS-08 在内网将受影响软件/版本范围匹配 `ots_component` 并维护候选关系；OTS-10 再按候选关系和 `product_ots` 事务性创建负责人待评估/待复评任务。
+- KEV/EOL 仍为条件任务 OTS-09；若启用，以后续格式版本扩展，不在 NVD `1.0` 中放空文件。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `package-contract-validation`: 定义仅包含 NVD 输入的三文件离线 ZIP/CSV 数据包版本化契约、安全上传、范围与 JSON 引用校验、批次校验预览、错误清单以及管理员导入向导骨架。
+- `package-contract-validation`: 定义原始 NVD 两文件离线包、可安全预览的来源事实分类，以及管理员确认后的漏洞事实事务导入。
 
 ### Modified Capabilities
 
@@ -24,9 +25,8 @@
 
 ## Impact
 
-- 数据：复用 OTS-06 已创建的 `import_batch` 表及唯一键、状态和 JSON 字段；不新增或变更 11 表基线，不写 `audit_log`，不保存正式导入结果。
-- 后端：新增包契约常量/Schema、安全 ZIP 读取与 CSV 校验服务、批次 Repository，以及数据包上传、详情/预览和错误清单下载路由；继续使用现有认证、管理员依赖和统一错误响应。
-- 前端：在现有“数据交换”导航下新增数据包导入页面、四步向导骨架、上传/校验/预览/错误下载交互；API 类型从 OpenAPI 生成。
-- 文件：仅在服务端受控目录临时处理或归档原始 ZIP，不向客户端回显服务器路径；失败和取消清理临时文件，归档策略不引入对象存储。
-- 测试与契约：增加三文件 ZIP 安全、CSV 字节和表头、嵌套 JSON、摘要、候选匹配与范围、批次状态、权限、前端各状态及纵向上传预览场景；保持 10,000 个 CVE 数据包五分钟目标的可验证基础。
-- 依赖：直接依赖 `ots-06-collector-scope-export` 的 `collector_scope.csv` 字节契约和既有 `import_batch` 表；为 OTS-08 和 OTS-10 提供后续扩展点。OTS-09 的 KEV/EOL 输入必须先明确是否启用并升级格式版本。
+- 数据：继续复用 `import_batch`，新增基线内第 8 张表 `vulnerability`；补充来源标识、完整 CVSS JSON 和原始 configuration JSON 字段，不创建第 9、10 张表。
+- 后端：重构包 Schema、校验和分类，增加漏洞 Repository/Service、确认导入 API、事务幂等、内容哈希和审计摘要。
+- 前端：导入向导展示受影响软件/版本范围、来源状态和评分，开放“确认导入 → 查看结果”；不展示候选 OTS 或生成任务数量。
+- 后续任务：OTS-08 改为内部 OTS 候选匹配；OTS-09 保持条件性 KEV/EOL；OTS-10 改为产品评估任务生成；OTS-11 继续提供漏洞目录与工作台。
+- 文件与兼容：现有三文件样例仅保留为错误方向的历史测试材料，实施时必须重建两文件合规样例和最近一日真实 NVD 样例。

@@ -1,115 +1,128 @@
 # OTS 离线数据包契约 V1.0
 
-本文档是外部数据服务生成仅含 NVD 输入的 OTS 离线回传包的可执行契约。合规最小样例见
-`doc/samples/ots_intelligence_20260822_010203.zip`。
+本文档规定外部数据服务向内网平台交付 NVD 漏洞事实的可执行契约。格式 `1.0` 只负责导入 CVE 来源事实；OTS/CVE 候选匹配由平台内部执行，产品评估任务在匹配完成后生成。
 
-## 1. ZIP 物理契约
+## 1. 数据边界
 
-- ZIP 文件名必须匹配 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。
-- ZIP 根目录必须恰好包含 `manifest.csv`、`collector_scope.csv`、`nvd_cves.csv` 三个普通文件；不得包含目录、未知/重复文件、大小写变体、绝对/反斜杠/`..` 路径或符号链接。
-- 所有 CSV 必须使用 UTF-8 无 BOM、CRLF 换行和标准双引号转义；表头必须逐字、逐序一致。
-- 默认限制：上传包 50 MiB、成员 3 个、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 最多 10,000 条数据行、单字段 UTF-8 最多 1 MiB（1,048,576 字节）。
+- 一条 `nvd_cves.csv` 数据记录对应一个 CVE，而不是一个内部 OTS。
+- 同一 CVE 的受影响软件、精确版本或版本范围保存在 `affected_software_json`；一个 CVE 可以包含多个软件和多个范围。
+- 外部包不得包含内网 `ots_id`、`collector_scope.csv` 或 `matched_ots_json`。
+- 无 configuration、Rejected 或当前匹配不到内部 OTS 的 CVE仍是合法来源事实，可以导入。
+- `collector_scope.csv` 仅是管理平台已有的可选采集辅助输出，不属于本契约的数据包。
+- KEV/EOL 不在格式 `1.0` 中占位；确认启用时必须提出新的 `format_version`。
+
+## 2. ZIP 物理契约
+
+- ZIP 文件名匹配 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。
+- ZIP 根目录必须恰好包含 `manifest.csv` 和 `nvd_cves.csv` 两个普通文件；不得包含目录、未知/重复文件、大小写变体、绝对路径、反斜杠路径、`..` 路径或符号链接。
+- CSV 使用 UTF-8 无 BOM和标准双引号转义。记录分隔符使用 CRLF；被双引号包围的字段内部兼容 LF 或 CRLF，并在解析后归一化为 LF。
+- 默认限制：上传包 50 MiB、成员 2 个、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、`nvd_cves.csv` 最多 10,000 条数据记录、单字段 UTF-8 最多 1 MiB（1,048,576 字节）。
 
 | 文件 | 固定表头 |
 | --- | --- |
-| `manifest.csv` | `record_type,format_version,batch_no,generated_at,producer_version,scope_export_id,scope_sha256,file_name,file_sha256,ots_id,collection_status,covered_from,covered_to,error_message` |
-| `collector_scope.csv` | `scope_export_id,ots_id,ots_name,ots_version,official_website,last_covered_time` |
-| `nvd_cves.csv` | `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json` |
+| `manifest.csv` | `record_type,format_version,batch_no,generated_at,producer_version,source_name,source_release,window_start,window_end,file_name,file_sha256` |
+| `nvd_cves.csv` | `cve_id,source_identifier,vuln_status,published_at,last_modified_at,description,affected_software_json,cvss_json,cwes_json,references_json,configurations_json` |
 
-格式 `1.0` 只接收 NVD 数据，不包含 KEV/EOL，也不保留空占位文件。若以后启用 KEV/EOL，必须使用新的 `format_version`。
+## 3. `manifest.csv`
 
-## 2. Manifest
-
-`manifest.csv` 每行必须使用相同的 `format_version`、`batch_no`、`generated_at`、
-`producer_version`、`scope_export_id` 和 `scope_sha256`。`format_version` 固定为 `1.0`；
-`batch_no` 必填且 UTF-8 不超过 100 字节；时间使用含时区的 ISO 8601，推荐 UTC `Z`。
-
-| `record_type` | 数量 | 专属字段 |
-| --- | ---: | --- |
-| `package` | 1 | 公共字段；`scope_sha256` 是原始 `collector_scope.csv` 字节的小写十六进制 SHA-256 |
-| `file` | 2 | 分别声明 `collector_scope.csv`、`nvd_cves.csv` 的 `file_name` 和实际字节 SHA-256 |
-| `scope_result` | 范围中每个 OTS 各 1 | `ots_id`、`collection_status`、覆盖区间和可空错误摘要 |
-
-manifest 不声明自身摘要，避免循环。`collection_status` 仅允许 `succeeded`、`failed`、`not_run`；
-`succeeded` 必须提供含时区的 `covered_to`；`failed/not_run` 必须提供 `error_message` 且
-`covered_to` 为空。OTS-07 只保存该结果，不推进平台覆盖时间。
-
-## 3. `nvd_cves.csv`
-
-每一数据行表示一个 CVE，业务键为 `cve_id`。同一 CVE 的多项 CVSS、CWE、参考和 NVD
-configuration 保存在 JSON 数组列中，避免为一个数据源拆分多张关联 CSV。
+`manifest.csv` 必须恰好包含两条数据记录：一条 `package` 和一条声明 `nvd_cves.csv` 的 `file`。两条记录使用相同的 `format_version`、`batch_no`、`generated_at`、`producer_version`、`source_name`、`source_release`、`window_start` 和 `window_end`。
 
 | 字段 | 规则 |
 | --- | --- |
-| `cve_id` | 匹配 `CVE-YYYY-NNNN...`，在包内按业务键分类 |
-| `status` | `published`、`modified` 或 `rejected` |
-| `published_at`、`last_modified_at` | 含时区的 ISO 8601 时间 |
-| `description` | 必填的 NVD 主描述 |
-| `cvss_json` | JSON 数组，保存 NVD 提供的一个或多个评分对象；可为空数组 |
-| `cwes_json` | JSON 数组，保存 CWE；可为空数组 |
-| `references_json` | JSON 数组，保存参考链接及标签对象；可为空数组 |
-| `configurations_json` | JSON 数组，保存 NVD configuration/CPE 结构；可为空数组 |
-| `matched_ots_json` | 非空 JSON 对象数组，保存该 CVE 与范围内 OTS 的候选匹配 |
+| `format_version` | 固定为 `1.0` |
+| `batch_no` | 必填，UTF-8 不超过 100 字节 |
+| `generated_at` | 含时区 ISO 8601 时间，推荐 UTC `Z` |
+| `producer_version` | 数据包生成程序版本 |
+| `source_name` | 固定来源名称，NVD 包使用 `NVD` |
+| `source_release` | 来源发布标识，例如上游仓库提交或快照标识 |
+| `window_start`、`window_end` | 本包覆盖的来源时间窗口，含时区且开始时间不晚于结束时间 |
+| `file_name` | `file` 记录固定为 `nvd_cves.csv`；`package` 记录为空 |
+| `file_sha256` | `file` 记录为原始 `nvd_cves.csv` 字节的小写十六进制 SHA-256；`package` 记录为空 |
 
-JSON 建议使用紧凑 UTF-8。CSV 会把 JSON 内的 `"` 按标准规则写成 `""`。除
-`matched_ots_json` 外，OTS-07 只固定 JSON 顶层必须为数组，具体 NVD 领域对象由 OTS-08 扩展校验。
+manifest 不声明自身摘要，避免循环。来源时间窗口只说明本包覆盖的 NVD 数据区间，不证明某个内部 OTS 没有漏洞。
 
-`matched_ots_json` 每个对象必须且只能包含：
+## 4. `nvd_cves.csv`
+
+每条数据记录表示一个 CVE，业务键为规范化大写 `cve_id`。同一 CVE 的一对多信息使用 JSON 数组保存，不拆成多张 CSV。
+
+| 字段 | 规则 |
+| --- | --- |
+| `cve_id` | 匹配 `CVE-YYYY-NNNN...` |
+| `source_identifier` | NVD/CNA 提供的来源标识 |
+| `vuln_status` | 来源状态原值，包括但不限于 `Analyzed`、`Modified`、`Rejected` |
+| `published_at`、`last_modified_at` | 含时区 ISO 8601 时间 |
+| `description` | 来源主描述；Rejected 记录可保存拒绝说明 |
+| `affected_software_json` | 归一化受影响软件、精确版本或版本区间数组；允许空数组 |
+| `cvss_json` | 来源提供的全部 CVSS 对象数组；允许空数组 |
+| `cwes_json` | 来源提供的 CWE 对象数组；允许空数组 |
+| `references_json` | 来源提供的参考链接及标签对象数组；允许空数组 |
+| `configurations_json` | NVD 原始 configuration 数组；允许空数组 |
+
+五个 JSON 字段的顶层必须是数组。JSON 建议使用紧凑 UTF-8；CSV 中的 JSON 双引号按 RFC 4180 规则写成 `""`。
+
+### 4.1 受影响软件对象
+
+`affected_software_json` 中每个对象只允许以下字段：
 
 ```json
 {
-  "ots_id": 1,
-  "match_method": "cpe",
-  "match_evidence": "vendor/product/version",
-  "confidence": 0.95
+  "part": "a",
+  "vendor": "openssl",
+  "product": "openssl",
+  "version": "*",
+  "version_start_including": "1.0.0",
+  "version_start_excluding": null,
+  "version_end_including": null,
+  "version_end_excluding": "1.0.2",
+  "cpe": "cpe:2.3:a:openssl:openssl:*:*:*:*:*:*:*:*",
+  "match_criteria_id": "来源匹配条件标识",
+  "vulnerable": true
 }
 ```
 
-- `ots_id` 必须是正整数，存在于 `collector_scope.csv`，并且当前能被平台识别。
-- `match_method`、`match_evidence` 必须是非空字符串。
-- `confidence` 可以为 `null`，否则必须是 0～1 的数值。
-- 每个 CVE 至少有一个候选匹配；候选关系不等于产品受影响结论。
+- `part`、`vendor`、`product`、`vulnerable` 必填。
+- `version` 表示精确版本或 `*`；版本上下界按 NVD 的 including/excluding 语义保存。
+- 同一个对象可以表达精确版本、开闭区间或通配版本；互相矛盾的表达拒绝导入。
+- 一个 CVE 可包含多个对象，以表达多个产品或多个不连续范围。
+- `cpe` 和 `match_criteria_id` 用于追溯及后续内部身份匹配，不得替换为内网 OTS ID。
 
-同 `cve_id` 同内容的后续行分类为 `duplicate`，同 `cve_id` 不同内容分类为 `conflict`。
-OTS-07 没有领域目标表，因此 `update=0`、`classification_basis=package_structure_v1`、
-`final_import_diff=false`。
+## 5. 校验、预览与确认导入
 
-## 4. 范围、安全与信任边界
+平台先校验 ZIP 路径、成员类型、成员集合和资源上限，再以支持引号内换行的 CSV 解析器读取记录。错误返回文件、记录号、字段、错误码、原因和截断后的拒绝值。
 
-`collector_scope.csv` 必须原样来自本次实际采集范围。其所有行使用同一 `scope_export_id`，
-`ots_id` 为范围内唯一正整数；manifest 的范围 ID 和原始字节 SHA-256 必须与它一致。
+预览使用第 8 张表 `vulnerability` 的真实当前数据，按 `cve_id` 和规范化内容哈希分类：
 
-接收方先校验 ZIP 路径、成员类型、成员集合和资源上限，再读取 CSV；不会把成员路径直接解压到
-文件系统。错误使用物理行号（表头为第 1 行），返回错误码、文件、行、字段、原因和截断拒绝值。
+- `new`：数据库中不存在该 CVE；
+- `update`：存在该 CVE，来源事实发生合法变化；
+- `duplicate`：数据库中的规范化事实完全相同；
+- `conflict`：业务唯一键或来源规则冲突，不能自动覆盖；
+- `error`：文件或记录不满足契约。
 
-校验只能证明 manifest、范围快照和 NVD 文件在包内一致，并确认 OTS 当前可识别；由于范围导出记录
-不落库，它不构成历史签发证明或数字签名。OTS-07 不联网、不写漏洞/候选/评估数据、不写审计、
-不推进覆盖时间，也不开放确认导入。
+管理员确认后，平台在事务内锁定批次并重新分类，批量 upsert 第 8 张表。任何失败都回滚本批次的漏洞写入和审计；成功后批次状态为 `succeeded`，并在同一事务写入一条 `batch_upsert` 审计摘要。`duplicate` 不重写记录；Rejected 更新来源状态但不物理删除历史。
 
-## 5. 最小样例与验证
+批次状态为 `uploaded → validated → importing → succeeded | failed`。相同整包 SHA-256 返回已有批次；相同 `batch_no` 但 SHA-256 不同返回 `PACKAGE_BATCH_CONFLICT`，不得回放旧包的校验错误。
 
-样例包含一个范围内 OpenSSL OTS 和一个 NVD CVE；CVSS、CWE、参考、configuration 与候选 OTS
-均位于该 CVE 行的 JSON 列。固定 ID、时间和测试域名只用于契约验证，不能作为真实情报。
+OTS-07 不创建或更新第 9 张表 `vulnerability_ots_match` 和第 10 张表 `product_assessment`。OTS-08 使用 `affected_software_json` 匹配内部 OTS；OTS-10 再为相关产品生成任务。
 
-样例 SHA-256：`0018a426effe31f73db52de4497196f24b6ceaee41451042181b0da3a1daf1b9`。
+## 6. 安全和性能
 
-自动化证据位于 `backend/tests/test_package_validation.py`、
-`backend/tests/test_import_packages.py`、`front/src/pages/ImportPackagePage.test.ts` 和
-`front/e2e/import-packages.spec.ts`。10,000 个 CVE 实测校验 0.902 秒、峰值 51.31 MiB。
+- 不把 ZIP 成员路径直接解压到文件系统；在读取前拒绝路径穿越、符号链接、重复文件和压缩炸弹。
+- 管理平台不联网，不保存外网 API Key，不信任描述、引用或 JSON 中的 HTML。
+- 导入仅允许管理员执行；错误和预览不回显服务器绝对路径或未截断的恶意字段。
+- 10,000 条 CVE 的包应在需求规定的 5 分钟内完成校验和导入；实现需覆盖 1 MiB 字段边界。
 
-`doc/samples/ots_intelligence_20260822_000009.zip` 是最近一日 1,215 条真实 NVD 记录的边界测试包；其中 `CVE-2019-10219.configurations_json` 为 71,123 字节，用于验证大型 configuration 不再因旧 64 KiB 上限被拒绝。该包没有 OTS 范围和候选匹配，预期仍在后续引用校验阶段失败，不属于最小合规样例。
+## 7. 样例与版本说明
 
-## 6. 需求追溯与后续版本
+当前 `doc/samples` 下已有 ZIP 是旧三文件探索样例，包含 `collector_scope.csv` 或旧 `matched_ots_json` 规则，不符合本次修订后的格式 `1.0`，不得继续作为合规验收包。OTS-07 实现阶段必须从最近一天完整 NVD 数据重新生成两文件样例，并同时提供最小合规包、非法包和大字段边界包。
 
-| 需求 | OTS-07 证据 |
+若确认启用 KEV/EOL，OTS-09 必须提出 `1.1` 或后续格式及兼容策略；不得改变本契约 `1.0` 的两文件集合和字段语义。
+
+## 8. 需求追溯
+
+| 需求 | 契约落实 |
 | --- | --- |
-| `FR-EXCH-003` | 单行 CVE 保存描述、时间及 NVD 的 CVSS/CWE/参考/configuration 数组 |
-| `FR-EXCH-008` | 上传后展示 new/update/duplicate/conflict/error；确认导入禁用 |
-| `FR-EXCH-012` | 错误精确到 ZIP 文件、CSV 行和 JSON 字段，并可下载 |
-| `FR-EXCH-013` | 固定版本化三文件 ZIP、manifest、范围 ID 和 SHA-256 |
-| `FR-EXCH-014` | 校验批次、范围和 `matched_ots_json` 中的 OTS 引用 |
-| `NFR 12.3` | 无外网访问；受限 ZIP/CSV 流水线；管理员权限；不回显服务器路径和原始内容 |
-
-OTS-08 可在不改变 `1.0` 表头的前提下扩展 NVD JSON 领域预览和数据库对比。OTS-09 若确认接收
-KEV/EOL，必须提出 `1.1` 或后续格式，不能改变 `1.0` 的三文件集合。OTS-10 才实现正式写入、
-覆盖推进、评估任务和确认导入，并沿用同一批次 ID、预览模型及幂等边界。
+| `FR-EXCH-003` | 单行 CVE 保存来源标识、状态、描述、时间、受影响软件/范围、全部 CVSS/CWE/参考和原始 configuration |
+| `FR-EXCH-008～011` | 真实数据库分类、管理员确认、事务 upsert、重复包幂等和批次冲突 |
+| `FR-EXCH-012～014` | 固定两文件 ZIP、manifest 来源窗口/摘要、精确到记录和字段的错误 |
+| `FR-VULN-001～003、006` | CVE 当前事实、来源评分、无评分语义和 CVE/OTS 分离 |
+| `NFR 12.3` | 无联网、管理员权限、受限 ZIP/CSV 流水线和同事务审计 |

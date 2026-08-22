@@ -1,137 +1,143 @@
 ## Context
 
-参见 `proposal.md` 的动机及 `specs/package-contract-validation/spec.md` 的行为契约。当前平台已归档 OTS-06：`collector_scope.csv` 使用固定 UTF-8/CRLF 字节契约，每次导出产生新的 `scope_export_id` 和对实际字节计算的 SHA-256；导出记录本身不落库。数据库已有完整 `import_batch` 表及 `uploaded/validated/importing/succeeded/failed` 状态，但尚无写入该表的数据包路由、Repository 或 Service，也尚未创建漏洞与评估相关表。
+参见 `proposal.md` 和 `specs/package-contract-validation/spec.md`。现有实现已具备受限 ZIP/CSV 读取、`import_batch` 状态、上传预览页面和错误下载，但它按旧假设要求外部包携带内部 OTS 范围及匹配。当前数据库迁移只到第 7 张逻辑表 `import_batch`；11 表基线中的第 8～10 张表尚未创建。
 
-本设计受三个边界约束：管理平台部署在内网且不得访问外部数据源；V1 只能使用既定 11 张应用表；OTS-07 必须能验证跨文件引用和范围，但不得提前执行 OTS-08～10 的领域入库、覆盖推进或任务生成。由于 OTS-06 不保存导出 ID 与摘要，OTS-07 能证明 ZIP 内 manifest 与原始范围快照字节自洽并验证 OTS 可识别性，不能把这种自洽误称为对外部来源的数字签名或历史签发证明。
+正确的数据边界是：外部包只表达 NVD 来源事实与受影响软件/版本；内网先导入 `vulnerability`，OTS-08 再使用内部 `ots_component` 建立候选关系，OTS-10 最后生成产品评估任务。这样外部系统不需要知道内部主键，Rejected 和尚未完成 NVD applicability 分析的 CVE 也能保留来源状态。
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 固定 `1.0` 包级文件集合、CSV 物理 Schema、manifest 结构和兼容策略，使外部数据服务可独立生成契约样例。
-- 在任何 CSV 业务解析前建立双层 ZIP 资源限制和路径安全检查。
-- 复用 `import_batch` 形成 `uploaded → validated|failed` 的可恢复校验状态，并为后续正式导入保留同一批次 ID。
-- 以单行 CVE 与规范 JSON 列完成 NVD 字节、Schema、摘要、范围候选匹配和包内重复/冲突分类；后续 change 在其后追加领域语义校验。
-- 通过 OpenAPI 生成前端类型，交付管理员四步向导的前两步和错误清单下载。
+- 用两文件包稳定表达一行一个 CVE及其多软件、多版本范围。
+- 将结构预览升级为相对 `vulnerability` 当前事实的真实数据库差异预览。
+- 在管理员确认后事务性 upsert 漏洞来源事实和批次状态，并写审计摘要。
+- 保持 ZIP 安全、错误定位、批次幂等、1 MiB 字段和五分钟目标。
+- 为 OTS-08 提供无需重新解析外部包的规范化受影响范围。
 
 **Non-Goals:**
 
-- 不验证 NVD 数据是否真实，不访问其网络服务，也不实现候选匹配算法；`1.0` 不接收 KEV/EOL。
-- 不把校验通过记录写入 `vulnerability`、`vulnerability_ots_match`、`product_assessment` 或 `audit_log`，不推进 `last_covered_time`。
-- 不提供确认导入端点、后台队列、多 worker、对象存储、病毒扫描服务或 ZIP 数字签名。
-- 不把 OTS-07 的包内结构分类承诺为最终数据库差异；完整领域对比由 OTS-08～10 在同一预览模型上扩展。
+- 不在外部包或 OTS-07 中引用内部 `ots_id`。
+- 不在 OTS-07 创建 `vulnerability_ots_match`、`product_assessment` 或负责人待办。
+- 不访问 NVD 网络、不实现采集分页和限流；样例从公开 feed 离线生成。
+- 不接收 KEV/EOL，不导入或展示 CVSS v4.0 当前值，不覆盖任何产品评估结论。
 
 ## Decisions
 
-### 1. `1.0` 使用固定三文件根目录契约
+### 1. 格式 `1.0` 重置为两文件原始 NVD 包
 
-ZIP 文件名固定为 `ots_intelligence_YYYYMMDD_HHMMSS.zip`。根目录恰好包含 `manifest.csv`、`collector_scope.csv` 和 `nvd_cves.csv` 三个普通文件。未知文件、目录、大小写变体和重复规范化名称均拒绝。KEV/EOL 是否启用尚未确定，因此 `1.0` 不提供空占位文件；若后续启用，必须通过新的 `format_version` 进入显式解析器，不在同一版本中静默增加文件或映射旧列名。
+ZIP 只包含 `manifest.csv` 和 `nvd_cves.csv`。旧草案没有发布给外部兼容方，因此直接重置 `1.0`，并通过精确文件集合和表头明确拒绝三文件草案；不为错误方向永久保留兼容解析器。
 
-各 CSV `1.0` 固定表头如下：
+`manifest.csv` 表头固定为：
 
-| 文件 | 固定列顺序 |
-| --- | --- |
-| `collector_scope.csv` | `scope_export_id,ots_id,ots_name,ots_version,official_website,last_covered_time` |
-| `manifest.csv` | `record_type,format_version,batch_no,generated_at,producer_version,scope_export_id,scope_sha256,file_name,file_sha256,ots_id,collection_status,covered_from,covered_to,error_message` |
-| `nvd_cves.csv` | `cve_id,status,published_at,last_modified_at,description,cvss_json,cwes_json,references_json,configurations_json,matched_ots_json` |
+```text
+record_type,format_version,batch_no,generated_at,producer_version,source_name,source_release,window_start,window_end,file_name,file_sha256
+```
 
-`nvd_cves.csv` 一行对应一个 CVE，`cve_id` 是业务键。`cvss_json`、`cwes_json`、`references_json` 和 `configurations_json` 使用规范 JSON 数组保存 NVD 的一对多结构；`matched_ots_json` 使用非空对象数组保存外部采集工具基于范围得到的候选关系，每个对象固定为 `{ots_id,match_method,match_evidence,confidence}`。JSON 使用紧凑 UTF-8、对象键按契约名称输出；数组顺序属于内容的一部分，接收端不替生成端重排。单字段受 1 MiB 上限约束，以容纳 NVD 对大量下游产品枚举形成的 configuration；超过上限的异常复杂 CVE 必须作为生成失败报告，而不能产生无界包。
+它只有一个 package 行和一个 nvd_cves.csv file 行。来源窗口替代 OTS 范围和逐 OTS 覆盖结果；`import_batch.covered_to` 保存本批次 NVD 窗口结束时间，`scope_coverage_json` 在本格式中为空。
 
-采用 JSON 列而非五张规范化 NVD 子表，是因为当前交换边界只需要“一行一个 CVE”的完整输入，目标领域表尚未实现，提前拆表增加生成、校验和人工排错成本。替代方案“整行只放原始 NVD JSON”虽然更少列，但会把关键批次预览字段完全隐藏在不稳定的上游结构中；保留稳定标量列与五个明确 JSON 列可以兼顾简单性和可校验性。
+`nvd_cves.csv` 表头固定为：
 
-### 2. manifest 使用三种行类型避免摘要循环
+```text
+cve_id,source_identifier,vuln_status,published_at,last_modified_at,description,affected_software_json,cvss_json,cwes_json,references_json,configurations_json
+```
 
-`manifest.csv` 采用统一表头和以下行规则：
+### 2. 一行一个 CVE，多软件和版本范围使用规范 JSON 数组
 
-- `package`：恰好一行，填写 `format_version`、`batch_no`、`generated_at`、`producer_version`、`scope_export_id`、`scope_sha256`；文件和 OTS 专属列为空。
-- `file`：对 `collector_scope.csv` 和 `nvd_cves.csv` 各一行，填写 `file_name` 与实际字节 SHA-256；公共批次列与 package 行一致。
-- `scope_result`：对范围 CSV 每个 OTS 恰好一行，填写 `ots_id`、`collection_status`、覆盖区间与可空错误摘要；公共批次列一致。
+一个 CVE 可影响多个产品和版本范围，不能把 CVE 行扩展成“CVE + 具体软件版本”重复事实。生成端从 NVD `configurations[].nodes[].cpeMatch[]` 和可用的 CNA affected 信息形成 `affected_software_json`，每个对象固定字段：
 
-不要求 manifest 自己的摘要，避免文件包含自身摘要导致循环。`collection_status` 仅允许 `succeeded/failed/not_run`；只有 `succeeded` 可提供 `covered_to`，`failed/not_run` 必须提供简短原因且不能推进覆盖。本 change 将这些结果保存到 `scope_coverage_json`，但只有 OTS-10 正式导入成功后才可让整个批次进入 `succeeded` 并成为下次范围导出的覆盖来源。
+```json
+{
+  "part": "o",
+  "vendor": "linux",
+  "product": "linux_kernel",
+  "version": null,
+  "version_start_including": "3.0",
+  "version_start_excluding": null,
+  "version_end_including": null,
+  "version_end_excluding": "3.4.20",
+  "cpe": "cpe:2.3:o:linux:linux_kernel:*:*:*:*:*:*:*:*",
+  "match_criteria_id": "...",
+  "vulnerable": true
+}
+```
 
-替代方案“每个元数据项一行 key/value”扩展性较强，但很难用固定表头表达唯一性与必填组合，也更容易产生重复键解释差异。
+精确版本写 `version`，范围边界写对应 start/end 字段，通配全版本允许所有版本字段为 null。原始 `configurations_json` 同时保留，以免扁平化丢失 AND/OR、negate 和非易受攻击环境条件。替代方案“只保存原始 configuration”字段更少，但会把 CPE 解析和上游结构兼容推迟到内网每次匹配；规范化加原始结构更适合后续稳定索引。
 
-### 3. 受限内存/临时文件流水线，不调用通用解压
+### 3. CSV 物理检查必须感知引号上下文
 
-上传请求先以流式方式写入应用控制的临时目录并同步计算整包 SHA-256，文件名只作为元数据保存，实际临时名由服务生成。默认上限固定为：上传 ZIP 50 MiB、3 个成员、单成员解压 50 MiB、总解压 200 MiB、单成员压缩比 100:1、每个 CSV 10,000 条数据行、单字段 UTF-8 后 1 MiB、错误明细 1,000 条、错误值 256 个字符。单字段上限用于容纳真实 NVD configuration，仍由 200 MiB 总解压上限约束整包最坏资源消耗；设置允许向下收紧，不允许在同一 `format_version` 下放宽到无法满足五分钟目标的数量级。
+记录分隔符继续要求 CRLF，但引号字段内部允许 LF 或 CRLF。校验器使用轻量状态扫描区分引号外记录边界和引号内内容，再交给严格 CSV 解析器；解析后字段内 CRLF/CR 统一为 LF。不能继续使用“删除所有 CRLF 后搜索 LF”的全文件判断，因为 NVD 描述天然可能包含段落换行。
 
-使用 ZIP central directory 先检查条目名、Unix mode/符号链接、声明大小和压缩比，再逐成员通过有字节计数上限的 reader 读取；不调用将成员路径直接映射到文件系统的 `extract`/`extractall`。实际读取字节超过声明或上限时立即失败。CSV 可逐行解析；需要跨文件引用的稳定键集合和有限样例保存在内存，V1 10,000 行规模无需新增 staging 表。
+ZIP 上传 50 MiB、2 个成员、单成员 50 MiB、总解压 200 MiB、压缩比 100:1、10,000 行、单字段 1 MiB、错误 1,000 条等边界保持。CSV 解析器技术字符上限不得低于业务字段字节上限，最终仍按 UTF-8 字节精确校验。
 
-替代方案“全部解压后再校验”会在路径和资源验证之前产生写盘风险；“为校验新增 staging 表”违反 11 表约束且给失败清理带来额外事务状态。
+### 4. 第 8 张表保存完整来源事实和当前展示字段
 
-### 4. 校验按不可绕过的阶段执行
+新增编号 `010_vulnerability.sql` 及回滚说明，创建既有 11 表基线中的 `vulnerability`。为避免导入后丢失 NVD 信息，表 8 增加或明确以下字段：
 
-单次同步校验按以下顺序执行，任一安全/包级阶段失败即停止后续语义解析；记录级阶段可聚合至错误上限：
+- `source_identifier`：CNA/NVD 来源标识；
+- `cvss_json`：全部来源 CVSS 数组；
+- `affected_ranges_json`：规范化 `affected_software_json`；
+- `configurations_json`：NVD 原始 configuration 数组；
+- 既有 `cwe_json`、`references_json`、来源状态/时间和内容哈希；
+- CVSS v3.1 标量字段作为查询和展示当前值。
 
-1. 请求权限、扩展名、上传流大小、整包 SHA-256；
-2. ZIP 可读性、路径/类型、精确文件集合、声明与实际资源限制；
-3. `manifest.csv` 自身编码、表头、行类型与公共元数据；
-4. 两个非 manifest 文件逐字节 SHA-256；
-5. 全部 CSV 编码、CRLF、表头、字段长度、行数和基础类型；
-6. 范围 ID/摘要/OTS 可识别性、manifest scope_result 完整性；
-7. CVE 主键、JSON 结构、包内重复/冲突和候选 OTS 范围闭包；
-8. 统计、有限样例与规范 JSON 持久化。
+CVSS v3.1 当前值选择顺序固定为：NVD 标记 Primary 的 v3.1 指标优先，其次其他 Primary v3.1，再按 source 和向量稳定排序取第一项；所有原始指标仍保存在 `cvss_json`。没有 v3.1 时标量为空，不换算 v2/v4。
 
-公共错误对象为 `{error_code,file_name,row_number,field,reason,rejected_value}`；行号使用文件物理行号，表头为第 1 行。安全错误不回显攻击路径原文之外的服务器信息，所有 rejected value 截断并去除控制字符。API 返回最多 100 条用于页面，数据库保存最多 1,000 条及 `total_count/truncated_count`；下载从同一持久化错误对象生成，不重新解析恶意包。
+Rejected 只更新 `source_status`、时间和合法来源内容，不删除漏洞。`ai_analysis_suggestion`、KEV 和 CVSS v4.0 字段不属于本次来源哈希的可写输入；新记录的 `is_kev=false`。
 
-### 5. 批次提交边界为“先识别上传，再原子落校验结果”
+### 5. 规范内容哈希驱动真实预览和幂等 upsert
 
-Repository 直接复用 `ImportBatch`。上传完成并得到整包摘要后，在短事务内插入 `uploaded` 批次；manifest 尚未可信时，临时使用服务生成的占位批次号，解析到受信任 `batch_no` 后在校验结果事务中更新。为避免占位与业务批次冲突，占位前缀保留为 `upload:<UUID>`，`format_version` 初始为 `pending`。校验成功原子更新为 `validated`、真实批次元数据、`manifest_json/result_json/scope_coverage_json`；失败原子更新为 `failed` 和 `error_json`。若真实批次号唯一键在更新时冲突，回滚当前更新并返回既有批次，随后删除本次未引用临时文件；不产生第二条业务批次。
+内容哈希对以下规范字段计算：CVE ID、来源标识/状态、描述、时间、排序规范化的受影响范围、CVSS、CWE、引用和原始 configuration。对象键排序；无语义数组如 CWE/引用/评分按稳定键排序；NVD configuration 中有逻辑意义的数组保持来源顺序。哈希不包含数据库 ID、批次 ID、人工字段或时间戳。
 
-同包摘要在插入前查询并由数据库唯一键兜底。对竞争上传，捕获唯一键冲突后重新查询已有记录并返回幂等响应。OTS-07 不写 `audit_log`：批次本身就是文件处理运行记录，而需求把审计限定为正式数据库业务变更；OTS-10 的 `batch_upsert` 审计在正式导入事务中实现。
+分类规则：
 
-替代方案“解析完 manifest 后才创建批次”无法在解析失败时保留可识别失败状态；“每个校验阶段 commit”会暴露难以恢复的中间 JSON。
+- 数据库无 CVE：new；
+- 哈希相同：duplicate；
+- 数据包 `last_modified_at` 更新且哈希不同：update；
+- 同一/更旧来源时间但哈希不同：conflict；
+- 包内同 CVE 同内容为 duplicate、不同内容为 conflict。
 
-### 6. 原始包存储采用受控本地归档，失败包仅保留元数据
+预览在 validated 批次中保存有限样例和规范化待写入摘要；确认时必须在事务内重新锁定相关 CVE并重算分类，防止预览后并发更新。发现漂移则回到 conflict/failed，不按过期预览写入。
 
-校验通过后将 ZIP 原子移动到设置项指定的受控归档目录，路径结构按服务生成的批次 ID，而不是用户文件名；`archive_path` 只保存服务器内部相对路径。校验失败、重复或请求异常时删除临时 ZIP，仅保留数据库错误摘要和原始文件名/摘要；API 永不返回 `archive_path`。部署文档要求归档目录与数据库一起备份并限制应用账户权限。
+### 6. 确认导入是单事务，OTS 匹配不在该事务内
 
-替代方案“失败包也长期归档”增加恶意内容保留与磁盘耗尽风险；对象存储不在 V1 架构内。
+新增 `POST /api/v1/import-packages/{batch_id}/confirm`。事务顺序为：锁定 validated 批次 → 标记 importing → 锁定相关 CVE → 重算分类 → bulk insert/update vulnerability → 更新批次 succeeded/result_json → 插入一条 `audit_log(operation=batch_upsert)` 摘要 → commit。任何一步失败整批回滚，再用独立短事务把批次标为 failed 并保存非敏感错误。
 
-### 7. API 为同步上传加只读批次查询
+归档 ZIP 在 validated 时保留，确认失败可基于同一归档诊断但不可重复确认；修复数据必须生成新 batch_no。成功响应只显示漏洞新增/更新/重复/Rejected 数量，不宣称已匹配 OTS 或已生成产品任务。
 
-管理员端点：
+### 7. 同 batch_no 不同内容必须报告冲突
 
-- `POST /api/v1/import-packages/validate`：`multipart/form-data` 单文件上传；同步完成校验后返回 `201` 新批次或 `200` 既有批次，响应包含批次 ID、状态、分类摘要、范围统计、文件统计、有限错误/样例和后续动作能力。
-- `GET /api/v1/import-packages/{batch_id}`：返回上传/校验结果，不返回服务器路径、原始 CSV 行或完整包内容。
-- `GET /api/v1/import-packages/{batch_id}/errors`：仅失败批次下载 `package_validation_errors.csv`；没有错误时返回稳定的状态冲突错误。
+整包 SHA 相同继续返回既有批次。解析出可信 batch_no 后，若数据库已有相同 batch_no 且 SHA 不同，返回稳定 `PACKAGE_BATCH_CONFLICT`，包含既有批次 ID和两个摘要前缀，不复用旧批次错误作为本次结果。这样既保留业务幂等，也避免样例重建后出现“旧错误回放”。
 
-V1 上限和五分钟目标允许单请求同步完成，省去后台任务/轮询状态机；前端仍展示“校验中”。若反向代理超时低于性能目标，应在部署配置提高该单端点超时，而不是引入 Redis/队列。错误沿用统一 envelope；新增稳定码至少覆盖 `PACKAGE_TYPE_INVALID`、`PACKAGE_TOO_LARGE`、`PACKAGE_ZIP_UNSAFE`、`PACKAGE_STRUCTURE_INVALID`、`PACKAGE_VERSION_UNSUPPORTED`、`PACKAGE_MANIFEST_INVALID`、`PACKAGE_DIGEST_MISMATCH`、`PACKAGE_CSV_INVALID`、`PACKAGE_REFERENCE_INVALID`、`PACKAGE_SCOPE_INVALID`、`PACKAGE_DUPLICATE` 和 `PACKAGE_VALIDATION_FAILED`。
+### 8. 后续 change 按数据依赖拆分
 
-### 8. 预览分类先表达包内结构，后续领域 change 扩展同一模型
+- OTS-08 创建/维护第 9 张表 `vulnerability_ots_match`：读取已导入 `affected_ranges_json`，按 CPE 标准标识、名称归一化和版本区间匹配内部 `ots_component`，只形成候选关系。
+- OTS-09 仅在确认 KEV/EOL 后扩展来源导入；不阻塞纯 NVD 主链。
+- OTS-10 创建第 10 张表 `product_assessment`：读取第 9 张表候选关系，经 `product_ots` 找到有效产品版本和负责人，幂等创建 pending/reassess 修订。
+- OTS-11 在第 8～10 张表可用后提供漏洞目录、候选依据和工作台查询。
 
-`nvd_cves.csv` 输出 `{new,update,duplicate,conflict,error,total}`：首次出现且基础、JSON 和范围校验通过的 `cve_id` 计为 `new`；相同 `cve_id` 与整行规范内容相同的后续行计为 `duplicate`；相同 `cve_id` 内容不同计为 `conflict`；基础、JSON 或范围失败计为 `error`。当前数据库尚无漏洞表，因此 `update` 为 0，并在响应 `classification_basis=package_structure_v1` 与 `final_import_diff=false` 中明确说明。
+内网 OTS 目前只有名称/版本/官网，不能保证 `Linux` 与 `linux_kernel` 等名称稳定对应。OTS-08 必须明确标准 CPE vendor/product 或受控别名策略；该问题不应让 OTS-07 再次依赖内部 ID。
 
-OTS-08 在不破坏响应字段的前提下增加 NVD 领域预览和数据库对比；OTS-10 才把确认动作能力置为 true。OTS-09 若确认接收 KEV/EOL，必须先提出新格式版本，不能改变 `1.0` 的三文件集合。
+### 9. 前端完成来源事实导入闭环
 
-### 9. 前端四步向导由服务端能力驱动
-
-新增管理员路由 `/system/data-exchange/import-packages`，复用现有“数据交换”导航和管理员路由元数据。步骤固定为“上传数据包、校验预览、确认导入、查看结果”；OTS-07 中前两步可用，后两步显示“后续能力尚未开放”且无可触发请求。文件选择仅接受单个 `.zip`，客户端大小检查用于快速反馈，服务端仍执行全部安全校验。
-
-页面不把 File、响应明细或批次 ID写入 localStorage/sessionStorage。刷新已带 batch ID 的页面可重新读取只读详情；上传新包前清空旧成功状态，防止服务失败时把旧预览误认为本次结果。统计卡、文件表、错误表与下载按钮全部使用 OpenAPI 生成类型；未知错误走现有统一提示。
-
-### 10. 测试按契约夹具分层且验证无业务副作用
-
-测试构造确定性的三文件最小合规包，再通过单一变异生成缺文件、未知文件、路径穿越、伪装符号链接、声明/实际超限、摘要篡改、BOM/编码/表头/字段错误、非法 JSON、范围外 OTS、空候选匹配和 CVE 重复/冲突。后端单元测试覆盖纯解析器，API/Repository 集成测试覆盖权限、状态、唯一键竞争、临时清理和 JSON；MySQL 测试验证现有表约束且确认表数不增加。前端组件测试覆盖所有向导状态，Playwright 使用系统 Chrome 完成“管理员上传合规三文件包 → 查看预览”和“上传损坏包 → 下载错误清单”纵向场景。
-
-每个写批次测试同时快照漏洞/候选/评估（若测试库已有）与 `audit_log`，验证均未改变；性能夹具包含不超过 10,000 条领域行并记录耗时、峰值内存和错误上限行为。
+四步向导全部可用。预览按 CVE 展示来源状态、软件/vendor/product、精确版本或版本区间、CVSS v3.1 摘要和 new/update/duplicate/conflict/error。Rejected 和没有 affected 范围使用明确空状态，不显示为数据错误。确认页展示实际写入影响并二次确认；结果页明确“漏洞事实已导入，内部 OTS 匹配尚未执行”。
 
 ## Risks / Trade-offs
 
-- [范围导出未落库，manifest 与范围快照可能由同一外部方同时伪造] → 明确本 change 只验证包内一致性和 OTS 可识别性；人工离线介质是信任边界。若未来要求签发真实性，需单独变更 OTS-06 持久化或签名方案。
-- [同步校验接近五分钟可能超过代理默认超时] → 文档固定上传端点超时与大小设置，先用代表性 10,000 行包测量；不以引入队列掩盖部署配置问题。
-- [JSON 单元格可能包含深层或超大上游结构] → 在解析前执行 1 MiB 字段限制，并保留 200 MiB 总解压与 10,000 行限制；解析后仅接受规定的顶层数组和候选对象字段，不递归执行任何内容。
-- [失败批次保留但失败原包被删除，无法事后重新提取全部错误] → 首次校验聚合到 1,000 条并保存总数；安全上优先不持久保存恶意包，用户可修复后重新上传。
-- [未来确认需要 KEV/EOL] → 由 OTS-09 提出 `1.1` 或后续格式并提供迁移说明；`1.0` 继续稳定接收仅 NVD 三文件包。
-- [批次占位号短暂存在] → 占位前缀是保留命名空间且只在未完成事务外可见；查询 API按批次 ID返回上传状态，不向用户承诺占位值为外部批次号。
+- [NVD configuration 逻辑复杂，扁平化可能产生过宽候选] → 同时保存原始 configuration；OTS-08 将规范范围作为召回候选、把原始逻辑作为匹配证据，不自动形成产品受影响结论。
+- [OTS 名称和 CPE product 不一致] → OTS-08 引入明确标准标识/别名策略并保留 match_basis；禁止静默模糊匹配直接形成任务。
+- [完整 NVD 日增量包含无 applicability 与 Rejected] → 作为来源状态正常导入；仅有可用受影响范围的 CVE进入 OTS-08 匹配。
+- [预览与确认间数据库发生变化] → 确认事务重新分类并锁定，漂移阻止写入。
+- [1 MiB JSON 字段和 10,000 行造成内存峰值] → 保留 200 MiB 总解压、有限样例和五分钟性能测试；正式写入分批执行但处于同一事务。
+- [旧三文件包和已存失败批次] → 明确为未发布草案，不兼容；保留旧批次历史但不得把它们当作新格式成功输入。
 
 ## Migration Plan
 
-1. 先把十文件测试夹具替换为三文件夹具并提交 RED 证据，再修改契约常量和纯校验器，验证安全、JSON 与范围场景。
-2. 增加现有 `import_batch` Repository、受控目录设置和三个管理员 API；不新增 SQL 迁移，使用 MySQL 验证唯一键竞争、状态 JSON 和 11 表数量。
-3. 重新生成 OpenAPI TypeScript 类型，部署向导前两步与错误清单下载；以系统 Chrome 验证管理员和越权旅程。
-4. 使用 10,000 行合规包记录性能证据，并复核进程、代理上传大小/超时与归档目录权限。
-5. 回滚时先回滚前端路由与后端 API；保留既有 `import_batch` 表。若已有 `validated/failed` 批次，保留其行和已验证归档以供后续版本恢复，不执行数据删除；仅清理经确认未被引用的临时文件。
+1. 先用 RED 测试替换两文件夹具，覆盖字段内换行、空 affected、Rejected、真实版本范围、数据库分类和 batch_no 冲突。
+2. 重构校验器与 manifest，保留现有安全上传和错误清单；旧三文件包得到稳定不兼容错误。
+3. 增加 `010_vulnerability.sql`、回滚说明、模型/Repository 和 MySQL 8.x 验证，不新增第 11 张表之外的表。
+4. 实现确认导入事务、审计摘要和前端四步闭环；以系统 Chrome验证上传、预览、确认、结果和失败回滚。
+5. 重建最小合规包和最近一日真实 NVD 包，执行覆盖率、性能、OpenAPI 漂移和 OpenSpec 严格校验。
+6. 回滚时先关闭确认端点和前端动作，再回滚应用；若 `vulnerability` 已被后续表引用则禁止执行 010 回滚，保留成功批次和来源事实。
 
 ## Open Questions
 
