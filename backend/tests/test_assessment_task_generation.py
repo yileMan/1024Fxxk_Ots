@@ -1,0 +1,371 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import func, select, text
+
+from app.main import create_app
+from app.models.imports import ImportBatch, Vulnerability
+from app.models.user import AuditLog, Base
+from app.services.authentication import AuthenticationService
+from tests.package_fixtures import build_package
+
+
+@pytest.fixture
+def client(tmp_path: Path, monkeypatch) -> Iterator[TestClient]:
+    monkeypatch.setenv("OTS_DATABASE_URL", f"sqlite:///{tmp_path / 'assessment-tasks.db'}")
+    monkeypatch.setenv("OTS_IMPORT_TEMP_DIR", str(tmp_path / "incoming"))
+    monkeypatch.setenv("OTS_IMPORT_ARCHIVE_DIR", str(tmp_path / "archive"))
+    application = create_app()
+    Base.metadata.create_all(application.state.database.engine)
+    AuthenticationService(application.state.database.session_factory).initialize_admin(
+        "admin", "初始管理员", "admin-password"
+    )
+    with TestClient(application, raise_server_exceptions=False) as test_client:
+        yield test_client
+    application.state.database.engine.dispose()
+
+
+def login(client: TestClient) -> None:
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"login_name": "admin", "password": "admin-password"},
+    ).status_code == 200
+
+
+def create_user(client: TestClient, login_name: str, roles: list[str]) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "login_name": login_name,
+            "display_name": login_name,
+            "password": "user-password",
+            "roles": roles,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def create_product_ots(
+    client: TestClient,
+    *,
+    code: str,
+    owner_id: int,
+    reviewer_id: int,
+    ots_component_id: int,
+) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+    product = client.post(
+        "/api/v1/products", json={"product_code": code, "product_name": f"产品 {code}"}
+    ).json()
+    version = client.post(
+        f"/api/v1/products/{product['id']}/versions",
+        json={
+            "version_no": "1.0",
+            "owner_id": owner_id,
+            "reviewer_id": reviewer_id,
+        },
+    ).json()
+    relation_response = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots",
+        json={"ots_component_id": ots_component_id},
+    )
+    assert relation_response.status_code == 201
+    return product, version, relation_response.json()
+
+
+def import_batch(client: TestClient) -> int:
+    validated = client.post(
+        "/api/v1/import-packages/validate",
+        files={
+            "file": (
+                "ots_intelligence_20260822_010203.zip",
+                build_package(),
+                "application/zip",
+            )
+        },
+    ).json()
+    assert client.post(f"/api/v1/import-packages/{validated['id']}/confirm").status_code == 200
+    return validated["id"]
+
+
+def setup_scope(client: TestClient, *, product_count: int = 1) -> dict[str, object]:
+    login(client)
+    owners = [create_user(client, f"owner-{index}", ["product_owner"]) for index in range(product_count)]
+    reviewer = create_user(client, "reviewer", ["reviewer"])
+    ots = client.post(
+        "/api/v1/ots-components",
+        json={
+            "ots_name": "OpenSSL",
+            "ots_version": "3.0.0",
+            "official_website": "https://openssl.org",
+            "is_eol": False,
+        },
+    ).json()
+    scopes = [
+        create_product_ots(
+            client,
+            code=f"P-{index}",
+            owner_id=owners[index]["id"],
+            reviewer_id=reviewer["id"],
+            ots_component_id=ots["id"],
+        )
+        for index in range(product_count)
+    ]
+    return {
+        "owners": owners,
+        "reviewer": reviewer,
+        "ots": ots,
+        "scopes": scopes,
+        "batch_id": import_batch(client),
+    }
+
+
+def assessment_rows(client: TestClient) -> list[dict[str, object]]:
+    with client.app.state.database.engine.connect() as connection:
+        return [
+            dict(row)
+            for row in connection.execute(
+                text("SELECT * FROM product_assessment ORDER BY product_ots_id, revision_no")
+            ).mappings()
+        ]
+
+
+def test_preview_expands_one_candidate_to_each_active_product_without_writes(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client, product_count=2)
+
+    preview = client.get(
+        f"/api/v1/import-packages/{scope['batch_id']}/ots-match-preview"
+    )
+
+    assert preview.status_code == 200
+    tasks = preview.json()["task_generation"]
+    assert tasks["status"] == "pending"
+    assert tasks["task_inserted_count"] == 2
+    assert tasks["task_reassess_count"] == 0
+    assert tasks["task_failed_count"] == 0
+    assert [sample["owner_id"] for sample in tasks["task_samples"]] == [
+        owner["id"] for owner in scope["owners"]
+    ]
+    with client.app.state.database.engine.connect() as connection:
+        assert connection.scalar(text("SELECT COUNT(*) FROM product_assessment")) == 0
+
+
+def test_execute_creates_independent_pending_tasks_and_is_idempotent(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client, product_count=2)
+
+    first = client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+    repeated = client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+
+    assert first.status_code == 200
+    assert first.json()["task_generation"]["task_inserted_count"] == 2
+    assert repeated.status_code == 200
+    assert repeated.json()["task_generation"]["task_inserted_count"] == 0
+    assert repeated.json()["task_generation"]["task_unchanged_count"] == 2
+    rows = assessment_rows(client)
+    assert len(rows) == 2
+    assert {row["status"] for row in rows} == {"pending"}
+    assert {row["applicability"] for row in rows} == {"pending"}
+    assert {row["revision_no"] for row in rows} == {1}
+    assert {row["is_current"] for row in rows} == {1}
+    assert {row["owner_id"] for row in rows} == {
+        owner["id"] for owner in scope["owners"]
+    }
+    assert all(row["analysis_summary"] is None for row in rows)
+
+
+def test_disabled_product_version_and_unavailable_owner_are_reported(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client, product_count=4)
+    product_disabled, _, _ = scope["scopes"][1]
+    _, version_disabled, _ = scope["scopes"][2]
+    unavailable_owner = scope["owners"][3]
+    assert client.post(
+        f"/api/v1/products/{product_disabled['id']}/disable", json={"row_version": 1}
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/products/{scope['scopes'][2][0]['id']}/versions/{version_disabled['id']}/disable",
+        json={"row_version": 1},
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/users/{unavailable_owner['id']}/disable", json={"row_version": 1}
+    ).status_code == 200
+
+    tasks = client.get(
+        f"/api/v1/import-packages/{scope['batch_id']}/ots-match-preview"
+    ).json()["task_generation"]
+
+    assert tasks["task_inserted_count"] == 1
+    assert tasks["task_skipped_count"] == 3
+    assert tasks["skip_reason_counts"] == {
+        "OWNER_UNAVAILABLE": 1,
+        "PRODUCT_DISABLED": 1,
+        "PRODUCT_VERSION_DISABLED": 1,
+    }
+
+
+def test_completed_assessment_gets_one_reassess_revision_for_material_evidence_change(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    assert client.post(f"/api/v1/import-packages/{batch_id}/ots-matches").status_code == 200
+    owner_id = scope["owners"][0]["id"]
+    reviewer_id = scope["reviewer"]["id"]
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text("""
+            UPDATE product_assessment
+            SET status='completed', applicability='affected', analysis_summary='已审核结论',
+                submitted_by=:owner_id, submitted_at=CURRENT_TIMESTAMP,
+                review_decision='approved', reviewer_id=:reviewer_id,
+                reviewed_at=CURRENT_TIMESTAMP
+        """), {"owner_id": owner_id, "reviewer_id": reviewer_id})
+    with client.app.state.database.session_factory.begin() as session:
+        vulnerability = session.scalar(select(Vulnerability))
+        changed = [dict(item) for item in vulnerability.affected_ranges_json]
+        changed[0]["cpe"] = None
+        vulnerability.affected_ranges_json = changed
+        vulnerability.content_sha256 = "c" * 64
+
+    changed = client.post(f"/api/v1/import-packages/{batch_id}/ots-matches").json()
+    repeated = client.post(f"/api/v1/import-packages/{batch_id}/ots-matches").json()
+
+    assert changed["task_generation"]["task_reassess_count"] == 1
+    assert repeated["task_generation"]["task_reassess_count"] == 0
+    rows = assessment_rows(client)
+    assert len(rows) == 2
+    previous, current = rows
+    assert previous["status"] == "completed"
+    assert previous["is_current"] == 0
+    assert previous["analysis_summary"] == "已审核结论"
+    assert previous["review_decision"] == "approved"
+    assert current["revision_no"] == 2
+    assert current["parent_revision_id"] == previous["id"]
+    assert current["status"] == "reassess"
+    assert current["is_current"] == 1
+    assert current["analysis_summary"] == "已审核结论"
+    assert current["submitted_by"] is None
+    assert current["review_decision"] is None
+    assert current["reviewer_id"] is None
+
+
+def test_candidate_removal_preserves_completed_history_and_creates_reassess(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text("UPDATE product_assessment SET status='completed'"))
+    with client.app.state.database.session_factory.begin() as session:
+        vulnerability = session.scalar(select(Vulnerability))
+        changed = [dict(item) for item in vulnerability.affected_ranges_json]
+        changed[0]["version"] = "4.0.0"
+        vulnerability.affected_ranges_json = changed
+        vulnerability.content_sha256 = "d" * 64
+
+    result = client.post(f"/api/v1/import-packages/{batch_id}/ots-matches").json()
+
+    assert result["candidate_removed_count"] == 1
+    assert result["task_generation"]["task_reassess_count"] == 1
+    rows = assessment_rows(client)
+    assert [row["status"] for row in rows] == ["completed", "reassess"]
+    assert "候选已移除" in rows[-1]["reassess_reason"]
+
+
+def test_non_material_source_change_does_not_create_reassess(client: TestClient) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text("UPDATE product_assessment SET status='completed'"))
+    with client.app.state.database.session_factory.begin() as session:
+        vulnerability = session.scalar(select(Vulnerability))
+        vulnerability.description = "只修改来源描述，不改变候选证据"
+        vulnerability.content_sha256 = "e" * 64
+
+    result = client.post(f"/api/v1/import-packages/{batch_id}/ots-matches").json()
+
+    assert result["candidate_updated_count"] == 1
+    assert result["task_generation"]["task_reassess_count"] == 0
+    assert len(assessment_rows(client)) == 1
+
+
+def test_submitted_assessment_is_not_overwritten_by_candidate_change(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text(
+            "UPDATE product_assessment SET status='submitted', analysis_summary='待审核内容'"
+        ))
+    with client.app.state.database.session_factory.begin() as session:
+        vulnerability = session.scalar(select(Vulnerability))
+        changed = [dict(item) for item in vulnerability.affected_ranges_json]
+        changed[0]["cpe"] = None
+        vulnerability.affected_ranges_json = changed
+        vulnerability.content_sha256 = "f" * 64
+
+    tasks = client.post(
+        f"/api/v1/import-packages/{batch_id}/ots-matches"
+    ).json()["task_generation"]
+
+    assert tasks["task_skipped_count"] == 1
+    assert tasks["skip_reason_counts"] == {"ASSESSMENT_IN_PROGRESS": 1}
+    rows = assessment_rows(client)
+    assert len(rows) == 1
+    assert rows[0]["status"] == "submitted"
+    assert rows[0]["analysis_summary"] == "待审核内容"
+
+
+def test_old_matching_result_is_exposed_as_pending_task_generation(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+    with client.app.state.database.session_factory.begin() as session:
+        batch = session.get(ImportBatch, batch_id)
+        root = dict(batch.result_json)
+        matching = dict(root["matching"])
+        matching.pop("task_generation", None)
+        root["matching"] = matching
+        batch.result_json = root
+
+    result = client.get(f"/api/v1/import-packages/{batch_id}/ots-match-result")
+
+    assert result.status_code == 200
+    assert result.json()["task_generation"]["status"] == "pending"
+
+
+def test_task_changes_write_one_bounded_audit_summary(client: TestClient) -> None:
+    scope = setup_scope(client, product_count=2)
+    batch_id = scope["batch_id"]
+
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+
+    with client.app.state.database.session_factory() as session:
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.object_type == "product_assessment")
+        ).all()
+        assert len(audits) == 1
+        assert audits[0].action == "batch_upsert"
+        assert audits[0].detail_json["task_inserted_count"] == 2
+        assert "analysis_summary" not in audits[0].detail_json
+        assert session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.object_type == "product_assessment"
+            )
+        ) == 1
+

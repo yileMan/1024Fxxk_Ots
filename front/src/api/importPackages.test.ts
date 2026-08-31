@@ -80,7 +80,10 @@ describe('import package API client', () => {
   })
 
   it('previews, executes and reads internal OTS candidates', async () => {
-    const summary = { status: 'pending', candidate_inserted_count: 1, candidate_disclaimer: '候选不等于产品受影响' }
+    const summary = {
+      status: 'pending', candidate_inserted_count: 1, candidate_disclaimer: '候选不等于产品受影响',
+      task_generation: { status: 'pending', task_inserted_count: 2, task_samples: [] },
+    }
     const detail = { vulnerability_id: 7, cve_id: 'CVE-2026-0001', candidates: [], unmatched_reason: 'VERSION_OUTSIDE_RANGE', candidate_disclaimer: '候选不等于产品受影响' }
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify(summary), { status: 200 }))

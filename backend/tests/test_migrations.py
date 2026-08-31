@@ -8,7 +8,7 @@ from app.migrations import apply_migrations, discover_migrations
 def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> None:
     migrations = discover_migrations(Path(__file__).parents[1] / "migrations")
 
-    assert [migration.version for migration in migrations] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert [migration.version for migration in migrations] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     assert "app_user" in migrations[1].sql
     assert "audit_log" not in migrations[1].sql
     assert "audit_log" in migrations[2].sql
@@ -38,6 +38,11 @@ def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> N
     assert "uk_vulnerability_ots" in migrations[10].sql
     assert "idx_match_ots" in migrations[10].sql
     assert "idx_match_last_batch" in migrations[10].sql
+    assert "product_assessment" in migrations[11].sql
+    assert "uk_assessment_revision" in migrations[11].sql
+    assert "idx_assessment_current_owner" in migrations[11].sql
+    assert "idx_assessment_current_review" in migrations[11].sql
+    assert "idx_assessment_cross_product" in migrations[11].sql
 
     rollback = (Path(__file__).parents[1] / "migrations" / "008_user_product_scope.rollback.md").read_text(encoding="utf-8")
     assert "备份" in rollback
@@ -59,6 +64,12 @@ def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> N
     assert "备份" in match_rollback
     assert "OTS-10" in match_rollback
     assert "DROP TABLE vulnerability_ots_match" in match_rollback
+
+    assessment_rollback = (Path(__file__).parents[1] / "migrations" / "012_product_assessment.rollback.md").read_text(encoding="utf-8")
+    assert "备份" in assessment_rollback
+    assert "系统待办" in assessment_rollback
+    assert "审核" in assessment_rollback
+    assert "DROP TABLE product_assessment" in assessment_rollback
 
 
 def test_migrations_apply_once(tmp_path) -> None:

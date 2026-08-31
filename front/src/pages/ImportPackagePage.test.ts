@@ -111,6 +111,16 @@ describe('ImportPackagePage', () => {
   })
 
   it('previews and executes internal matching with candidate evidence', async () => {
+    const taskGeneration = {
+      schema_version: '1.0', status: 'pending', task_inserted_count: 2,
+      task_reassess_count: 0, task_updated_count: 0, task_unchanged_count: 0,
+      task_skipped_count: 1, task_failed_count: 0,
+      skip_reason_counts: { PRODUCT_VERSION_DISABLED: 1 },
+      task_samples: [
+        { vulnerability_id: 7, cve_id: 'CVE-2026-0001', product_id: 2, product_name: '网关', product_version_id: 4, version_no: '1.0', product_ots_id: 9, owner_id: 5, action: 'inserted', reason: null },
+      ],
+      truncated_task_count: 0, error_code: null,
+    }
     const matching = {
       schema_version: '1.0', status: 'pending', matching_rule_version: 'exact-identity-v1',
       version_rule_version: 'natural-version-v1', processed_vulnerability_count: 2,
@@ -121,6 +131,7 @@ describe('ImportPackagePage', () => {
       truncated_unmatched_count: 0,
       candidate_samples: [{ vulnerability_id: 7, cve_id: 'CVE-2026-0001', ots_component_id: 3, ots_name: 'OpenSSL', ots_version: '3.0.0', match_method: 'cpe', match_basis: '精确版本命中', match_confidence: null, match_evidence: {} }],
       truncated_candidate_count: 0, candidate_disclaimer: '候选不等于产品受影响', error_code: null, finished_at: null,
+      task_generation: taskGeneration,
     }
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify(response('succeeded')), { status: 200 }))
@@ -134,10 +145,38 @@ describe('ImportPackagePage', () => {
     expect(wrapper.text()).toContain('OpenSSL 3.0.0')
     expect(wrapper.text()).toContain('VERSION_OUTSIDE_RANGE')
     expect(wrapper.text()).toContain('候选不等于产品受影响')
+    expect(wrapper.text()).toContain('产品评估任务')
+    expect(wrapper.text()).toContain('新任务')
+    expect(wrapper.text()).toContain('网关 1.0')
+    expect(wrapper.text()).toContain('PRODUCT_VERSION_DISABLED')
+    expect(wrapper.text()).toContain('待产品独立评估')
     await wrapper.get('button[data-action="execute-matches"]').trigger('click')
     await flushPromises()
     expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/import-packages/12/ots-matches')
     expect(wrapper.text()).toContain('内部匹配已完成')
+  })
+
+  it('marks a legacy succeeded matching result as awaiting product task generation', async () => {
+    const legacyMatching = {
+      schema_version: '1.0', status: 'succeeded', matching_rule_version: 'exact-identity-v1',
+      version_rule_version: 'natural-version-v1', processed_vulnerability_count: 1,
+      candidate_inserted_count: 0, candidate_updated_count: 0, candidate_removed_count: 0,
+      candidate_unchanged_count: 1, unmatched_vulnerability_count: 0,
+      unmatched_reason_counts: {}, unmatched_samples: [], truncated_unmatched_count: 0,
+      candidate_samples: [], truncated_candidate_count: 0,
+      candidate_disclaimer: '候选不等于产品受影响', error_code: null, finished_at: '2026-08-31T00:00:00Z',
+    }
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(response('succeeded')), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(legacyMatching), { status: 200 }))
+    window.history.replaceState({}, '', '/system/data-exchange/import-packages?batch=12')
+    const wrapper = mount(ImportPackagePage)
+    await flushPromises()
+    await wrapper.get('button[data-action="preview-matches"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('产品任务待生成')
+    expect(wrapper.find('button[data-action="execute-matches"]').exists()).toBe(true)
   })
 
   it('does not confirm when the user cancels the secondary confirmation', async () => {
