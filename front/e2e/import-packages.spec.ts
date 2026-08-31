@@ -38,6 +38,21 @@ const succeeded = {
   internal_matching_pending: true,
 }
 
+const matching = {
+  schema_version: '1.0', status: 'pending', matching_rule_version: 'exact-identity-v1',
+  version_rule_version: 'natural-version-v1', processed_vulnerability_count: 4,
+  candidate_inserted_count: 2, candidate_updated_count: 0, candidate_removed_count: 0,
+  candidate_unchanged_count: 0, unmatched_vulnerability_count: 2,
+  unmatched_reason_counts: { VERSION_OUTSIDE_RANGE: 1, NO_AFFECTED_RANGE: 1 },
+  unmatched_samples: [{ vulnerability_id: 8, cve_id: 'CVE-2026-0803', reason: 'VERSION_OUTSIDE_RANGE' }],
+  truncated_unmatched_count: 0,
+  candidate_samples: [
+    { vulnerability_id: 7, cve_id: 'CVE-2026-0801', ots_component_id: 3, ots_name: 'OpenSSL', ots_version: '1.0', match_method: 'cpe', match_basis: 'OpenSSL 1.0 命中来源受影响版本范围', match_confidence: null, match_evidence: {} },
+    { vulnerability_id: 9, cve_id: 'CVE-2026-0802', ots_component_id: 4, ots_name: 'Linux', ots_version: '3.1', match_method: 'cpe', match_basis: 'Linux 3.1 命中来源受影响版本范围', match_confidence: null, match_evidence: {} },
+  ],
+  truncated_candidate_count: 0, candidate_disclaimer: '候选不等于产品受影响', error_code: null, finished_at: null,
+}
+
 const failed = {
   ...validated,
   id: 13,
@@ -57,6 +72,10 @@ async function mockAdmin(page) {
     status: 200,
     json: { id: 1, login_name: 'admin', display_name: '管理员', roles: ['admin'] },
   }))
+  await page.route('**/api/v1/scopes/me', route => route.fulfill({
+    status: 200,
+    json: { user_id: 1, is_admin: true, effective_product_ids: [], effective_product_version_ids: [] },
+  }))
 }
 
 async function selectPackage(page, body = 'package') {
@@ -72,6 +91,8 @@ test('管理员完成两文件上传、预览、二次确认和成功结果', as
   await mockAdmin(page)
   await page.route('**/api/v1/import-packages/validate', route => route.fulfill({ status: 201, json: validated }))
   await page.route('**/api/v1/import-packages/12/confirm', route => route.fulfill({ status: 200, json: succeeded }))
+  await page.route('**/api/v1/import-packages/12/ots-match-preview', route => route.fulfill({ status: 200, json: matching }))
+  await page.route('**/api/v1/import-packages/12/ots-matches', route => route.fulfill({ status: 200, json: { ...matching, status: 'succeeded', finished_at: '2026-08-31T08:01:00Z' } }))
   page.on('dialog', dialog => dialog.accept())
 
   await page.goto('/system/data-exchange/import-packages')
@@ -83,6 +104,13 @@ test('管理员完成两文件上传、预览、二次确认和成功结果', as
   await expect(page.getByRole('heading', { name: '漏洞事实已成功导入' }).first()).toBeVisible()
   await expect(page.getByText('内部 OTS 匹配尚未执行')).toBeVisible()
   await expect(page.getByRole('button', { name: '确认导入漏洞事实' })).toHaveCount(0)
+  await page.getByRole('button', { name: '预览内部匹配' }).click()
+  await expect(page.getByRole('heading', { name: 'OpenSSL 1.0', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Linux 3.1', exact: true })).toBeVisible()
+  await expect(page.getByText('VERSION_OUTSIDE_RANGE')).toBeVisible()
+  await expect(page.getByText('候选不等于产品受影响').first()).toBeVisible()
+  await page.getByRole('button', { name: '执行内部匹配' }).click()
+  await expect(page.getByRole('heading', { name: '内部匹配已完成' })).toBeVisible()
 })
 
 test('字段错误或旧三文件包展示稳定拒绝证据', async ({ page }) => {
@@ -128,6 +156,10 @@ test('非管理员无法看到入口或直接访问向导', async ({ page }) => 
   await page.route('**/api/v1/auth/me', route => route.fulfill({
     status: 200,
     json: { id: 2, login_name: 'owner', display_name: '负责人', roles: ['product_owner'] },
+  }))
+  await page.route('**/api/v1/scopes/me', route => route.fulfill({
+    status: 200,
+    json: { user_id: 2, is_admin: false, effective_product_ids: [], effective_product_version_ids: [] },
   }))
   await page.goto('/system/data-exchange/import-packages')
   await expect(page.getByRole('heading', { name: '没有访问权限' })).toBeVisible()

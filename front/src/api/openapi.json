@@ -1925,6 +1925,174 @@
           }
         }
       }
+    },
+    "/api/v1/import-packages/{batch_id}/ots-match-preview": {
+      "get": {
+        "tags": [
+          "internal-ots-vulnerability-matching"
+        ],
+        "summary": "Preview",
+        "operationId": "preview_api_v1_import_packages__batch_id__ots_match_preview_get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-packages/{batch_id}/ots-matches": {
+      "post": {
+        "tags": [
+          "internal-ots-vulnerability-matching"
+        ],
+        "summary": "Execute",
+        "operationId": "execute_api_v1_import_packages__batch_id__ots_matches_post",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import-packages/{batch_id}/ots-match-result": {
+      "get": {
+        "tags": [
+          "internal-ots-vulnerability-matching"
+        ],
+        "summary": "Result",
+        "operationId": "result_api_v1_import_packages__batch_id__ots_match_result_get",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSummaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vulnerabilities/{vulnerability_id}/ots-matches": {
+      "get": {
+        "tags": [
+          "internal-ots-vulnerability-matching"
+        ],
+        "summary": "Detail",
+        "operationId": "detail_api_v1_vulnerabilities__vulnerability_id__ots_matches_get",
+        "parameters": [
+          {
+            "name": "vulnerability_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vulnerability Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VulnerabilityMatchDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1942,6 +2110,140 @@
           "file"
         ],
         "title": "Body_validate_import_package_api_v1_import_packages_validate_post"
+      },
+      "CandidateDetailResponse": {
+        "properties": {
+          "vulnerability_id": {
+            "type": "integer",
+            "title": "Vulnerability Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "match_method": {
+            "type": "string",
+            "title": "Match Method"
+          },
+          "match_basis": {
+            "type": "string",
+            "title": "Match Basis"
+          },
+          "match_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Confidence"
+          },
+          "match_evidence": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Match Evidence"
+          },
+          "first_seen_batch_id": {
+            "type": "integer",
+            "title": "First Seen Batch Id"
+          },
+          "last_seen_batch_id": {
+            "type": "integer",
+            "title": "Last Seen Batch Id"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "vulnerability_id",
+          "cve_id",
+          "ots_component_id",
+          "ots_name",
+          "ots_version",
+          "match_method",
+          "match_basis",
+          "match_confidence",
+          "match_evidence",
+          "first_seen_batch_id",
+          "last_seen_batch_id"
+        ],
+        "title": "CandidateDetailResponse"
+      },
+      "CandidateSampleResponse": {
+        "properties": {
+          "vulnerability_id": {
+            "type": "integer",
+            "title": "Vulnerability Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "match_method": {
+            "type": "string",
+            "title": "Match Method"
+          },
+          "match_basis": {
+            "type": "string",
+            "title": "Match Basis"
+          },
+          "match_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Confidence"
+          },
+          "match_evidence": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Match Evidence"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "vulnerability_id",
+          "cve_id",
+          "ots_component_id",
+          "ots_name",
+          "ots_version",
+          "match_method",
+          "match_basis",
+          "match_confidence",
+          "match_evidence"
+        ],
+        "title": "CandidateSampleResponse"
       },
       "CollectorScopeBaselineResponse": {
         "properties": {
@@ -2296,6 +2598,129 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "MatchSummaryResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "matching_rule_version": {
+            "type": "string",
+            "title": "Matching Rule Version"
+          },
+          "version_rule_version": {
+            "type": "string",
+            "title": "Version Rule Version"
+          },
+          "processed_vulnerability_count": {
+            "type": "integer",
+            "title": "Processed Vulnerability Count"
+          },
+          "candidate_inserted_count": {
+            "type": "integer",
+            "title": "Candidate Inserted Count"
+          },
+          "candidate_updated_count": {
+            "type": "integer",
+            "title": "Candidate Updated Count"
+          },
+          "candidate_removed_count": {
+            "type": "integer",
+            "title": "Candidate Removed Count"
+          },
+          "candidate_unchanged_count": {
+            "type": "integer",
+            "title": "Candidate Unchanged Count"
+          },
+          "unmatched_vulnerability_count": {
+            "type": "integer",
+            "title": "Unmatched Vulnerability Count"
+          },
+          "unmatched_reason_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Unmatched Reason Counts"
+          },
+          "unmatched_samples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Unmatched Samples"
+          },
+          "truncated_unmatched_count": {
+            "type": "integer",
+            "title": "Truncated Unmatched Count"
+          },
+          "candidate_samples": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateSampleResponse"
+            },
+            "type": "array",
+            "title": "Candidate Samples"
+          },
+          "truncated_candidate_count": {
+            "type": "integer",
+            "title": "Truncated Candidate Count"
+          },
+          "candidate_disclaimer": {
+            "type": "string",
+            "title": "Candidate Disclaimer"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "schema_version",
+          "status",
+          "matching_rule_version",
+          "version_rule_version",
+          "processed_vulnerability_count",
+          "candidate_inserted_count",
+          "candidate_updated_count",
+          "candidate_removed_count",
+          "candidate_unchanged_count",
+          "unmatched_vulnerability_count",
+          "unmatched_reason_counts",
+          "unmatched_samples",
+          "truncated_unmatched_count",
+          "candidate_samples",
+          "truncated_candidate_count",
+          "candidate_disclaimer",
+          "error_code",
+          "finished_at"
+        ],
+        "title": "MatchSummaryResponse"
       },
       "OtsCreateRequest": {
         "properties": {
@@ -3466,6 +3891,49 @@
           "row_version"
         ],
         "title": "VersionUpdateRequest"
+      },
+      "VulnerabilityMatchDetailResponse": {
+        "properties": {
+          "vulnerability_id": {
+            "type": "integer",
+            "title": "Vulnerability Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateDetailResponse"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "unmatched_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmatched Reason"
+          },
+          "candidate_disclaimer": {
+            "type": "string",
+            "title": "Candidate Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vulnerability_id",
+          "cve_id",
+          "candidates",
+          "unmatched_reason",
+          "candidate_disclaimer"
+        ],
+        "title": "VulnerabilityMatchDetailResponse"
       }
     }
   }

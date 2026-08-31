@@ -558,6 +558,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/import-packages/{batch_id}/ots-match-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview */
+        get: operations["preview_api_v1_import_packages__batch_id__ots_match_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-packages/{batch_id}/ots-matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute */
+        post: operations["execute_api_v1_import_packages__batch_id__ots_matches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-packages/{batch_id}/ots-match-result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Result */
+        get: operations["result_api_v1_import_packages__batch_id__ots_match_result_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vulnerabilities/{vulnerability_id}/ots-matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detail */
+        get: operations["detail_api_v1_vulnerabilities__vulnerability_id__ots_matches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -566,6 +634,60 @@ export interface components {
         Body_validate_import_package_api_v1_import_packages_validate_post: {
             /** File */
             file: string;
+        };
+        /** CandidateDetailResponse */
+        CandidateDetailResponse: {
+            /** Vulnerability Id */
+            vulnerability_id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Match Method */
+            match_method: string;
+            /** Match Basis */
+            match_basis: string;
+            /** Match Confidence */
+            match_confidence: number | null;
+            /** Match Evidence */
+            match_evidence: {
+                [key: string]: unknown;
+            };
+            /** First Seen Batch Id */
+            first_seen_batch_id: number;
+            /** Last Seen Batch Id */
+            last_seen_batch_id: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** CandidateSampleResponse */
+        CandidateSampleResponse: {
+            /** Vulnerability Id */
+            vulnerability_id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Match Method */
+            match_method: string;
+            /** Match Basis */
+            match_basis: string;
+            /** Match Confidence */
+            match_confidence: number | null;
+            /** Match Evidence */
+            match_evidence: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         /** CollectorScopeBaselineResponse */
         CollectorScopeBaselineResponse: {
@@ -680,6 +802,51 @@ export interface components {
             login_name: string;
             /** Password */
             password: string;
+        };
+        /** MatchSummaryResponse */
+        MatchSummaryResponse: {
+            /** Schema Version */
+            schema_version: string;
+            /** Status */
+            status: string;
+            /** Matching Rule Version */
+            matching_rule_version: string;
+            /** Version Rule Version */
+            version_rule_version: string;
+            /** Processed Vulnerability Count */
+            processed_vulnerability_count: number;
+            /** Candidate Inserted Count */
+            candidate_inserted_count: number;
+            /** Candidate Updated Count */
+            candidate_updated_count: number;
+            /** Candidate Removed Count */
+            candidate_removed_count: number;
+            /** Candidate Unchanged Count */
+            candidate_unchanged_count: number;
+            /** Unmatched Vulnerability Count */
+            unmatched_vulnerability_count: number;
+            /** Unmatched Reason Counts */
+            unmatched_reason_counts: {
+                [key: string]: number;
+            };
+            /** Unmatched Samples */
+            unmatched_samples: {
+                [key: string]: unknown;
+            }[];
+            /** Truncated Unmatched Count */
+            truncated_unmatched_count: number;
+            /** Candidate Samples */
+            candidate_samples: components["schemas"]["CandidateSampleResponse"][];
+            /** Truncated Candidate Count */
+            truncated_candidate_count: number;
+            /** Candidate Disclaimer */
+            candidate_disclaimer: string;
+            /** Error Code */
+            error_code: string | null;
+            /** Finished At */
+            finished_at: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** OtsCreateRequest */
         OtsCreateRequest: {
@@ -1112,6 +1279,19 @@ export interface components {
             reviewer_id: number;
             /** Row Version */
             row_version: number;
+        };
+        /** VulnerabilityMatchDetailResponse */
+        VulnerabilityMatchDetailResponse: {
+            /** Vulnerability Id */
+            vulnerability_id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Candidates */
+            candidates: components["schemas"]["CandidateDetailResponse"][];
+            /** Unmatched Reason */
+            unmatched_reason: string | null;
+            /** Candidate Disclaimer */
+            candidate_disclaimer: string;
         };
     };
     responses: never;
@@ -2397,6 +2577,130 @@ export interface operations {
                 };
                 content: {
                     "text/csv": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_v1_import_packages__batch_id__ots_match_preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    execute_api_v1_import_packages__batch_id__ots_matches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    result_api_v1_import_packages__batch_id__ots_match_result_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detail_api_v1_vulnerabilities__vulnerability_id__ots_matches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vulnerability_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilityMatchDetailResponse"];
                 };
             };
             /** @description Validation Error */

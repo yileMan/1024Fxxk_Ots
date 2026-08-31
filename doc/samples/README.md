@@ -30,3 +30,21 @@ cd D:\261024\backend
 ```
 
 生成器使用固定 ZIP 时间、稳定字段顺序和紧凑 JSON；相同输入重复生成的 ZIP 字节和 SHA-256 一致。
+
+## OTS-08 内部匹配验收包
+
+`ots_intelligence_20260831_080000.zip` 是独立的两文件合规包，同时提供同名解压目录。建议先在
+OTS 主数据中准备 `OpenSSL 1.0`、`Linux 3.1` 和 `zlib 1.3`，再导入并执行内部匹配。预期结果为：
+
+- `CVE-2026-0801` 精确命中 OpenSSL 1.0；
+- `CVE-2026-0802` 以 `[3.0, 3.2)` 命中 Linux 3.1；
+- `CVE-2026-0803` 因 zlib 1.3 范围外返回 `VERSION_OUTSIDE_RANGE`；
+- `CVE-2026-0804` 因 Rejected 且无范围返回 `NO_AFFECTED_RANGE`。
+
+该包的 SHA-256 为 `a1ea6dbcf2e737ee2405ac11dad7efae55f3ebfc5a3aea93b8d6ed867f0d19ab`。
+重新生成时无需外部输入，也不会访问网络：
+
+```powershell
+cd D:\261024\backend
+.\.venv\Scripts\python.exe scripts\generate_ots08_sample.py
+```

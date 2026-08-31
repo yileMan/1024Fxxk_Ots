@@ -2,6 +2,8 @@ import type { components } from './generated'
 
 
 export type ImportPackageResult = components['schemas']['ImportPackageResponse']
+export type OtsMatchSummary = components['schemas']['MatchSummaryResponse']
+export type VulnerabilityOtsMatchDetail = components['schemas']['VulnerabilityMatchDetailResponse']
 
 export class ImportPackageApiError extends Error {
   constructor(readonly code: string, readonly status: number) {
@@ -39,6 +41,30 @@ export async function confirmImportPackage(batchId: number): Promise<ImportPacka
   })
   if (!response.ok) throw await errorFrom(response)
   return response.json() as Promise<ImportPackageResult>
+}
+
+export async function previewOtsMatches(batchId: number): Promise<OtsMatchSummary> {
+  const response = await fetch(`/api/v1/import-packages/${batchId}/ots-match-preview`, { credentials: 'include' })
+  if (!response.ok) throw await errorFrom(response)
+  return response.json() as Promise<OtsMatchSummary>
+}
+
+export async function executeOtsMatches(batchId: number): Promise<OtsMatchSummary> {
+  const response = await fetch(`/api/v1/import-packages/${batchId}/ots-matches`, { method: 'POST', credentials: 'include' })
+  if (!response.ok) throw await errorFrom(response)
+  return response.json() as Promise<OtsMatchSummary>
+}
+
+export async function getOtsMatchResult(batchId: number): Promise<OtsMatchSummary> {
+  const response = await fetch(`/api/v1/import-packages/${batchId}/ots-match-result`, { credentials: 'include' })
+  if (!response.ok) throw await errorFrom(response)
+  return response.json() as Promise<OtsMatchSummary>
+}
+
+export async function getVulnerabilityOtsMatches(vulnerabilityId: number): Promise<VulnerabilityOtsMatchDetail> {
+  const response = await fetch(`/api/v1/vulnerabilities/${vulnerabilityId}/ots-matches`, { credentials: 'include' })
+  if (!response.ok) throw await errorFrom(response)
+  return response.json() as Promise<VulnerabilityOtsMatchDetail>
 }
 
 function responseFileName(response: Response): string {

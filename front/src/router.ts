@@ -12,6 +12,7 @@ import OtsAdminPage from './pages/OtsAdminPage.vue'
 import MyProductsPage from './pages/MyProductsPage.vue'
 import CollectorScopePage from './pages/CollectorScopePage.vue'
 import ImportPackagePage from './pages/ImportPackagePage.vue'
+import VulnerabilityMatchPage from './pages/VulnerabilityMatchPage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -26,6 +27,12 @@ export const router = createRouter({
     { path: '/system/ots', component: OtsAdminPage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/data-exchange/collector-scope', component: CollectorScopePage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/data-exchange/import-packages', component: ImportPackagePage, meta: { requiresAuthentication: true, requiresAdmin: true } },
+    {
+      path: '/system/vulnerabilities/:vulnerabilityId/ots-matches',
+      component: VulnerabilityMatchPage,
+      props: route => ({ vulnerabilityId: Number(route.params.vulnerabilityId) }),
+      meta: { requiresAuthentication: true, requiresAdmin: true },
+    },
     { path: '/forbidden', component: ForbiddenPage, meta: { requiresAuthentication: true } },
     { path: '/:pathMatch(.*)*', component: NotFoundPage },
   ],

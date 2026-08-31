@@ -91,9 +91,29 @@
         </aside>
         <aside v-else-if="result.status === 'succeeded'" class="write-action succeeded-panel">
           <small>IMPORT SUCCEEDED</small><h2>漏洞事实已成功导入</h2>
-          <p>内部 OTS 匹配尚未执行。后续由 OTS-08 使用受影响软件和版本范围生成候选关系。</p>
+          <p>{{ result.internal_matching_pending ? '内部 OTS 匹配尚未执行。可先预览，再按当前 OTS 主数据生成候选关系。' : '内部 OTS 匹配已有成功结果，可重新预览当前数据。' }}</p>
+          <button data-action="preview-matches" :disabled="matchingBusy" @click="previewMatches">{{ matchingBusy ? '正在计算…' : '预览内部匹配' }}</button>
         </aside>
       </section>
+
+      <section v-if="matching" class="matching-ledger" aria-label="内部 OTS 候选匹配">
+        <div class="section-heading"><div><small>INTERNAL OTS MATCHING</small><h2>{{ matching.status === 'succeeded' ? '内部匹配已完成' : '内部匹配预览' }}</h2></div><p>{{ matching.candidate_disclaimer }}</p></div>
+        <div class="matching-metrics">
+          <article><small>处理漏洞</small><strong>{{ matching.processed_vulnerability_count }}</strong></article>
+          <article><small>候选新增</small><strong>{{ matching.candidate_inserted_count }}</strong></article>
+          <article><small>候选更新</small><strong>{{ matching.candidate_updated_count }}</strong></article>
+          <article><small>候选移除</small><strong>{{ matching.candidate_removed_count }}</strong></article>
+          <article><small>未匹配漏洞</small><strong>{{ matching.unmatched_vulnerability_count }}</strong></article>
+        </div>
+        <article v-for="candidate in matching.candidate_samples" :key="`${candidate.vulnerability_id}-${candidate.ots_component_id}`" class="match-card">
+          <div><a class="mono" :href="`/system/vulnerabilities/${candidate.vulnerability_id}/ots-matches`">{{ candidate.cve_id }}</a><span>{{ candidate.match_method }}</span></div>
+          <h3>{{ candidate.ots_name }} {{ candidate.ots_version }}</h3><p>{{ candidate.match_basis }}</p>
+        </article>
+        <div v-if="matching.unmatched_samples.length" class="unmatched-list"><p v-for="sample in matching.unmatched_samples" :key="String(sample.vulnerability_id)"><strong class="mono">{{ sample.cve_id }}</strong> · {{ sample.reason }}</p></div>
+        <p class="candidate-warning">{{ matching.candidate_disclaimer }}</p>
+        <button v-if="matching.status !== 'succeeded'" data-action="execute-matches" class="primary" :disabled="matchingBusy" @click="executeMatches">{{ matchingBusy ? '正在提交…' : '执行内部匹配' }}</button>
+      </section>
+      <p v-if="matchingError" class="feedback error" role="alert">{{ matchingError }}，漏洞事实导入结果不受影响，可稍后重试。</p>
 
       <section v-if="result.status === 'failed'" class="error-ledger">
         <div class="section-heading"><div><small>REJECTION LEDGER</small><h2>错误清单</h2></div><button data-action="download-errors" :disabled="downloading" @click="downloadErrors">{{ downloading ? '正在下载…' : '下载错误清单 CSV' }}</button></div>
@@ -110,9 +130,12 @@ import { computed, onMounted, ref } from 'vue'
 import {
   confirmImportPackage,
   downloadPackageErrors,
+  executeOtsMatches,
   getImportPackage,
+  previewOtsMatches,
   validateImportPackage,
   type ImportPackageResult,
+  type OtsMatchSummary,
 } from '../api/importPackages'
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024
@@ -126,6 +149,9 @@ const submitting = ref(false)
 const confirming = ref(false)
 const downloading = ref(false)
 const result = ref<ImportPackageResult | null>(null)
+const matching = ref<OtsMatchSummary | null>(null)
+const matchingBusy = ref(false)
+const matchingError = ref('')
 
 const fileEntries = computed(() => Object.entries(result.value?.file_stats ?? {}).filter(([, stats]) => stats.total > 0 || stats.error > 0))
 const samples = computed<Record<string, unknown>[]>(() => fileEntries.value.flatMap(([, stats]) => stats.samples as Record<string, unknown>[]))
@@ -155,6 +181,8 @@ function selectFile(event: Event): void {
   downloadError.value = false
   downloadedFile.value = ''
   selectionError.value = ''
+  matching.value = null
+  matchingError.value = ''
   const file = (event.target as HTMLInputElement).files?.[0] ?? null
   selectedFile.value = file
   if (!file) return
@@ -185,6 +213,27 @@ async function confirmSelected(): Promise<void> {
   try { result.value = await confirmImportPackage(result.value.id) }
   catch { requestError.value = '确认导入失败' }
   finally { confirming.value = false }
+}
+
+async function previewMatches(): Promise<void> {
+  if (!result.value || matchingBusy.value) return
+  matchingBusy.value = true
+  matchingError.value = ''
+  try { matching.value = await previewOtsMatches(result.value.id) }
+  catch { matchingError.value = '内部匹配预览失败' }
+  finally { matchingBusy.value = false }
+}
+
+async function executeMatches(): Promise<void> {
+  if (!result.value || matchingBusy.value) return
+  if (!window.confirm(`确认对批次 ${result.value.batch_no} 执行内部 OTS 候选匹配？候选不等于产品受影响。`)) return
+  matchingBusy.value = true
+  matchingError.value = ''
+  try {
+    matching.value = await executeOtsMatches(result.value.id)
+    result.value = { ...result.value, internal_matching_pending: false }
+  } catch { matchingError.value = '内部匹配执行失败' }
+  finally { matchingBusy.value = false }
 }
 
 async function downloadErrors(): Promise<void> {
@@ -219,4 +268,5 @@ function formatScore(sample: Record<string, unknown>): string {
 
 <style scoped>
 .package-page{max-width:1380px;margin:0 auto;padding:48px 32px 80px}.page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:32px}.eyebrow{margin:0;color:var(--brand-red);font-size:11px;font-weight:900;letter-spacing:.18em}.page-heading h1{margin:9px 0 10px;color:var(--ink);font:750 clamp(42px,6vw,68px)/.95 var(--font-display);letter-spacing:-.045em}.page-heading>div>span{color:var(--text-muted);line-height:1.7}.contract-seal{width:124px;padding:18px;border:1px solid var(--line-strong);border-top:5px solid var(--brand-red);background:#fff}.contract-seal small,.contract-seal span{display:block;color:var(--text-muted);font-size:9px;font-weight:900;letter-spacing:.14em}.contract-seal strong{display:block;margin:5px 0;color:var(--ink);font:800 34px var(--font-display)}.step-rail{display:grid;grid-template-columns:repeat(4,1fr);margin:36px 0 16px;padding:0;list-style:none}.step-rail li{display:flex;align-items:center;gap:12px;min-height:72px;padding:14px 18px;border:1px solid var(--line-strong);background:#fff}.step-rail li.active{color:#fff;background:var(--ink)}.step-rail li[aria-disabled=true]{color:#8b949c;background:var(--paper-warm)}.step-rail>li>span{font:800 23px var(--font-display)}.step-rail strong,.step-rail small{display:block}.step-rail small{margin-top:4px;font-size:10px;opacity:.66}.upload-gate{display:grid;grid-template-columns:1fr 1.1fr;border:1px solid var(--line-strong);background:#fff}.gate-copy{padding:35px;color:#fff;background:var(--ink)}.gate-copy h2{margin:13px 0 10px;font:750 29px var(--font-display)}.gate-copy p{color:rgba(255,255,255,.65);line-height:1.75}.gate-copy ul{display:flex;gap:8px;margin:24px 0 0;padding:0;list-style:none}.gate-copy li{padding:7px 10px;border:1px solid rgba(255,255,255,.2);font-size:10px;font-weight:800}.file-control{display:flex;flex-direction:column;justify-content:center;padding:35px}.file-control>label{margin-bottom:9px;font-weight:800}.file-picker{position:relative;display:flex;align-items:center;gap:16px;min-height:88px;padding:18px;border:1px dashed var(--line-strong);background:var(--paper-warm)}.file-picker.selected{border-style:solid;background:#fff}.file-picker input{position:absolute;inset:0;width:100%;height:100%;opacity:0}.file-icon{display:grid;place-items:center;width:54px;height:54px;color:#fff;background:var(--brand-red);font-weight:900}.file-picker strong,.file-picker small{display:block}.file-picker small{margin-top:7px;color:var(--text-muted)}.primary,.write-action button,.section-heading button{min-height:44px;margin-top:14px;padding:10px 16px;border:1px solid var(--brand-red);color:#fff;background:var(--brand-red);font-weight:800}.feedback,.validating{margin:16px 0 0;padding:14px 17px;border-left:4px solid}.feedback.error{display:flex;flex-direction:column;border-color:var(--brand-red);background:#fff1f2}.feedback.success{border-color:var(--success);background:#edf9f4}.validating{display:flex;gap:12px;border:1px solid var(--line-strong);background:#fff}.validating i{width:12px;height:12px;border-radius:50%;background:var(--brand-red)}.validating strong{display:block}.result-banner{display:flex;align-items:center;justify-content:space-between;margin-top:22px;padding:27px 30px;border:1px solid var(--line-strong);border-left:7px solid var(--success);background:#fff}.result-banner.failed{border-left-color:var(--brand-red)}.result-banner h2{margin:8px 0 6px;font:750 29px var(--font-display)}.result-banner p{margin:0;color:var(--text-muted)}.status-mark{font:800 30px var(--font-display)}.source-strip{display:grid;grid-template-columns:1.2fr 1.4fr 1fr;gap:1px;margin-top:10px;border:1px solid var(--line-strong);background:var(--line)}.source-strip>div{padding:16px;background:#fff}.source-strip small,.source-strip strong{display:block}.source-strip small{color:var(--text-muted);font-size:9px}.source-strip strong{margin-top:7px;font-size:11px}.metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:10px 0}.metrics article{padding:20px;border:1px solid var(--line-strong);border-top:4px solid #75808a;background:#fff}.metrics article.new{border-top-color:var(--success)}.metrics article.conflict,.metrics article.error{border-top-color:var(--brand-red)}.metrics small{display:block;color:var(--text-muted)}.metrics strong{display:block;margin-top:12px;font:750 30px var(--font-display)}.sample-ledger,.file-ledger,.write-action,.error-ledger{border:1px solid var(--line-strong);background:#fff}.section-heading{display:flex;align-items:flex-end;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--line)}.section-heading h2{margin:5px 0 0;font:750 23px var(--font-display)}.section-heading p{margin:0;color:var(--text-muted);font-size:11px}.section-heading button{margin:0}.sample-card{padding:20px 24px;border-bottom:1px solid var(--line)}.sample-card>div{display:flex;align-items:center;gap:12px}.sample-card span{padding:4px 8px;background:var(--paper-warm);font-size:10px}.sample-card p{color:var(--text-muted)}.sample-card dl{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin:0}.sample-card dt{color:var(--text-muted);font-size:9px}.sample-card dd{margin:5px 0 0;font-size:12px}.evidence-grid{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:12px;margin-top:12px}.write-action{padding:27px;color:#fff;background:var(--ink)}.write-action h2{font:750 23px var(--font-display)}.write-action p{color:rgba(255,255,255,.65);line-height:1.7}.succeeded-panel{border-top:5px solid var(--success)}.table-scroll{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:13px 15px;border-bottom:1px solid var(--line);text-align:left}th{background:var(--paper-warm);font-size:9px}td{font-size:12px}.mono{font-family:Consolas,"Cascadia Mono",monospace}.code{color:var(--brand-red-deep)}.rejected{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.error-ledger{margin-top:12px}.truncated{padding:12px 24px;color:var(--brand-red-deep)}@media(max-width:900px){.upload-gate,.evidence-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(3,1fr)}.source-strip{grid-template-columns:1fr}.step-rail{grid-template-columns:1fr 1fr}}@media(max-width:600px){.package-page{padding:28px 14px}.page-heading{align-items:flex-start;flex-direction:column}.metrics{grid-template-columns:repeat(2,1fr)}.step-rail{grid-template-columns:1fr}.sample-card dl{grid-template-columns:1fr}}
+.matching-ledger{margin-top:12px;border:1px solid var(--line-strong);background:#fff}.matching-metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line)}.matching-metrics article{padding:18px;background:#fff}.matching-metrics small,.matching-metrics strong{display:block}.matching-metrics strong{margin-top:8px;font:750 26px var(--font-display)}.match-card{padding:18px 24px;border-top:1px solid var(--line)}.match-card>div{display:flex;gap:10px}.match-card span{padding:3px 7px;background:var(--paper-warm);font-size:10px}.match-card h3{margin:10px 0 5px}.match-card p,.unmatched-list,.candidate-warning{color:var(--text-muted)}.unmatched-list,.candidate-warning{margin:0;padding:14px 24px;border-top:1px solid var(--line)}.candidate-warning{color:var(--brand-red-deep);font-weight:800}.matching-ledger>.primary{margin:0 24px 24px}@media(max-width:900px){.matching-metrics{grid-template-columns:repeat(2,1fr)}}
 </style>

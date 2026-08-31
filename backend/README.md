@@ -131,6 +131,24 @@ OTS-06 只读该表，不保存导出记录且不写 `audit_log`。回滚仅允�
 OTS-07 新增 `010_vulnerability.sql` 和对应回滚说明。回滚时先关闭确认入口；若第 9、10 张下游表已引用
 漏洞则禁止删除第 8 张表。已成功导入的来源事实、批次和归档不能当作临时文件清理。
 
+## 内部 OTS 漏洞候选匹配
+
+内部与外部采集数据使用一致的 OTS 名称，因此本功能不新增 YAML、别名表或身份映射配置。名称只做
+Unicode NFKC、大小写折叠和首尾空白清理，随后精确比较；不会做子串、模糊匹配或分隔符替换。
+版本按确定性自然版本规则处理精确值、`*` 和开闭区间，不可比较时保守地不生成候选。
+
+管理员可使用以下接口：
+
+- `GET /api/v1/import-packages/{batch_id}/ots-match-preview`：按当前事实和 OTS 主数据只读预览；
+- `POST /api/v1/import-packages/{batch_id}/ots-matches`：锁定 succeeded 批次并原子重算、写入候选和审计；
+- `GET /api/v1/import-packages/{batch_id}/ots-match-result`：读取最近结果，尚未执行时返回当前预览；
+- `GET /api/v1/vulnerabilities/{vulnerability_id}/ots-matches`：读取候选、证据或稳定未匹配原因。
+
+响应固定带有“候选不等于产品受影响”的提示。执行失败不会改变已导入的漏洞事实，事务回滚后批次保留
+`MATCH_EXECUTION_FAILED` 供重试；并发锁冲突返回 `MATCH_ALREADY_RUNNING`。日志只记录批次 ID、算法
+版本、计数、耗时和错误码，不记录证据正文。数据库升级使用
+`migrations/011_vulnerability_ots_match.sql`，回滚前置检查和恢复方式见对应 rollback 文档。
+
 根据旧最近一日包重新生成测试样例：
 
 ```powershell
@@ -138,6 +156,9 @@ OTS-07 新增 `010_vulnerability.sql` 和对应回滚说明。回滚时先关闭
   --source ..\doc\samples\ots_intelligence_20260822_000009.zip `
   --output-dir ..\doc\samples
 ```
+
+OTS-08 的确定性验收包见 `doc/samples/ots_intelligence_20260831_080000.zip`，准备方式和预期结果见
+`doc/samples/README.md`。
 
 ## 测试
 

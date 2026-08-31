@@ -50,6 +50,12 @@ npm run api:check
 当前格式 `1.0` 固定为 `manifest.csv`、`nvd_cves.csv` 两文件。页面预览一行一个 CVE 的来源状态、
 受影响软件/版本范围和 CVSS；成功结果明确提示“内部 OTS 匹配尚未执行”。KEV/EOL 未启用，也不会显示空占位区域。
 
+导入成功后，管理员可先预览再二次确认执行内部 OTS 候选匹配。页面分别展示新增、更新、移除、未匹配
+原因和有界样例；执行失败不覆盖漏洞事实结果，可原地重试。候选 CVE 链接到
+`/system/vulnerabilities/{vulnerabilityId}/ots-matches`，详情展示 method、basis、版本范围证据、首次/最近
+批次和可空 confidence。预览、结果和详情均固定显示“候选不等于产品受影响”；无候选时显示原因，
+不会把它表述成“无漏洞”。这些入口仅对管理员显示，后端接口仍独立执行权限校验。
+
 本项目不自动下载 Playwright Chromium。E2E 优先使用系统 Chrome：
 
 ```powershell

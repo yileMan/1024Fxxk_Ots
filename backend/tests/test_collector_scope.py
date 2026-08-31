@@ -456,6 +456,7 @@ def test_mysql_import_batch_migration_and_collector_scope(monkeypatch) -> None:
         application.state.database.engine.dispose()
         application = None
         with test_engine.begin() as connection:
+            connection.execute(text("DROP TABLE vulnerability_ots_match"))
             connection.execute(text("DROP TABLE vulnerability"))
             connection.execute(text("DELETE FROM import_batch"))
             connection.execute(text("DROP TABLE import_batch"))

@@ -14,6 +14,7 @@ from app.api.routes.ots import router as ots_router
 from app.api.routes.scopes import router as scopes_router
 from app.api.routes.collector_scope import router as collector_scope_router
 from app.api.routes.import_packages import router as import_packages_router
+from app.api.routes.vulnerability_matching import router as vulnerability_matching_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
@@ -23,6 +24,7 @@ from app.services.ots import OtsManagementService
 from app.services.scopes import ScopeAuthorizationService
 from app.services.collector_scope import CollectorScopeService
 from app.services.import_packages import ImportPackageService
+from app.services.vulnerability_matching import VulnerabilityMatchingService
 
 logger = logging.getLogger("ots")
 
@@ -55,6 +57,9 @@ def create_app() -> FastAPI:
         application.state.import_package_service = ImportPackageService(
             application.state.database.session_factory,
             settings,
+        )
+        application.state.vulnerability_matching_service = VulnerabilityMatchingService(
+            application.state.database.session_factory,
         )
 
     @application.middleware("http")
@@ -113,6 +118,7 @@ def create_app() -> FastAPI:
     application.include_router(scopes_router, prefix="/api/v1")
     application.include_router(collector_scope_router, prefix="/api/v1")
     application.include_router(import_packages_router, prefix="/api/v1")
+    application.include_router(vulnerability_matching_router, prefix="/api/v1")
 
     return application
 

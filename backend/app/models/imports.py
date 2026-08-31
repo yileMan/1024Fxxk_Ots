@@ -77,3 +77,28 @@ class Vulnerability(Base):
     content_sha256: Mapped[str] = mapped_column(CHAR(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
+
+
+class VulnerabilityOtsMatch(Base):
+    __tablename__ = "vulnerability_ots_match"
+    __table_args__ = (
+        UniqueConstraint("vulnerability_id", "ots_component_id", name="uk_vulnerability_ots"),
+        CheckConstraint("match_method IN ('cpe', 'purl', 'name_version', 'vendor_advisory', 'combined')", name="ck_match_method"),
+        CheckConstraint("match_confidence IS NULL OR (match_confidence >= 0 AND match_confidence <= 1)", name="ck_match_confidence"),
+        Index("idx_match_ots", "ots_component_id", "vulnerability_id"),
+        Index("idx_match_last_batch", "last_seen_batch_id", "updated_at"),
+    )
+
+    id: Mapped[int] = mapped_column(identifier_type, primary_key=True, autoincrement=True)
+    vulnerability_id: Mapped[int] = mapped_column(ForeignKey("vulnerability.id"))
+    ots_component_id: Mapped[int] = mapped_column(ForeignKey("ots_component.id"))
+    match_method: Mapped[str] = mapped_column(String(32))
+    match_basis: Mapped[str] = mapped_column(Text)
+    match_confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    match_evidence_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    first_seen_batch_id: Mapped[int] = mapped_column(ForeignKey("import_batch.id"))
+    last_seen_batch_id: Mapped[int] = mapped_column(ForeignKey("import_batch.id"))
+    based_on_source_modified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    match_content_sha256: Mapped[str] = mapped_column(CHAR(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)
