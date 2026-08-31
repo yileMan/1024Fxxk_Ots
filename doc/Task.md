@@ -245,7 +245,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：后端 pytest 103 项通过且总覆盖率 93%，核心导入服务覆盖率 83%、契约校验服务 90%，包含 MySQL 8.x 迁移/事务和 10,000 CVE 性能验证（预检与确认导入 49.52 秒、峰值 136.44 MiB）；前端 Vitest 80 项通过且语句覆盖率 96.89%，系统 Chrome Playwright 17 项通过；类型检查、生产构建、OpenAPI 重复生成一致性和 OpenSpec 全量严格校验通过。`doc/samples` 已提供最小合规、1,215 CVE 完整日包、非法 JSON 和精确 1 MiB 字段边界包，并由脚本验证确定性生成。主规格已同步，OpenSpec change 于 2026-08-22 归档为 `2026-08-22-ots-07-package-contract-and-validation`。
 
-#### [ ] OTS-08 `ots-08-internal-ots-vulnerability-matching`（复杂度：L，依赖：OTS-04/07）
+#### [x] OTS-08 `ots-08-internal-ots-vulnerability-matching`（复杂度：L，依赖：OTS-04/07）
 
 **目标**：平台内部将已导入 CVE 的受影响软件/版本范围与 `ots_component` 匹配，形成 OTS/CVE 候选关系。
 
@@ -256,6 +256,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：Linux 3.1、OpenSSL 1.0 等精确版本及开闭区间按规则命中；范围外版本不命中；一个 CVE 可匹配多个 OTS，一个 OTS 可匹配多个 CVE；无匹配 CVE 保留在漏洞库且不生成候选关系。
 
 **需求映射**：FR-MATCH-001、FR-MATCH-002、FR-MATCH-006、FR-VULN-006。
+
+**完成证据**：新增 `011_vulnerability_ots_match.sql`、四个管理员匹配 API、导入结果页匹配闭环和漏洞候选详情页；内外 OTS 名称按 NFKC、大小写折叠及首尾空白清理后精确比较，不新增 YAML、别名或联网配置。后端 pytest 124 项通过，匹配模块覆盖率 89%，包含 MySQL 迁移、唯一键、并发 409、审计故障原子回滚和 10,000 CVE 性能验证（1.556 秒、峰值 17.30 MiB）；前端 Vitest 84 项通过且总覆盖率 96.85%，系统 Chrome 匹配纵向场景 5 项通过；类型检查、生产构建、OpenAPI 重复生成一致性和 OpenSpec 全量严格校验通过。`doc/samples/ots_intelligence_20260831_080000.zip` 提供 OpenSSL 1.0、Linux 3.1、范围外版本和空范围的确定性验收数据。主规格已同步，OpenSpec change 于 2026-08-31 归档为 `2026-08-31-ots-08-internal-ots-vulnerability-matching`。
 
 #### [ ] OTS-09 `ots-09-kev-eol-input-preview`（条件任务，复杂度：M，依赖：OTS-07；需要联动匹配时再依赖 OTS-08）
 
