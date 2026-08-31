@@ -8,7 +8,7 @@ from app.migrations import apply_migrations, discover_migrations
 def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> None:
     migrations = discover_migrations(Path(__file__).parents[1] / "migrations")
 
-    assert [migration.version for migration in migrations] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert [migration.version for migration in migrations] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     assert "app_user" in migrations[1].sql
     assert "audit_log" not in migrations[1].sql
     assert "audit_log" in migrations[2].sql
@@ -34,6 +34,10 @@ def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> N
     assert "cvss_json" in migrations[9].sql
     assert "configurations_json" in migrations[9].sql
     assert "uk_vulnerability_cve" in migrations[9].sql
+    assert "vulnerability_ots_match" in migrations[10].sql
+    assert "uk_vulnerability_ots" in migrations[10].sql
+    assert "idx_match_ots" in migrations[10].sql
+    assert "idx_match_last_batch" in migrations[10].sql
 
     rollback = (Path(__file__).parents[1] / "migrations" / "008_user_product_scope.rollback.md").read_text(encoding="utf-8")
     assert "备份" in rollback
@@ -50,6 +54,11 @@ def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> N
     assert "备份" in vulnerability_rollback
     assert "下游" in vulnerability_rollback
     assert "DROP TABLE vulnerability" in vulnerability_rollback
+
+    match_rollback = (Path(__file__).parents[1] / "migrations" / "011_vulnerability_ots_match.rollback.md").read_text(encoding="utf-8")
+    assert "备份" in match_rollback
+    assert "OTS-10" in match_rollback
+    assert "DROP TABLE vulnerability_ots_match" in match_rollback
 
 
 def test_migrations_apply_once(tmp_path) -> None:
