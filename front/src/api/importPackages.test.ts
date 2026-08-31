@@ -5,6 +5,9 @@ import {
   confirmImportPackage,
   downloadPackageErrors,
   getImportPackage,
+  previewOtsMatches,
+  executeOtsMatches,
+  getVulnerabilityOtsMatches,
   validateImportPackage,
 } from './importPackages'
 
@@ -74,6 +77,24 @@ describe('import package API client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/import-packages/12/confirm', {
       method: 'POST', credentials: 'include',
     })
+  })
+
+  it('previews, executes and reads internal OTS candidates', async () => {
+    const summary = { status: 'pending', candidate_inserted_count: 1, candidate_disclaimer: '候选不等于产品受影响' }
+    const detail = { vulnerability_id: 7, cve_id: 'CVE-2026-0001', candidates: [], unmatched_reason: 'VERSION_OUTSIDE_RANGE', candidate_disclaimer: '候选不等于产品受影响' }
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(summary), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...summary, status: 'succeeded' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail), { status: 200 }))
+
+    await expect(previewOtsMatches(12)).resolves.toEqual(summary)
+    await expect(executeOtsMatches(12)).resolves.toEqual({ ...summary, status: 'succeeded' })
+    await expect(getVulnerabilityOtsMatches(7)).resolves.toEqual(detail)
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/v1/import-packages/12/ots-match-preview',
+      '/api/v1/import-packages/12/ots-matches',
+      '/api/v1/vulnerabilities/7/ots-matches',
+    ])
   })
 
   it('downloads the stable error filename', async () => {

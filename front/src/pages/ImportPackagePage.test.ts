@@ -107,6 +107,37 @@ describe('ImportPackagePage', () => {
     expect(wrapper.text()).toContain('漏洞事实已成功导入')
     expect(wrapper.text()).toContain('内部 OTS 匹配尚未执行')
     expect(wrapper.get('[data-step="result"]').classes()).toContain('active')
+    expect(wrapper.get('button[data-action="preview-matches"]').text()).toContain('预览内部匹配')
+  })
+
+  it('previews and executes internal matching with candidate evidence', async () => {
+    const matching = {
+      schema_version: '1.0', status: 'pending', matching_rule_version: 'exact-identity-v1',
+      version_rule_version: 'natural-version-v1', processed_vulnerability_count: 2,
+      candidate_inserted_count: 1, candidate_updated_count: 0, candidate_removed_count: 0,
+      candidate_unchanged_count: 0, unmatched_vulnerability_count: 1,
+      unmatched_reason_counts: { VERSION_OUTSIDE_RANGE: 1 },
+      unmatched_samples: [{ vulnerability_id: 8, cve_id: 'CVE-2026-0002', reason: 'VERSION_OUTSIDE_RANGE' }],
+      truncated_unmatched_count: 0,
+      candidate_samples: [{ vulnerability_id: 7, cve_id: 'CVE-2026-0001', ots_component_id: 3, ots_name: 'OpenSSL', ots_version: '3.0.0', match_method: 'cpe', match_basis: '精确版本命中', match_confidence: null, match_evidence: {} }],
+      truncated_candidate_count: 0, candidate_disclaimer: '候选不等于产品受影响', error_code: null, finished_at: null,
+    }
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(response('succeeded')), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(matching), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...matching, status: 'succeeded', finished_at: '2026-08-31T00:00:00Z' }), { status: 200 }))
+    window.history.replaceState({}, '', '/system/data-exchange/import-packages?batch=12')
+    const wrapper = mount(ImportPackagePage)
+    await flushPromises()
+    await wrapper.get('button[data-action="preview-matches"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('OpenSSL 3.0.0')
+    expect(wrapper.text()).toContain('VERSION_OUTSIDE_RANGE')
+    expect(wrapper.text()).toContain('候选不等于产品受影响')
+    await wrapper.get('button[data-action="execute-matches"]').trigger('click')
+    await flushPromises()
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/import-packages/12/ots-matches')
+    expect(wrapper.text()).toContain('内部匹配已完成')
   })
 
   it('does not confirm when the user cancels the secondary confirmation', async () => {
