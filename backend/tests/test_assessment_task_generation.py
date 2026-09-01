@@ -156,6 +156,34 @@ def test_preview_expands_one_candidate_to_each_active_product_without_writes(
         assert connection.scalar(text("SELECT COUNT(*) FROM product_assessment")) == 0
 
 
+def test_execute_recalculates_product_relations_changed_after_preview(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    preview = client.get(
+        f"/api/v1/import-packages/{scope['batch_id']}/ots-match-preview"
+    ).json()
+    assert preview["task_generation"]["task_inserted_count"] == 1
+    extra_owner = create_user(client, "late-owner", ["product_owner"])
+    create_product_ots(
+        client,
+        code="P-LATE",
+        owner_id=extra_owner["id"],
+        reviewer_id=scope["reviewer"]["id"],
+        ots_component_id=scope["ots"]["id"],
+    )
+
+    executed = client.post(
+        f"/api/v1/import-packages/{scope['batch_id']}/ots-matches"
+    ).json()
+
+    assert executed["task_generation"]["task_inserted_count"] == 2
+    assert {row["owner_id"] for row in assessment_rows(client)} == {
+        scope["owners"][0]["id"],
+        extra_owner["id"],
+    }
+
+
 def test_execute_creates_independent_pending_tasks_and_is_idempotent(
     client: TestClient,
 ) -> None:
@@ -210,6 +238,53 @@ def test_disabled_product_version_and_unavailable_owner_are_reported(
         "PRODUCT_DISABLED": 1,
         "PRODUCT_VERSION_DISABLED": 1,
     }
+
+
+def test_candidate_without_product_relation_has_stable_skip_reason(client: TestClient) -> None:
+    login(client)
+    client.post(
+        "/api/v1/ots-components",
+        json={
+            "ots_name": "OpenSSL", "ots_version": "3.0.0",
+            "official_website": "https://openssl.org", "is_eol": False,
+        },
+    )
+    batch_id = import_batch(client)
+
+    tasks = client.get(
+        f"/api/v1/import-packages/{batch_id}/ots-match-preview"
+    ).json()["task_generation"]
+
+    assert tasks["task_inserted_count"] == 0
+    assert tasks["skip_reason_counts"] == {"NO_ACTIVE_PRODUCT_OTS": 1}
+
+
+def test_empty_pending_task_follows_current_product_owner(client: TestClient) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+    new_owner = create_user(client, "replacement-owner", ["product_owner"])
+    product, version, _ = scope["scopes"][0]
+    updated = client.put(
+        f"/api/v1/products/{product['id']}/versions/{version['id']}",
+        json={
+            "version_no": version["version_no"],
+            "description": version["description"],
+            "owner_id": new_owner["id"],
+            "reviewer_id": scope["reviewer"]["id"],
+            "row_version": version["row_version"],
+        },
+    )
+    assert updated.status_code == 200
+
+    tasks = client.post(
+        f"/api/v1/import-packages/{batch_id}/ots-matches"
+    ).json()["task_generation"]
+
+    assert tasks["task_updated_count"] == 1
+    rows = assessment_rows(client)
+    assert rows[0]["owner_id"] == new_owner["id"]
+    assert rows[0]["row_version"] == 2
 
 
 def test_completed_assessment_gets_one_reassess_revision_for_material_evidence_change(
@@ -369,3 +444,33 @@ def test_task_changes_write_one_bounded_audit_summary(client: TestClient) -> Non
             )
         ) == 1
 
+
+def test_task_stage_failure_rolls_back_candidates_tasks_and_audits(
+    client: TestClient, monkeypatch
+) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    service = client.app.state.vulnerability_matching_service
+
+    def fail_task_write(*_args, **_kwargs) -> None:
+        raise RuntimeError("task write failed")
+
+    monkeypatch.setattr(service._assessment_tasks, "apply", fail_task_write)
+    failed = client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+
+    assert failed.status_code == 500
+    assert failed.json()["code"] == "MATCH_EXECUTION_FAILED"
+    with client.app.state.database.engine.connect() as connection:
+        assert connection.scalar(text("SELECT COUNT(*) FROM vulnerability_ots_match")) == 0
+        assert connection.scalar(text("SELECT COUNT(*) FROM product_assessment")) == 0
+    with client.app.state.database.session_factory() as session:
+        assert session.scalar(select(func.count(AuditLog.id))) is not None
+        assert session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.object_type.in_(["vulnerability_ots_match", "product_assessment"])
+            )
+        ) == 0
+    result = client.get(f"/api/v1/import-packages/{batch_id}/ots-match-result").json()
+    assert result["status"] == "failed"
+    assert result["task_generation"]["status"] == "failed"
+    assert result["task_generation"]["task_failed_count"] == 1

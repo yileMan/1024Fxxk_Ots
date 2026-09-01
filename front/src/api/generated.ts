@@ -845,6 +845,7 @@ export interface components {
             error_code: string | null;
             /** Finished At */
             finished_at: string | null;
+            task_generation: components["schemas"]["TaskGenerationResponse"];
         } & {
             [key: string]: unknown;
         };
@@ -1176,6 +1177,58 @@ export interface components {
             effective_product_ids: number[];
             /** Effective Version Ids */
             effective_version_ids: number[];
+        };
+        /** TaskGenerationResponse */
+        TaskGenerationResponse: {
+            /** Schema Version */
+            schema_version: string;
+            /** Status */
+            status: string;
+            /** Task Inserted Count */
+            task_inserted_count: number;
+            /** Task Reassess Count */
+            task_reassess_count: number;
+            /** Task Updated Count */
+            task_updated_count: number;
+            /** Task Unchanged Count */
+            task_unchanged_count: number;
+            /** Task Skipped Count */
+            task_skipped_count: number;
+            /** Task Failed Count */
+            task_failed_count: number;
+            /** Skip Reason Counts */
+            skip_reason_counts: {
+                [key: string]: number;
+            };
+            /** Task Samples */
+            task_samples: components["schemas"]["TaskSampleResponse"][];
+            /** Truncated Task Count */
+            truncated_task_count: number;
+            /** Error Code */
+            error_code: string | null;
+        };
+        /** TaskSampleResponse */
+        TaskSampleResponse: {
+            /** Vulnerability Id */
+            vulnerability_id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Product Id */
+            product_id: number | null;
+            /** Product Name */
+            product_name: string | null;
+            /** Product Version Id */
+            product_version_id: number | null;
+            /** Version No */
+            version_no: string | null;
+            /** Product Ots Id */
+            product_ots_id: number | null;
+            /** Owner Id */
+            owner_id: number | null;
+            /** Action */
+            action: string;
+            /** Reason */
+            reason: string | null;
         };
         /** UserCreateRequest */
         UserCreateRequest: {

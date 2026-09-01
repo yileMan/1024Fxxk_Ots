@@ -2696,6 +2696,9 @@
               }
             ],
             "title": "Finished At"
+          },
+          "task_generation": {
+            "$ref": "#/components/schemas/TaskGenerationResponse"
           }
         },
         "additionalProperties": true,
@@ -2718,7 +2721,8 @@
           "truncated_candidate_count",
           "candidate_disclaimer",
           "error_code",
-          "finished_at"
+          "finished_at",
+          "task_generation"
         ],
         "title": "MatchSummaryResponse"
       },
@@ -3573,6 +3577,194 @@
           "effective_version_ids"
         ],
         "title": "ScopeSummaryResponse"
+      },
+      "TaskGenerationResponse": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "task_inserted_count": {
+            "type": "integer",
+            "title": "Task Inserted Count"
+          },
+          "task_reassess_count": {
+            "type": "integer",
+            "title": "Task Reassess Count"
+          },
+          "task_updated_count": {
+            "type": "integer",
+            "title": "Task Updated Count"
+          },
+          "task_unchanged_count": {
+            "type": "integer",
+            "title": "Task Unchanged Count"
+          },
+          "task_skipped_count": {
+            "type": "integer",
+            "title": "Task Skipped Count"
+          },
+          "task_failed_count": {
+            "type": "integer",
+            "title": "Task Failed Count"
+          },
+          "skip_reason_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Skip Reason Counts"
+          },
+          "task_samples": {
+            "items": {
+              "$ref": "#/components/schemas/TaskSampleResponse"
+            },
+            "type": "array",
+            "title": "Task Samples"
+          },
+          "truncated_task_count": {
+            "type": "integer",
+            "title": "Truncated Task Count"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_version",
+          "status",
+          "task_inserted_count",
+          "task_reassess_count",
+          "task_updated_count",
+          "task_unchanged_count",
+          "task_skipped_count",
+          "task_failed_count",
+          "skip_reason_counts",
+          "task_samples",
+          "truncated_task_count",
+          "error_code"
+        ],
+        "title": "TaskGenerationResponse"
+      },
+      "TaskSampleResponse": {
+        "properties": {
+          "vulnerability_id": {
+            "type": "integer",
+            "title": "Vulnerability Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "product_version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Version Id"
+          },
+          "version_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version No"
+          },
+          "product_ots_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Ots Id"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vulnerability_id",
+          "cve_id",
+          "product_id",
+          "product_name",
+          "product_version_id",
+          "version_no",
+          "product_ots_id",
+          "owner_id",
+          "action",
+          "reason"
+        ],
+        "title": "TaskSampleResponse"
       },
       "UserCreateRequest": {
         "properties": {

@@ -129,8 +129,16 @@ def test_relation_with_downstream_history_cannot_be_removed(client: TestClient) 
     ots = client.post("/api/v1/ots-components", json={"ots_name": "busybox", "ots_version": "1.36", "official_website": "https://busybox.net", "is_eol": False}).json()
     relation = client.post(f"/api/v1/product-versions/{version['id']}/ots", json={"ots_component_id": ots["id"]}).json()
     with client.app.state.database.engine.begin() as connection:
-        connection.execute(text("CREATE TABLE product_assessment (id INTEGER PRIMARY KEY, product_ots_id INTEGER NOT NULL)"))
-        connection.execute(text("INSERT INTO product_assessment (id, product_ots_id) VALUES (1, :relation_id)"), {"relation_id": relation["id"]})
+        connection.execute(text("""
+            INSERT INTO product_assessment (
+                product_ots_id, vulnerability_id, revision_no, is_current, status,
+                owner_id, applicability, based_on_source_modified_at, row_version,
+                created_at, updated_at
+            ) VALUES (
+                :relation_id, 999, 1, 1, 'pending', 1, 'pending',
+                CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """), {"relation_id": relation["id"]})
 
     protected = client.delete(f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}")
     assert protected.status_code == 409

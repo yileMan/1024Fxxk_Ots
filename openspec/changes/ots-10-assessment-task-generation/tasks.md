@@ -9,42 +9,42 @@
 
 ## 2. 契约、迁移和数据访问
 
-- [ ] 2.1 固定 `task_generation` 预览/结果、样例、跳过原因和稳定错误码的 Pydantic/OpenAPI Schema，保持现有四个 OTS-08 路由兼容
-- [ ] 2.2 新增 `012_product_assessment.sql`，按 11 表基线创建全部字段、CHECK、六个 RESTRICT 外键、唯一修订键和三组查询索引，不创建额外业务表
-- [ ] 2.3 编写 `012_product_assessment.rollback.md`，说明空表、仅系统待办和已有用户评估/审核数据时的回滚前置检查、导出要求与恢复方式
-- [ ] 2.4 新增 `ProductAssessment` 模型和 Repository 批量读取、组合锁、当前修订切换及新增能力，禁止业务层逐候选查询
-- [ ] 2.5 增加 MySQL 迁移/回滚集成测试，验证字段类型与长度、空值、CHECK、外键、索引、重复修订拒绝、应用基础表总数和受保护数据回滚检查
+- [x] 2.1 固定 `task_generation` 预览/结果、样例、跳过原因和稳定错误码的 Pydantic/OpenAPI Schema，保持现有四个 OTS-08 路由兼容
+- [x] 2.2 新增 `012_product_assessment.sql`，按 11 表基线创建全部字段、CHECK、六个 RESTRICT 外键、唯一修订键和三组查询索引，不创建额外业务表
+- [x] 2.3 编写 `012_product_assessment.rollback.md`，说明空表、仅系统待办和已有用户评估/审核数据时的回滚前置检查、导出要求与恢复方式
+- [x] 2.4 新增 `ProductAssessment` 模型和 Repository 批量读取、组合锁、当前修订切换及新增能力，禁止业务层逐候选查询
+- [x] 2.5 增加 MySQL 迁移/回滚集成测试，验证字段类型与长度、空值、CHECK、外键、索引、重复修订拒绝、应用基础表总数和受保护数据回滚检查
 
 ## 3. 后端任务生成与原子编排
 
-- [ ] 3.1 实现从执行时目标候选批量展开有效 `product_ots → product_version → product` 的任务计划，输出稳定排序的新增、更新、待复评、未变和跳过差异
-- [ ] 3.2 实现缺失任务的第 1 pending 修订、默认空产品结论、当前负责人/来源基准写入，以及未填写 pending 的安全负责人转交和 row_version 更新
-- [ ] 3.3 实现候选哈希预筛和规范 method/evidence 实质比较；候选依据更新或移除时原子保留 completed 修订并创建继承产品字段、清空事件字段的 reassess 修订
-- [ ] 3.4 重构 OTS-08 执行事务，按锁批次、重算、候选写入、任务写入/修订切换、候选移除、结果摘要和审计的顺序原子提交，失败完整回滚后以短事务记录可重试状态
-- [ ] 3.5 扩展预览、执行和结果服务：预览零写入、执行不信任旧预览、旧 matching JSON 返回 pending 任务语义、最多 100 条稳定样例及完整截断/原因计数
-- [ ] 3.6 补齐路由错误映射、结构化日志和 `product_assessment` 批量审计摘要，确保响应/日志/审计不泄露完整评估、证据、Cookie 或绝对路径
-- [ ] 3.7 运行后端单元与 MySQL 集成测试，修复至任务生成新增代码覆盖率不低于 80%，记录测试数量、覆盖率、并发和事务证据
+- [x] 3.1 实现从执行时目标候选批量展开有效 `product_ots → product_version → product` 的任务计划，输出稳定排序的新增、更新、待复评、未变和跳过差异
+- [x] 3.2 实现缺失任务的第 1 pending 修订、默认空产品结论、当前负责人/来源基准写入，以及未填写 pending 的安全负责人转交和 row_version 更新
+- [x] 3.3 实现候选哈希预筛和规范 method/evidence 实质比较；候选依据更新或移除时原子保留 completed 修订并创建继承产品字段、清空事件字段的 reassess 修订
+- [x] 3.4 重构 OTS-08 执行事务，按锁批次、重算、候选写入、任务写入/修订切换、候选移除、结果摘要和审计的顺序原子提交，失败完整回滚后以短事务记录可重试状态
+- [x] 3.5 扩展预览、执行和结果服务：预览零写入、执行不信任旧预览、旧 matching JSON 返回 pending 任务语义、最多 100 条稳定样例及完整截断/原因计数
+- [x] 3.6 补齐路由错误映射、结构化日志和 `product_assessment` 批量审计摘要，确保响应/日志/审计不泄露完整评估、证据、Cookie 或绝对路径
+- [x] 3.7 运行后端单元与 MySQL 集成测试，修复至任务生成新增代码覆盖率不低于 80%，记录测试数量、覆盖率、并发和事务证据
 
 ## 4. 前端任务生成结果与 OpenAPI 类型
 
-- [ ] 4.1 重新导出 OpenAPI 并生成 `front/src/api/generated.ts`，扩展薄 API client 使用生成的 `task_generation` 类型并通过重复生成一致性检查
-- [ ] 4.2 扩展 `ImportPackagePage.vue` 的匹配区域，增加产品任务新建、待复评、更新、未变、跳过和失败统计、有限样例与稳定原因展示
-- [ ] 4.3 对旧 OTS-08 succeeded 结果显示“产品任务待生成”并开放执行；失败明确候选与任务均已回滚且可重试，所有区域保留“候选不等于产品受影响/待产品独立评估”提示
-- [ ] 4.4 使第 1.5 节组件测试转绿，并运行前端 Vitest/coverage、`npm run typecheck` 和 `npm run build`，确保新增前端代码覆盖率不低于 80%
+- [x] 4.1 重新导出 OpenAPI 并生成 `front/src/api/generated.ts`，扩展薄 API client 使用生成的 `task_generation` 类型并通过重复生成一致性检查
+- [x] 4.2 扩展 `ImportPackagePage.vue` 的匹配区域，增加产品任务新建、待复评、更新、未变、跳过和失败统计、有限样例与稳定原因展示
+- [x] 4.3 对旧 OTS-08 succeeded 结果显示“产品任务待生成”并开放执行；失败明确候选与任务均已回滚且可重试，所有区域保留“候选不等于产品受影响/待产品独立评估”提示
+- [x] 4.4 使第 1.5 节组件测试转绿，并运行前端 Vitest/coverage、`npm run typecheck` 和 `npm run build`，确保新增前端代码覆盖率不低于 80%
 
 ## 5. 集成、性能与纵向验收
 
-- [ ] 5.1 增加 MySQL 故障注入测试，证明候选、评估修订、matching/task_generation 摘要或任一审计失败时无部分候选、多个 current、半成品任务或本次审计
-- [ ] 5.2 增加并发和幂等集成测试，证明同批次重复/并发执行不产生重复修订，预览后产品关联或负责人变化时执行使用最新数据
-- [ ] 5.3 使用不超过 10,000 CVE 和代表性多产品关联验证批量查询/写入、峰值内存和五分钟目标，记录环境、规模、耗时与结果
-- [ ] 5.4 使用系统 Chrome 运行 Playwright 纵向场景“导入并匹配 → 一个候选展开多个产品任务 → 重复执行任务数不增加”，不得下载 Playwright Chromium
-- [ ] 5.5 回归 OTS-03/04 产品与负责人、OTS-07 两文件导入和 OTS-08 候选详情，确认 NVD `1.0`、候选语义、现有权限和导入失败原子性未回归
+- [x] 5.1 增加 MySQL 故障注入测试，证明候选、评估修订、matching/task_generation 摘要或任一审计失败时无部分候选、多个 current、半成品任务或本次审计
+- [x] 5.2 增加并发和幂等集成测试，证明同批次重复/并发执行不产生重复修订，预览后产品关联或负责人变化时执行使用最新数据
+- [x] 5.3 使用不超过 10,000 CVE 和代表性多产品关联验证批量查询/写入、峰值内存和五分钟目标，记录环境、规模、耗时与结果
+- [x] 5.4 使用系统 Chrome 运行 Playwright 纵向场景“导入并匹配 → 一个候选展开多个产品任务 → 重复执行任务数不增加”，不得下载 Playwright Chromium
+- [x] 5.5 回归 OTS-03/04 产品与负责人、OTS-07 两文件导入和 OTS-08 候选详情，确认 NVD `1.0`、候选语义、现有权限和导入失败原子性未回归
 
 ## 6. 文档、严格校验与完成证据
 
-- [ ] 6.1 更新后端/前端使用说明和迁移操作，记录任务展开、跳过原因、幂等补齐、失败重试、日志边界及 OTS-09/OTS-16 的明确范围
-- [ ] 6.2 核对 proposal/spec/design/tasks 与 FR-MATCH-003～005、FR-VULN-005、系统方案和第 10 表数据基线的双向追溯
-- [ ] 6.3 运行 `openspec validate ots-10-assessment-task-generation --strict --no-interactive` 及 OpenSpec 全量严格校验，修复全部错误
-- [ ] 6.4 运行完整后端 pytest/coverage、前端 Vitest/coverage、`npm run typecheck`、`npm run build`、`npm run api:check` 和系统 Chrome Playwright；不能执行的项目保留实际环境错误
-- [ ] 6.5 完成业务验收清单：多产品独立任务、负责人快照、停用范围跳过、相同输入幂等、候选依据变化/移除复评、历史结论保留、单一 current、权限拒绝和失败回滚均有证据
-- [ ] 6.6 更新 `doc/Task.md` 的 OTS-10 状态和完成证据，复跑关键 GREEN 测试后创建仅包含本 change 实现与文档的 GREEN 检查点提交，并验证 RED/GREEN 提交均可从当前 HEAD 到达
+- [x] 6.1 更新后端/前端使用说明和迁移操作，记录任务展开、跳过原因、幂等补齐、失败重试、日志边界及 OTS-09/OTS-16 的明确范围
+- [x] 6.2 核对 proposal/spec/design/tasks 与 FR-MATCH-003～005、FR-VULN-005、系统方案和第 10 表数据基线的双向追溯
+- [x] 6.3 运行 `openspec validate ots-10-assessment-task-generation --strict --no-interactive` 及 OpenSpec 全量严格校验，修复全部错误
+- [x] 6.4 运行完整后端 pytest/coverage、前端 Vitest/coverage、`npm run typecheck`、`npm run build`、`npm run api:check` 和系统 Chrome Playwright；不能执行的项目保留实际环境错误
+- [x] 6.5 完成业务验收清单：多产品独立任务、负责人快照、停用范围跳过、相同输入幂等、候选依据变化/移除复评、历史结论保留、单一 current、权限拒绝和失败回滚均有证据
+- [x] 6.6 更新 `doc/Task.md` 的 OTS-10 状态和完成证据，复跑关键 GREEN 测试后创建仅包含本 change 实现与文档的 GREEN 检查点提交，并验证 RED/GREEN 提交均可从当前 HEAD 到达

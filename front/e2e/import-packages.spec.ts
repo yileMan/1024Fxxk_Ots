@@ -51,6 +51,16 @@ const matching = {
     { vulnerability_id: 9, cve_id: 'CVE-2026-0802', ots_component_id: 4, ots_name: 'Linux', ots_version: '3.1', match_method: 'cpe', match_basis: 'Linux 3.1 命中来源受影响版本范围', match_confidence: null, match_evidence: {} },
   ],
   truncated_candidate_count: 0, candidate_disclaimer: '候选不等于产品受影响', error_code: null, finished_at: null,
+  task_generation: {
+    schema_version: '1.0', status: 'pending', task_inserted_count: 2,
+    task_reassess_count: 0, task_updated_count: 0, task_unchanged_count: 0,
+    task_skipped_count: 0, task_failed_count: 0, skip_reason_counts: {},
+    task_samples: [
+      { vulnerability_id: 7, cve_id: 'CVE-2026-0801', product_id: 20, product_name: '边界网关', product_version_id: 21, version_no: '1.0', product_ots_id: 22, owner_id: 5, action: 'inserted', reason: null },
+      { vulnerability_id: 9, cve_id: 'CVE-2026-0802', product_id: 30, product_name: '终端平台', product_version_id: 31, version_no: '3.1', product_ots_id: 32, owner_id: 6, action: 'inserted', reason: null },
+    ],
+    truncated_task_count: 0, error_code: null,
+  },
 }
 
 const failed = {
@@ -89,10 +99,45 @@ async function selectPackage(page, body = 'package') {
 
 test('管理员完成两文件上传、预览、二次确认和成功结果', async ({ page }) => {
   await mockAdmin(page)
+  let previewCount = 0
+  let executionCount = 0
   await page.route('**/api/v1/import-packages/validate', route => route.fulfill({ status: 201, json: validated }))
   await page.route('**/api/v1/import-packages/12/confirm', route => route.fulfill({ status: 200, json: succeeded }))
-  await page.route('**/api/v1/import-packages/12/ots-match-preview', route => route.fulfill({ status: 200, json: matching }))
-  await page.route('**/api/v1/import-packages/12/ots-matches', route => route.fulfill({ status: 200, json: { ...matching, status: 'succeeded', finished_at: '2026-08-31T08:01:00Z' } }))
+  await page.route('**/api/v1/import-packages/12/ots-match-preview', route => {
+    previewCount += 1
+    const repeated = previewCount > 1
+    return route.fulfill({
+      status: 200,
+      json: {
+        ...matching,
+        task_generation: {
+          ...matching.task_generation,
+          task_inserted_count: repeated ? 0 : 2,
+          task_unchanged_count: repeated ? 2 : 0,
+          task_samples: repeated ? matching.task_generation.task_samples.map(task => ({ ...task, action: 'unchanged' })) : matching.task_generation.task_samples,
+        },
+      },
+    })
+  })
+  await page.route('**/api/v1/import-packages/12/ots-matches', route => {
+    executionCount += 1
+    const repeated = executionCount > 1
+    return route.fulfill({
+      status: 200,
+      json: {
+        ...matching,
+        status: 'succeeded',
+        task_generation: {
+          ...matching.task_generation,
+          status: 'succeeded',
+          task_inserted_count: repeated ? 0 : 2,
+          task_unchanged_count: repeated ? 2 : 0,
+          task_samples: repeated ? matching.task_generation.task_samples.map(task => ({ ...task, action: 'unchanged' })) : matching.task_generation.task_samples,
+        },
+        finished_at: '2026-08-31T08:01:00Z',
+      },
+    })
+  })
   page.on('dialog', dialog => dialog.accept())
 
   await page.goto('/system/data-exchange/import-packages')
@@ -109,8 +154,19 @@ test('管理员完成两文件上传、预览、二次确认和成功结果', as
   await expect(page.getByRole('heading', { name: 'Linux 3.1', exact: true })).toBeVisible()
   await expect(page.getByText('VERSION_OUTSIDE_RANGE')).toBeVisible()
   await expect(page.getByText('候选不等于产品受影响').first()).toBeVisible()
-  await page.getByRole('button', { name: '执行内部匹配' }).click()
+  await expect(page.getByRole('heading', { name: '产品评估任务' })).toBeVisible()
+  await expect(page.getByText('边界网关 1.0')).toBeVisible()
+  await expect(page.getByText('终端平台 3.1')).toBeVisible()
+  await page.getByRole('button', { name: '执行内部匹配与任务生成' }).click()
   await expect(page.getByRole('heading', { name: '内部匹配已完成' })).toBeVisible()
+  await expect(page.getByText('任务已生成')).toBeVisible()
+
+  await page.getByRole('button', { name: '预览内部匹配' }).click()
+  await expect(page.getByText('新任务').locator('..').getByText('0', { exact: true })).toBeVisible()
+  await expect(page.getByText('未变化').locator('..').getByText('2', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '执行内部匹配与任务生成' }).click()
+  await expect(page.getByText('新任务').locator('..').getByText('0', { exact: true })).toBeVisible()
+  await expect(page.getByText('未变化').locator('..').getByText('2', { exact: true })).toBeVisible()
 })
 
 test('字段错误或旧三文件包展示稳定拒绝证据', async ({ page }) => {

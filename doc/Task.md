@@ -271,7 +271,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求映射**：FR-EXCH-004、FR-EXCH-005、FR-EXCH-007、FR-EXCH-015、FR-VULN-004、FR-EOL-002、FR-EOL-003。
 
-#### [ ] OTS-10 `ots-10-assessment-task-generation`（复杂度：L，依赖：OTS-03/04/08；若启用 KEV/EOL 再依赖 OTS-09）
+#### [x] OTS-10 `ots-10-assessment-task-generation`（复杂度：L，依赖：OTS-03/04/08；若启用 KEV/EOL 再依赖 OTS-09）
 
 **目标**：基于平台内部 OTS/CVE 候选关系，为使用相关 OTS 的产品版本生成独立评估任务。
 
@@ -282,6 +282,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：重复批次/相同包不重复数据和任务；一个候选 OTS 为多个产品版本生成独立任务；导入失败没有半成品；已完成评估不被覆盖。
 
 **需求映射**：FR-MATCH-003～005、FR-VULN-005。
+
+**完成证据**：新增 `012_product_assessment.sql`、回滚说明、产品评估模型及批量任务生成服务；预览零写入，执行按当前产品关联和负责人重算，并与候选、摘要和审计原子提交。相同输入保持幂等，候选依据实质变化或移除时保留 completed 历史并生成单一 current 待复评修订；停用范围、不可用负责人和无有效关联均返回稳定跳过原因。后端 pytest 138 项通过且总覆盖率 91.71%，任务生成服务覆盖率 95%、匹配编排服务 94%；10,000 条任务规划耗时 0.198 秒、峰值 4.27 MiB。前端 Vitest 85 项通过且总语句覆盖率 96.9%、导入任务页 95.33%，系统 Chrome Playwright 17 项通过并覆盖一个候选展开多个产品任务及重复执行新增为零；类型检查、生产构建、OpenAPI 重复生成一致性和 OpenSpec 全量 13 项严格校验通过。RED 检查点为 `c974df7`。OTS-09 仍未启动，本任务未实现 KEV/EOL；CVSS、KEV 和其他产品上下文变化触发复评留待 OTS-16。
 
 ### M3：漏洞评估、审核与复评
 
