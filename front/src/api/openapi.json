@@ -2093,10 +2093,540 @@
           }
         }
       }
+    },
+    "/api/v1/workbench/summary": {
+      "get": {
+        "tags": [
+          "vulnerability-catalog-and-workbench"
+        ],
+        "summary": "Workbench Summary",
+        "operationId": "workbench_summary_api_v1_workbench_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbenchSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workbench/import-summary": {
+      "get": {
+        "tags": [
+          "vulnerability-catalog-and-workbench"
+        ],
+        "summary": "Import Summary",
+        "operationId": "import_summary_api_v1_workbench_import_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assessments/tasks": {
+      "get": {
+        "tags": [
+          "vulnerability-catalog-and-workbench"
+        ],
+        "summary": "Assessment Tasks",
+        "operationId": "assessment_tasks_api_v1_assessments_tasks_get",
+        "parameters": [
+          {
+            "name": "queue",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "pending",
+                "returned",
+                "reassess",
+                "submitted"
+              ],
+              "type": "string",
+              "title": "Queue"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentTaskPageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vulnerabilities": {
+      "get": {
+        "tags": [
+          "vulnerability-catalog-and-workbench"
+        ],
+        "summary": "Vulnerabilities",
+        "operationId": "vulnerabilities_api_v1_vulnerabilities_get",
+        "parameters": [
+          {
+            "name": "cve",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cve"
+            }
+          },
+          {
+            "name": "ots_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ots Id"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "NONE",
+                    "LOW",
+                    "MEDIUM",
+                    "HIGH",
+                    "CRITICAL"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "name": "is_kev",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Kev"
+            }
+          },
+          {
+            "name": "assessment_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "submitted",
+                    "returned",
+                    "completed",
+                    "reassess"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assessment Status"
+            }
+          },
+          {
+            "name": "published_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Published From"
+            }
+          },
+          {
+            "name": "published_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Published To"
+            }
+          },
+          {
+            "name": "modified_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Modified From"
+            }
+          },
+          {
+            "name": "modified_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Modified To"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VulnerabilityPageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vulnerabilities/{vulnerability_id}": {
+      "get": {
+        "tags": [
+          "vulnerability-catalog-and-workbench"
+        ],
+        "summary": "Vulnerability Detail",
+        "operationId": "vulnerability_detail_api_v1_vulnerabilities__vulnerability_id__get",
+        "parameters": [
+          {
+            "name": "vulnerability_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vulnerability Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VulnerabilityDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AssessmentTaskPageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AssessmentTaskResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "AssessmentTaskPageResponse"
+      },
+      "AssessmentTaskResponse": {
+        "properties": {
+          "assessment_id": {
+            "type": "integer",
+            "title": "Assessment Id"
+          },
+          "vulnerability_id": {
+            "type": "integer",
+            "title": "Vulnerability Id"
+          },
+          "revision_no": {
+            "type": "integer",
+            "title": "Revision No"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "returned",
+              "reassess",
+              "submitted"
+            ],
+            "title": "Status"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "product_version_id": {
+            "type": "integer",
+            "title": "Product Version Id"
+          },
+          "version_no": {
+            "type": "string",
+            "title": "Version No"
+          },
+          "product_ots_id": {
+            "type": "integer",
+            "title": "Product Ots Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "owner_id": {
+            "type": "integer",
+            "title": "Owner Id"
+          },
+          "reviewer_id": {
+            "type": "integer",
+            "title": "Reviewer Id"
+          },
+          "source_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Severity"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assessment_id",
+          "vulnerability_id",
+          "revision_no",
+          "status",
+          "cve_id",
+          "product_id",
+          "product_name",
+          "product_version_id",
+          "version_no",
+          "product_ots_id",
+          "ots_component_id",
+          "ots_name",
+          "ots_version",
+          "owner_id",
+          "reviewer_id",
+          "source_severity",
+          "updated_at"
+        ],
+        "title": "AssessmentTaskResponse"
+      },
       "Body_validate_import_package_api_v1_import_packages_validate_post": {
         "properties": {
           "file": {
@@ -2161,9 +2691,43 @@
             "type": "integer",
             "title": "First Seen Batch Id"
           },
+          "first_seen_batch_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen Batch No"
+          },
           "last_seen_batch_id": {
             "type": "integer",
             "title": "Last Seen Batch Id"
+          },
+          "last_seen_batch_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen Batch No"
+          },
+          "based_on_source_modified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Based On Source Modified At"
           }
         },
         "additionalProperties": true,
@@ -2413,6 +2977,55 @@
         ],
         "title": "CsvImportResultResponse"
       },
+      "Cvss31Response": {
+        "properties": {
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          },
+          "vector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vector"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "severity",
+          "vector",
+          "source"
+        ],
+        "title": "Cvss31Response"
+      },
       "DisableRequest": {
         "properties": {
           "row_version": {
@@ -2439,6 +3052,62 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ImportBatchSummaryResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "batch_no": {
+            "type": "string",
+            "title": "Batch No"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_count": {
+            "type": "integer",
+            "title": "Error Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "batch_no",
+          "status",
+          "finished_at"
+        ],
+        "title": "ImportBatchSummaryResponse"
       },
       "ImportPackageResponse": {
         "properties": {
@@ -2580,6 +3249,122 @@
           "duplicate"
         ],
         "title": "ImportPackageResponse"
+      },
+      "ImportSummaryResponse": {
+        "properties": {
+          "latest_succeeded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportBatchSummaryResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_failed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportBatchSummaryResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_successful_import_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Successful Import At"
+          },
+          "coverage_status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "not_provided"
+            ],
+            "title": "Coverage Status"
+          },
+          "last_covered_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Covered Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latest_succeeded",
+          "latest_failed",
+          "last_successful_import_at",
+          "coverage_status",
+          "last_covered_time"
+        ],
+        "title": "ImportSummaryResponse"
+      },
+      "KevResponse": {
+        "properties": {
+          "is_kev": {
+            "type": "boolean",
+            "title": "Is Kev"
+          },
+          "date_added": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Added"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "required_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_kev",
+          "date_added",
+          "due_date",
+          "required_action"
+        ],
+        "title": "KevResponse"
       },
       "LoginRequest": {
         "properties": {
@@ -4084,6 +4869,280 @@
         ],
         "title": "VersionUpdateRequest"
       },
+      "VulnerabilityCandidateResponse": {
+        "properties": {
+          "vulnerability_id": {
+            "type": "integer",
+            "title": "Vulnerability Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "match_method": {
+            "type": "string",
+            "title": "Match Method"
+          },
+          "match_basis": {
+            "type": "string",
+            "title": "Match Basis"
+          },
+          "match_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Confidence"
+          },
+          "match_evidence": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Match Evidence"
+          },
+          "first_seen_batch_id": {
+            "type": "integer",
+            "title": "First Seen Batch Id"
+          },
+          "first_seen_batch_no": {
+            "type": "string",
+            "title": "First Seen Batch No"
+          },
+          "last_seen_batch_id": {
+            "type": "integer",
+            "title": "Last Seen Batch Id"
+          },
+          "last_seen_batch_no": {
+            "type": "string",
+            "title": "Last Seen Batch No"
+          },
+          "based_on_source_modified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Based On Source Modified At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vulnerability_id",
+          "cve_id",
+          "ots_component_id",
+          "ots_name",
+          "ots_version",
+          "match_method",
+          "match_basis",
+          "match_confidence",
+          "match_evidence",
+          "first_seen_batch_id",
+          "first_seen_batch_no",
+          "last_seen_batch_id",
+          "last_seen_batch_no",
+          "based_on_source_modified_at"
+        ],
+        "title": "VulnerabilityCandidateResponse"
+      },
+      "VulnerabilityDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "source": {
+            "$ref": "#/components/schemas/VulnerabilitySourceResponse"
+          },
+          "cvss31": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cvss31Response"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cwes": {
+            "items": {},
+            "type": "array",
+            "title": "Cwes"
+          },
+          "affected_ranges": {
+            "items": {},
+            "type": "array",
+            "title": "Affected Ranges"
+          },
+          "references": {
+            "items": {},
+            "type": "array",
+            "title": "References"
+          },
+          "kev": {
+            "$ref": "#/components/schemas/KevResponse"
+          },
+          "ai_analysis_suggestion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Analysis Suggestion"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/VulnerabilityCandidateResponse"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "candidate_disclaimer": {
+            "type": "string",
+            "title": "Candidate Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cve_id",
+          "source",
+          "cvss31",
+          "cwes",
+          "affected_ranges",
+          "references",
+          "kev",
+          "ai_analysis_suggestion",
+          "candidates",
+          "candidate_disclaimer"
+        ],
+        "title": "VulnerabilityDetailResponse"
+      },
+      "VulnerabilityListItemResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "source_status": {
+            "type": "string",
+            "title": "Source Status"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source_modified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Modified At"
+          },
+          "cvss31_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvss31 Score"
+          },
+          "cvss31_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvss31 Severity"
+          },
+          "is_kev": {
+            "type": "boolean",
+            "title": "Is Kev"
+          },
+          "visible_candidate_count": {
+            "type": "integer",
+            "title": "Visible Candidate Count"
+          },
+          "visible_task_count": {
+            "type": "integer",
+            "title": "Visible Task Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cve_id",
+          "source_status",
+          "description",
+          "published_at",
+          "source_modified_at",
+          "cvss31_score",
+          "cvss31_severity",
+          "is_kev",
+          "visible_candidate_count",
+          "visible_task_count"
+        ],
+        "title": "VulnerabilityListItemResponse"
+      },
       "VulnerabilityMatchDetailResponse": {
         "properties": {
           "vulnerability_id": {
@@ -4126,6 +5185,131 @@
           "candidate_disclaimer"
         ],
         "title": "VulnerabilityMatchDetailResponse"
+      },
+      "VulnerabilityPageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VulnerabilityListItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "VulnerabilityPageResponse"
+      },
+      "VulnerabilitySourceResponse": {
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified At"
+          },
+          "import_batch_id": {
+            "type": "integer",
+            "title": "Import Batch Id"
+          },
+          "import_batch_no": {
+            "type": "string",
+            "title": "Import Batch No"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identifier",
+          "status",
+          "description",
+          "published_at",
+          "modified_at",
+          "import_batch_id",
+          "import_batch_no"
+        ],
+        "title": "VulnerabilitySourceResponse"
+      },
+      "WorkbenchSummaryResponse": {
+        "properties": {
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count"
+          },
+          "returned_count": {
+            "type": "integer",
+            "title": "Returned Count"
+          },
+          "reassess_count": {
+            "type": "integer",
+            "title": "Reassess Count"
+          },
+          "submitted_count": {
+            "type": "integer",
+            "title": "Submitted Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending_count",
+          "returned_count",
+          "reassess_count",
+          "submitted_count"
+        ],
+        "title": "WorkbenchSummaryResponse"
       }
     }
   }

@@ -100,13 +100,11 @@ describe('App', () => {
     expect(wrapper.get('h1').text()).toBe('没有访问权限')
   })
 
-  it('uses a left sidebar with seven ordered navigation items for administrators', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
-        { status: 200 },
-      ),
-    )
+  it('uses a left sidebar with ordered navigation items for administrators', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ pending_count: 0, returned_count: 0, reassess_count: 0, submitted_count: 0 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ latest_succeeded: null, latest_failed: null, last_successful_import_at: null, coverage_status: 'not_provided', last_covered_time: null }), { status: 200 }))
     await router.push('/system')
     const wrapper = mount(App, { global: { plugins: [router] } })
     await flushPromises()
@@ -114,6 +112,8 @@ describe('App', () => {
     const sidebar = wrapper.get('aside.app-sidebar')
     expect(sidebar.findAll('nav a').map((link) => link.text())).toEqual([
       '工作台',
+      '评估待办',
+      '漏洞目录',
       '产品管理',
       'OTS',
       '采集范围',
@@ -133,26 +133,27 @@ describe('App', () => {
         effective_product_ids: [10],
         effective_version_ids: [11],
       }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ pending_count: 0, returned_count: 0, reassess_count: 0, submitted_count: 0 }), { status: 200 }))
     await router.push('/system')
     const wrapper = mount(App, { global: { plugins: [router] } })
     await flushPromises()
 
     expect(wrapper.get('aside.app-sidebar').findAll('nav a').map((link) => link.text())).toEqual([
       '工作台',
+      '评估待办',
+      '漏洞目录',
       '我的产品',
       '运行状态',
     ])
   })
 
   it('clears in-memory identity and returns to login after logout', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    fetchMock.mockImplementation((input: string) => {
+      if (input === '/api/v1/auth/me') return Promise.resolve(new Response(JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }), { status: 200 }))
+      if (input === '/api/v1/workbench/summary') return Promise.resolve(new Response(JSON.stringify({ pending_count: 0, returned_count: 0, reassess_count: 0, submitted_count: 0 }), { status: 200 }))
+      if (input === '/api/v1/workbench/import-summary') return Promise.resolve(new Response(JSON.stringify({ latest_succeeded: null, latest_failed: null, last_successful_import_at: null, coverage_status: 'not_provided', last_covered_time: null }), { status: 200 }))
+      return Promise.resolve(new Response(null, { status: 204 }))
+    })
     await router.push('/system')
     const wrapper = mount(App, { global: { plugins: [router] } })
     await flushPromises()
@@ -160,20 +161,18 @@ describe('App', () => {
     await wrapper.get('button[aria-label="退出登录"]').trigger('click')
     await flushPromises()
 
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/auth/logout')
+    expect(fetchMock.mock.calls.map(call => call[0])).toContain('/api/v1/auth/logout')
     expect(router.currentRoute.value.path).toBe('/login')
     expect(authentication.user).toBeNull()
   })
 
   it('keeps the current identity and shows feedback when logout fails', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'NETWORK_ERROR' }), { status: 503 }))
+    fetchMock.mockImplementation((input: string) => {
+      if (input === '/api/v1/auth/me') return Promise.resolve(new Response(JSON.stringify({ id: 1, login_name: 'admin', display_name: '初始管理员', roles: ['admin'] }), { status: 200 }))
+      if (input === '/api/v1/workbench/summary') return Promise.resolve(new Response(JSON.stringify({ pending_count: 0, returned_count: 0, reassess_count: 0, submitted_count: 0 }), { status: 200 }))
+      if (input === '/api/v1/workbench/import-summary') return Promise.resolve(new Response(JSON.stringify({ latest_succeeded: null, latest_failed: null, last_successful_import_at: null, coverage_status: 'not_provided', last_covered_time: null }), { status: 200 }))
+      return Promise.resolve(new Response(JSON.stringify({ code: 'NETWORK_ERROR' }), { status: 503 }))
+    })
     await router.push('/system')
     const wrapper = mount(App, { global: { plugins: [router] } })
     await flushPromises()

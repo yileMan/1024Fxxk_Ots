@@ -79,6 +79,8 @@ test('管理员可以进入用户管理并创建多角色用户', async ({ page 
   const navigationItems = await page.locator('aside.app-sidebar nav a').allTextContents()
   expect(navigationItems.map((item) => item.trim())).toEqual([
     '工作台',
+    '评估待办',
+    '漏洞目录',
     '产品管理',
     'OTS',
     '采集范围',

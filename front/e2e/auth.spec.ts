@@ -34,6 +34,7 @@ test('用户名密码登录后通过用户 ID Cookie 恢复身份', async ({ pag
   await page.getByLabel('密码').fill('password')
   await page.getByRole('button', { name: '登录' }).click()
   await expect(page).toHaveURL(/\/system$/)
+  await expect.poll(async () => (await page.context().cookies()).some(cookie => cookie.name === 'ots_user_id' && cookie.value === '1')).toBe(true)
 
   await page.reload()
   await expect(page.getByText('初始管理员')).toBeVisible()

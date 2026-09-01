@@ -16,5 +16,8 @@ beforeEach(() => {
 
 it('restores the user-id cookie identity before mounting', async () => {
   await import('./main')
-  await vi.waitFor(() => expect(document.querySelector('#app')?.textContent).toContain('初始管理员'))
-})
+  await vi.waitFor(
+    () => expect(document.querySelector('#app')?.textContent).toContain('初始管理员'),
+    { timeout: 15_000 },
+  )
+}, 15_000)

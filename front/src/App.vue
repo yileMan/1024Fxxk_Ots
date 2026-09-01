@@ -7,6 +7,8 @@
       </a>
       <nav aria-label="主导航">
         <RouterLink to="/system"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z" /></svg><span>工作台</span></RouterLink>
+        <RouterLink to="/system/assessments/tasks?queue=pending"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 3h16v18H4V3Zm3 4v2h10V7H7Zm0 4v2h10v-2H7Zm0 4v2h7v-2H7Z" /></svg><span>评估待办</span></RouterLink>
+        <RouterLink to="/system/vulnerabilities"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M11 2h2v3h-2V2Zm7.07 3.93 1.41 1.41-2.12 2.12-1.41-1.41 2.12-2.12ZM4.52 7.34l1.41-1.41 2.12 2.12-1.41 1.41-2.12-2.12ZM12 7a5 5 0 0 1 5 5v7H7v-7a5 5 0 0 1 5-5Zm-7 5v2H2v-2h3Zm17 0v2h-3v-2h3Z" /></svg><span>漏洞目录</span></RouterLink>
         <RouterLink v-if="isAdmin" to="/system/products"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 8h8v2H8zm0 4h8v2H8zm0 4h5v2H8z" /></svg><span>产品管理</span></RouterLink>
         <RouterLink v-if="hasScopedProducts" to="/system/my-products"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 8h8v2H8zm0 4h8v2H8zm0 4h5v2H8z" /></svg><span>我的产品</span></RouterLink>
         <RouterLink v-if="isAdmin" to="/system/ots"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.8 8 12 11.7 5.2 8 12 4.3ZM5 9.7l6 3.3v6.4l-6-3.3V9.7Zm8 9.7V13l6-3.3v6.4l-6 3.3Z" /></svg><span>OTS</span></RouterLink>

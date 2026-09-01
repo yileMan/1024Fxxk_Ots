@@ -287,7 +287,7 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M3：漏洞评估、审核与复评
 
-#### [ ] OTS-11 `ots-11-vulnerability-catalog-and-workbench`（复杂度：L，依赖：OTS-10）
+#### [x] OTS-11 `ots-11-vulnerability-catalog-and-workbench`（复杂度：L，依赖：OTS-10）
 
 **目标**：提供漏洞/候选匹配查询和按当前用户实时计算的工作台待办。
 
@@ -298,6 +298,10 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：导入成功后负责人无需刷新任务表即可查询到待办；审核人只看到指定版本的 submitted 项；候选关系不显示为受影响结论。
 
 **需求映射**：FR-WORK-001、FR-WORK-002、FR-WORK-003、FR-WORK-004、FR-ASSESS-002、FR-VULN-007。
+
+**需求追溯**：FR-WORK-001～004 分别由实时四类计数、相同谓词的分页待办、管理员导入/覆盖摘要和 URL 可恢复卡片跳转覆盖；FR-ASSESS-002 由当前负责人/当前版本审核人及有效产品范围的 SQL 裁剪覆盖；FR-VULN-007 由统一交集筛选、来源事实分区、范围内候选和固定免责声明覆盖。对应证据集中在 `backend/tests/test_vulnerability_workbench.py`、前端工作台/待办/目录/详情组件测试和 `front/e2e/vulnerability-workbench.spec.ts`。
+
+**完成证据**：复用既有 11 张业务表，未新增迁移、通知同步或查询审计；新增工作台摘要、管理员导入摘要、评估待办、漏洞目录/详情并扩展候选详情只读 API。普通用户所有列表、计数、详情、候选及 OTS 筛选均按有效产品范围裁剪，管理员保持全局只读兼容；无明确逐 OTS 覆盖时显示“未提供”。后端 pytest 146 项通过，OTS-11 专项 8 项及候选兼容回归共 27 项通过，新增模块覆盖率 93%，MySQL 200 条正常规模查询 0.098 秒；前端 Vitest 100 项通过，总语句/行覆盖率 97.01%、函数覆盖率 82.12%，系统 Chrome Playwright 20 项通过；类型检查、生产构建、OpenAPI 两次生成哈希一致和 OpenSpec 严格校验通过。本任务仅交付只读查询，评估编辑/提交/审核、复评变化、跨产品参考及完整追溯仍分别属于 OTS-12/14/16/18/19。
 
 #### [ ] OTS-12 `ots-12-assessment-editor-core`（复杂度：L，依赖：OTS-11）
 

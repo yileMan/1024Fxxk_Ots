@@ -626,10 +626,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workbench/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workbench Summary */
+        get: operations["workbench_summary_api_v1_workbench_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workbench/import-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Import Summary */
+        get: operations["import_summary_api_v1_workbench_import_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assessment Tasks */
+        get: operations["assessment_tasks_api_v1_assessments_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vulnerabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vulnerabilities */
+        get: operations["vulnerabilities_api_v1_vulnerabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vulnerabilities/{vulnerability_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vulnerability Detail */
+        get: operations["vulnerability_detail_api_v1_vulnerabilities__vulnerability_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AssessmentTaskPageResponse */
+        AssessmentTaskPageResponse: {
+            /** Items */
+            items: components["schemas"]["AssessmentTaskResponse"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** AssessmentTaskResponse */
+        AssessmentTaskResponse: {
+            /** Assessment Id */
+            assessment_id: number;
+            /** Vulnerability Id */
+            vulnerability_id: number;
+            /** Revision No */
+            revision_no: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "returned" | "reassess" | "submitted";
+            /** Cve Id */
+            cve_id: string;
+            /** Product Id */
+            product_id: number;
+            /** Product Name */
+            product_name: string;
+            /** Product Version Id */
+            product_version_id: number;
+            /** Version No */
+            version_no: string;
+            /** Product Ots Id */
+            product_ots_id: number;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Owner Id */
+            owner_id: number;
+            /** Reviewer Id */
+            reviewer_id: number;
+            /** Source Severity */
+            source_severity: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** Body_validate_import_package_api_v1_import_packages_validate_post */
         Body_validate_import_package_api_v1_import_packages_validate_post: {
             /** File */
@@ -659,8 +798,14 @@ export interface components {
             };
             /** First Seen Batch Id */
             first_seen_batch_id: number;
+            /** First Seen Batch No */
+            first_seen_batch_no?: string | null;
             /** Last Seen Batch Id */
             last_seen_batch_id: number;
+            /** Last Seen Batch No */
+            last_seen_batch_no?: string | null;
+            /** Based On Source Modified At */
+            based_on_source_modified_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -742,6 +887,17 @@ export interface components {
             /** Existing Relations */
             existing_relations: number;
         };
+        /** Cvss31Response */
+        Cvss31Response: {
+            /** Score */
+            score: number;
+            /** Severity */
+            severity: string | null;
+            /** Vector */
+            vector: string | null;
+            /** Source */
+            source: string | null;
+        };
         /** DisableRequest */
         DisableRequest: {
             /** Row Version */
@@ -751,6 +907,27 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ImportBatchSummaryResponse */
+        ImportBatchSummaryResponse: {
+            /** Id */
+            id: number;
+            /** Batch No */
+            batch_no: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "failed";
+            /** Finished At */
+            finished_at: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /**
+             * Error Count
+             * @default 0
+             */
+            error_count: number;
         };
         /** ImportPackageResponse */
         ImportPackageResponse: {
@@ -795,6 +972,31 @@ export interface components {
             truncated_error_count: number;
             /** Duplicate */
             duplicate: boolean;
+        };
+        /** ImportSummaryResponse */
+        ImportSummaryResponse: {
+            latest_succeeded: components["schemas"]["ImportBatchSummaryResponse"] | null;
+            latest_failed: components["schemas"]["ImportBatchSummaryResponse"] | null;
+            /** Last Successful Import At */
+            last_successful_import_at: string | null;
+            /**
+             * Coverage Status
+             * @enum {string}
+             */
+            coverage_status: "available" | "not_provided";
+            /** Last Covered Time */
+            last_covered_time: string | null;
+        };
+        /** KevResponse */
+        KevResponse: {
+            /** Is Kev */
+            is_kev: boolean;
+            /** Date Added */
+            date_added: string | null;
+            /** Due Date */
+            due_date: string | null;
+            /** Required Action */
+            required_action: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1333,6 +1535,86 @@ export interface components {
             /** Row Version */
             row_version: number;
         };
+        /** VulnerabilityCandidateResponse */
+        VulnerabilityCandidateResponse: {
+            /** Vulnerability Id */
+            vulnerability_id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Match Method */
+            match_method: string;
+            /** Match Basis */
+            match_basis: string;
+            /** Match Confidence */
+            match_confidence: number | null;
+            /** Match Evidence */
+            match_evidence: {
+                [key: string]: unknown;
+            };
+            /** First Seen Batch Id */
+            first_seen_batch_id: number;
+            /** First Seen Batch No */
+            first_seen_batch_no: string;
+            /** Last Seen Batch Id */
+            last_seen_batch_id: number;
+            /** Last Seen Batch No */
+            last_seen_batch_no: string;
+            /** Based On Source Modified At */
+            based_on_source_modified_at: string | null;
+        };
+        /** VulnerabilityDetailResponse */
+        VulnerabilityDetailResponse: {
+            /** Id */
+            id: number;
+            /** Cve Id */
+            cve_id: string;
+            source: components["schemas"]["VulnerabilitySourceResponse"];
+            cvss31: components["schemas"]["Cvss31Response"] | null;
+            /** Cwes */
+            cwes: unknown[];
+            /** Affected Ranges */
+            affected_ranges: unknown[];
+            /** References */
+            references: unknown[];
+            kev: components["schemas"]["KevResponse"];
+            /** Ai Analysis Suggestion */
+            ai_analysis_suggestion: string | null;
+            /** Candidates */
+            candidates: components["schemas"]["VulnerabilityCandidateResponse"][];
+            /** Candidate Disclaimer */
+            candidate_disclaimer: string;
+        };
+        /** VulnerabilityListItemResponse */
+        VulnerabilityListItemResponse: {
+            /** Id */
+            id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Source Status */
+            source_status: string;
+            /** Description */
+            description: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Source Modified At */
+            source_modified_at: string | null;
+            /** Cvss31 Score */
+            cvss31_score: number | null;
+            /** Cvss31 Severity */
+            cvss31_severity: string | null;
+            /** Is Kev */
+            is_kev: boolean;
+            /** Visible Candidate Count */
+            visible_candidate_count: number;
+            /** Visible Task Count */
+            visible_task_count: number;
+        };
         /** VulnerabilityMatchDetailResponse */
         VulnerabilityMatchDetailResponse: {
             /** Vulnerability Id */
@@ -1345,6 +1627,45 @@ export interface components {
             unmatched_reason: string | null;
             /** Candidate Disclaimer */
             candidate_disclaimer: string;
+        };
+        /** VulnerabilityPageResponse */
+        VulnerabilityPageResponse: {
+            /** Items */
+            items: components["schemas"]["VulnerabilityListItemResponse"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** VulnerabilitySourceResponse */
+        VulnerabilitySourceResponse: {
+            /** Identifier */
+            identifier: string;
+            /** Status */
+            status: string;
+            /** Description */
+            description: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Modified At */
+            modified_at: string | null;
+            /** Import Batch Id */
+            import_batch_id: number;
+            /** Import Batch No */
+            import_batch_no: string;
+        };
+        /** WorkbenchSummaryResponse */
+        WorkbenchSummaryResponse: {
+            /** Pending Count */
+            pending_count: number;
+            /** Returned Count */
+            returned_count: number;
+            /** Reassess Count */
+            reassess_count: number;
+            /** Submitted Count */
+            submitted_count: number;
         };
     };
     responses: never;
@@ -2754,6 +3075,152 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VulnerabilityMatchDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workbench_summary_api_v1_workbench_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchSummaryResponse"];
+                };
+            };
+        };
+    };
+    import_summary_api_v1_workbench_import_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSummaryResponse"];
+                };
+            };
+        };
+    };
+    assessment_tasks_api_v1_assessments_tasks_get: {
+        parameters: {
+            query: {
+                queue: "pending" | "returned" | "reassess" | "submitted";
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentTaskPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vulnerabilities_api_v1_vulnerabilities_get: {
+        parameters: {
+            query?: {
+                cve?: string | null;
+                ots_id?: number | null;
+                product_id?: number | null;
+                severity?: ("NONE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL") | null;
+                is_kev?: boolean | null;
+                assessment_status?: ("pending" | "submitted" | "returned" | "completed" | "reassess") | null;
+                published_from?: string | null;
+                published_to?: string | null;
+                modified_from?: string | null;
+                modified_to?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilityPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vulnerability_detail_api_v1_vulnerabilities__vulnerability_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vulnerability_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilityDetailResponse"];
                 };
             };
             /** @description Validation Error */

@@ -175,6 +175,22 @@ pending 任务可安全同步负责人，已提交或审核中的任务不会被
 回滚前置检查、导出与恢复方式见 `migrations/012_product_assessment.rollback.md`。本阶段不接入 KEV/EOL；
 更广泛的 CVSS、KEV、产品上下文变化触发复评留待 OTS-16。
 
+## 漏洞目录与实时工作台
+
+OTS-11 提供只读查询接口：`GET /api/v1/workbench/summary` 返回当前用户四类实时待办数量，
+`GET /api/v1/assessments/tasks` 按 `queue` 分页返回负责人或当前版本审核人的任务；
+`GET /api/v1/vulnerabilities` 支持 CVE、产品、OTS、CVSS v3.1 严重度、KEV、当前评估状态及
+来源发布/修改时间区间的交集筛选，详情接口为 `GET /api/v1/vulnerabilities/{id}`。既有候选详情接口
+继续兼容管理员全局读取，普通用户则只返回其有效产品范围内的候选。
+
+普通用户的计数、列表、详情和候选均在 SQL 查询中按有效产品/版本范围裁剪；直接请求不可见 ID 时返回
+`403`，不存在返回 `404`。管理员可额外读取 `GET /api/v1/workbench/import-summary`；错误摘要会清理归档
+路径等敏感值。只有成功批次中明确的逐 OTS `scope_coverage_json` 才形成覆盖截止时间；没有该数据时返回
+“未提供”，不会把 NVD 来源窗口误当作逐 OTS 覆盖。所有接口只读，不写查询审计，也未新增表、索引或迁移。
+
+本阶段不开放评估编辑/提交/审核（OTS-12/14），不实现复评变化说明（OTS-16）、跨产品参考（OTS-18）
+或完整追溯（OTS-19）。候选响应继续固定声明“候选不等于产品受影响”。
+
 ## 测试
 
 ```powershell
