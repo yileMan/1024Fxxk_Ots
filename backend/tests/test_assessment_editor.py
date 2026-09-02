@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import create_engine, func, inspect, select, text
+from sqlalchemy.engine import make_url
 
 from app.main import create_app
+from app.infrastructure.settings import Settings
+from app.migrations import apply_migrations
 from app.models.assessments import ProductAssessment
 from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
+from app.repositories.assessment_editor import AssessmentEditorRepository
 from app.services.authentication import AuthenticationService
 from tests.test_vulnerability_workbench import login, seed_catalog
 
@@ -356,3 +362,84 @@ def test_assessment_editor_openapi_contract(client: TestClient) -> None:
     request_name = request_ref.rsplit("/", 1)[-1]
     properties = schema["components"]["schemas"][request_name]["properties"]
     assert set(properties) == set(draft_payload())
+
+
+def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
+    monkeypatch, tmp_path: Path
+) -> None:
+    configured_url = Settings.from_environment().database_url
+    assert configured_url is not None
+    url = make_url(configured_url)
+    database_name = f"ots12_test_{uuid4().hex}"
+    admin_engine = create_engine(url.set(database="mysql"))
+    test_engine = None
+    application = None
+    try:
+        with admin_engine.begin() as connection:
+            connection.execute(text(f"CREATE DATABASE `{database_name}` CHARACTER SET utf8mb4"))
+        test_url = url.set(database=database_name)
+        test_engine = create_engine(test_url)
+        assert apply_migrations(test_engine, Path(__file__).parents[1] / "migrations") == list(
+            range(1, 13)
+        )
+        assert len(
+            [
+                name
+                for name in inspect(test_engine).get_table_names()
+                if name != "schema_migration"
+            ]
+        ) == 11
+
+        monkeypatch.setenv("OTS_DATABASE_URL", test_url.render_as_string(hide_password=False))
+        monkeypatch.setenv("OTS_IMPORT_TEMP_DIR", str(tmp_path / "incoming"))
+        monkeypatch.setenv("OTS_IMPORT_ARCHIVE_DIR", str(tmp_path / "archive"))
+        application = create_app()
+        AuthenticationService(application.state.database.session_factory).initialize_admin(
+            "admin", "初始管理员", "admin-password"
+        )
+        with TestClient(application, raise_server_exceptions=False) as mysql_client:
+            seed_catalog(mysql_client)
+            target_id = assessment_id(mysql_client, "pending")
+            repository = AssessmentEditorRepository()
+            first_session = application.state.database.session_factory()
+            second_session = application.state.database.session_factory()
+            try:
+                first = first_session.get(ProductAssessment, target_id)
+                second = second_session.get(ProductAssessment, target_id)
+                assert first is not None and second is not None
+                assert first.row_version == second.row_version == 1
+                assert repository.update_draft_if_version(
+                    first_session,
+                    assessment_id=target_id,
+                    owner_id=first.owner_id,
+                    row_version=first.row_version,
+                    values={"analysis_summary": "第一个会话"},
+                    updated_at=datetime.now(timezone.utc),
+                )
+                first_session.commit()
+                assert not repository.update_draft_if_version(
+                    second_session,
+                    assessment_id=target_id,
+                    owner_id=second.owner_id,
+                    row_version=second.row_version,
+                    values={"analysis_summary": "第二个会话"},
+                    updated_at=datetime.now(timezone.utc),
+                )
+                second_session.rollback()
+            finally:
+                first_session.close()
+                second_session.close()
+
+            with application.state.database.session_factory() as session:
+                saved = session.get(ProductAssessment, target_id)
+                assert saved is not None
+                assert saved.analysis_summary == "第一个会话"
+                assert saved.row_version == 2
+    finally:
+        if application is not None:
+            application.state.database.engine.dispose()
+        if test_engine is not None:
+            test_engine.dispose()
+        with admin_engine.begin() as connection:
+            connection.execute(text(f"DROP DATABASE IF EXISTS `{database_name}`"))
+        admin_engine.dispose()

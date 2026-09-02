@@ -16,6 +16,7 @@ from app.api.routes.collector_scope import router as collector_scope_router
 from app.api.routes.import_packages import router as import_packages_router
 from app.api.routes.vulnerability_matching import router as vulnerability_matching_router
 from app.api.routes.vulnerability_catalog import router as vulnerability_catalog_router
+from app.api.routes.assessment_editor import router as assessment_editor_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
@@ -27,6 +28,7 @@ from app.services.collector_scope import CollectorScopeService
 from app.services.import_packages import ImportPackageService
 from app.services.vulnerability_matching import VulnerabilityMatchingService
 from app.services.vulnerability_catalog import VulnerabilityCatalogService
+from app.services.assessment_editor import AssessmentEditorService
 
 logger = logging.getLogger("ots")
 
@@ -64,6 +66,9 @@ def create_app() -> FastAPI:
             application.state.database.session_factory,
         )
         application.state.vulnerability_catalog_service = VulnerabilityCatalogService(
+            application.state.database.session_factory,
+        )
+        application.state.assessment_editor_service = AssessmentEditorService(
             application.state.database.session_factory,
         )
 
@@ -104,6 +109,21 @@ def create_app() -> FastAPI:
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        if request.url.path.startswith("/api/v1/assessments/"):
+            fields = [
+                {
+                    "path": ".".join(str(part) for part in error["loc"] if part != "body"),
+                    "message": "字段值无效",
+                }
+                for error in exc.errors()
+            ]
+            return error_response(
+                request,
+                422,
+                "ASSESSMENT_VALIDATION_ERROR",
+                "评估草稿校验失败",
+                {"fields": fields},
+            )
         return error_response(request, 422, "VALIDATION_ERROR", "请求不符合接口契约")
 
     @application.exception_handler(Exception)
@@ -125,6 +145,7 @@ def create_app() -> FastAPI:
     application.include_router(import_packages_router, prefix="/api/v1")
     application.include_router(vulnerability_matching_router, prefix="/api/v1")
     application.include_router(vulnerability_catalog_router, prefix="/api/v1")
+    application.include_router(assessment_editor_router, prefix="/api/v1")
 
     return application
 
