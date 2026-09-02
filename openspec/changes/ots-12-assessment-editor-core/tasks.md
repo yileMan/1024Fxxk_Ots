@@ -40,6 +40,6 @@
 
 - [x] 6.1 增加 Playwright 纵向流程：负责人从待办进入并保存部分草稿；`not_affected`/`accept_risk`/`no_action` 缺依据被拒绝；非负责人只读；两个客户端旧版本保存产生冲突且不覆盖，并使用系统 Chrome 运行。
 - [x] 6.2 运行前端 Vitest 覆盖率、`npm run typecheck`、`npm run build` 和 API 漂移检查，确保新增代码覆盖率不低于 80% 且现有工作台、待办和漏洞详情无回归。
-- [ ] 6.3 检查 FR-ASSESS-001、003、004、006～010、012 的 OTS-12 草稿编辑追溯，明确 FR-ASSESS-009 的提交转换及提交人留痕仍由 OTS-14 完成，CVSS 环境评分仍由 OTS-13 完成。
-- [ ] 6.4 更新前后端使用说明和 `doc/Task.md` 的 OTS-12 状态/完成证据，记录 API、字段枚举、权限、并发、审计摘要、测试结果和后续 change 边界。
-- [ ] 6.5 运行 `openspec validate ots-12-assessment-editor-core --strict --no-interactive` 及全量 OpenSpec 严格校验，确认 proposal/spec/design/tasks、需求追溯、11 表约束和无迁移结论一致。
+- [x] 6.3 检查 FR-ASSESS-001、003、004、006～010、012 的 OTS-12 草稿编辑追溯，明确 FR-ASSESS-009 的提交转换及提交人留痕仍由 OTS-14 完成，CVSS 环境评分仍由 OTS-13 完成。
+- [x] 6.4 更新前后端使用说明和 `doc/Task.md` 的 OTS-12 状态/完成证据，记录 API、字段枚举、权限、并发、审计摘要、测试结果和后续 change 边界。
+- [x] 6.5 运行 `openspec validate ots-12-assessment-editor-core --strict --no-interactive` 及全量 OpenSpec 严格校验，确认 proposal/spec/design/tasks、需求追溯、11 表约束和无迁移结论一致。

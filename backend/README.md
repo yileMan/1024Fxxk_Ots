@@ -188,8 +188,29 @@ OTS-11 提供只读查询接口：`GET /api/v1/workbench/summary` 返回当前�
 路径等敏感值。只有成功批次中明确的逐 OTS `scope_coverage_json` 才形成覆盖截止时间；没有该数据时返回
 “未提供”，不会把 NVD 来源窗口误当作逐 OTS 覆盖。所有接口只读，不写查询审计，也未新增表、索引或迁移。
 
-本阶段不开放评估编辑/提交/审核（OTS-12/14），不实现复评变化说明（OTS-16）、跨产品参考（OTS-18）
-或完整追溯（OTS-19）。候选响应继续固定声明“候选不等于产品受影响”。
+OTS-11 本身不开放评估编辑/提交/审核；候选响应继续固定声明“候选不等于产品受影响”。后续 OTS-12
+已补充草稿编辑，提交/审核仍由 OTS-14 完成；复评变化说明（OTS-16）、跨产品参考（OTS-17）和完整追溯
+（OTS-19）仍不在当前范围。
+
+## 产品评估草稿编辑
+
+OTS-12 提供 `GET /api/v1/assessments/{assessment_id}` 聚合读取当前产品上下文、来源事实、候选依据和
+核心草稿，以及 `PUT /api/v1/assessments/{assessment_id}/draft` 明确保存完整草稿快照。漏洞详情的
+`assessment_entries` 只返回当前用户可见的当前评估 ID、状态和产品/版本/OTS 上下文，不复制草稿字段。
+
+草稿字段包括分析摘要、触发条件、涉及功能或接口、适用性及依据、产品影响、现有控制、处置方式及说明和
+证据说明。适用性枚举为 `affected/not_affected/partly_affected/pending`；处置枚举为
+`patch_or_upgrade/configuration_mitigation/isolation_or_compensating_control/accept_risk/no_action/further_investigation`
+或空值。非 `pending` 适用性必须填写依据，`accept_risk/no_action` 必须填写处置说明。
+
+只有仍具有效产品范围、匹配当前 `owner_id` 且当前修订状态为 `pending/returned/reassess` 的用户可以保存。
+管理员、审核人和其他用户只能按范围读取。保存必须携带 `row_version`；旧版本返回
+`ASSESSMENT_VERSION_CONFLICT`，不可编辑状态返回 `ASSESSMENT_NOT_EDITABLE`，字段问题返回带路径的
+`ASSESSMENT_VALIDATION_ERROR`。实际变化会递增版本，并与脱敏 `audit_log` 在同一事务提交；长文本审计只记
+空值状态、长度和 SHA-256，不复制正文。无变化、校验失败、权限失败和冲突不写审计。
+
+本能力不新增迁移或应用基础表。CVSS v3.1 环境指标和计算由 OTS-13 完成；提交、实际提交人留痕、审核和
+状态转换由 OTS-14/15 完成。
 
 ## 测试
 
