@@ -11,6 +11,7 @@ OTS-10 已生成产品评估任务，OTS-11 已提供待办和漏洞事实只读
 - 服务端统一执行字段枚举、长度、空白归一化和条件必填校验；`not_affected`、`accept_risk`、`no_action` 等高风险选择必须具备相应依据或说明。
 - 每次实际草稿数据变化与 `audit_log` 在同一事务提交；无变化保存、校验失败、权限失败或并发冲突不产生审计记录，审计差异不包含整段证据正文。
 - 前端新增单页评估详情的“当前产品结论”编辑区，采用明确保存，覆盖加载、保存中、保存成功、校验失败、并发冲突、只读、退回和待复评提示状态。
+- 为 OTS-11 漏洞详情补充当前用户可见的当前评估入口元数据；仅返回评估 ID、状态及产品上下文，不在漏洞详情复制任何评估草稿内容。
 - 明确本 change 不实现 CVSS v3.1 环境指标与计算（OTS-13），不实现提交、审核、退回或修订状态转换（OTS-14/15），不展示跨产品已审核参考（OTS-17），也不改变任务生成和自动复评规则。
 - 覆盖 FR-ASSESS-001、FR-ASSESS-003、FR-ASSESS-004、FR-ASSESS-006～010、FR-ASSESS-012 中属于草稿编辑的部分；依赖 OTS-11 `ots-11-vulnerability-catalog-and-workbench`。
 
@@ -26,8 +27,8 @@ OTS-10 已生成产品评估任务，OTS-11 已提供待办和漏洞事实只读
 
 ## Impact
 
-- 后端：新增评估详情与草稿更新的 schema、repository、service 和 API；复用现有 `product_assessment`、产品/版本/OTS、漏洞、候选匹配、产品范围和审计能力。
-- API/OpenAPI：在 `/api/v1/assessments` 下新增按评估 ID 读取详情和更新草稿的契约，定义 `403/404/409/422` 稳定错误语义，并重新生成 TypeScript 类型。
+- 后端：新增评估详情与草稿更新的 schema、repository、service 和 API，并为 OTS-11 漏洞详情增加范围过滤后的当前评估入口；复用现有 `product_assessment`、产品/版本/OTS、漏洞、候选匹配、产品范围和审计能力。
+- API/OpenAPI：在 `/api/v1/assessments` 下新增按评估 ID 读取详情和更新草稿的契约，在漏洞详情响应中增加最小 `assessment_entries` 元数据，定义 `403/404/409/422` 稳定错误语义，并重新生成 TypeScript 类型。
 - 数据：不新增表、字段、索引或迁移；草稿更新 `product_assessment.row_version`，并在同一事务追加 `audit_log`。
 - 前端：从 OTS-11 待办和漏洞详情进入单页评估详情，新增当前产品结论表单、原因提示、保存反馈、并发冲突刷新提示和只读展示。
 - 测试：增加后端单元/API/MySQL 集成测试、前端 Vitest/组件测试和使用系统 Chrome 的 Playwright 纵向流程；新增代码覆盖率不低于 80%。
