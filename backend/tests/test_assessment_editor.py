@@ -14,6 +14,7 @@ from app.main import create_app
 from app.infrastructure.settings import Settings
 from app.migrations import apply_migrations
 from app.models.assessments import ProductAssessment
+from app.models.imports import Vulnerability
 from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
 from app.repositories.assessment_editor import AssessmentEditorRepository
@@ -66,9 +67,22 @@ def draft_payload(row_version: int = 1, **overrides: object) -> dict[str, object
         "treatment": None,
         "treatment_detail": None,
         "evidence_text": None,
+        "cvss_metrics": None,
     }
     payload.update(overrides)
     return payload
+
+
+def enable_source_cvss31(client: TestClient, target_id: int) -> None:
+    with client.app.state.database.session_factory.begin() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment is not None
+        vulnerability = session.get(Vulnerability, assessment.vulnerability_id)
+        assert vulnerability is not None
+        vulnerability.cvss31_score = 9.8
+        vulnerability.cvss31_severity = "CRITICAL"
+        vulnerability.cvss31_vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        vulnerability.cvss31_source = "nvd@nist.gov"
 
 
 def test_owner_reads_current_and_historical_details_with_server_editability(
@@ -362,6 +376,111 @@ def test_assessment_editor_openapi_contract(client: TestClient) -> None:
     request_name = request_ref.rsplit("/", 1)[-1]
     properties = schema["components"]["schemas"][request_name]["properties"]
     assert set(properties) == set(draft_payload())
+
+
+def test_detail_and_save_environmental_score_from_current_source(client: TestClient) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    enable_source_cvss31(client, target_id)
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    before = client.get(f"/api/v1/assessments/{target_id}")
+    saved = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(cvss_metrics={"CR": "H", "MAV": "A"}),
+    )
+
+    assert before.status_code == 200
+    assert before.json()["vulnerability"] | {
+        "cvss31_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        "cvss31_source": "nvd@nist.gov",
+    } == before.json()["vulnerability"]
+    assert before.json()["environmental_scoring"] == {
+        "available": True,
+        "unavailable_reason": None,
+        "metrics": None,
+        "score": None,
+        "vector": None,
+        "calculator_version": None,
+    }
+    assert saved.status_code == 200
+    scoring = saved.json()["environmental_scoring"]
+    assert scoring["available"] is True
+    assert scoring["metrics"] == {
+        "CR": "H", "IR": "X", "AR": "X", "MAV": "A", "MAC": "X",
+        "MPR": "X", "MUI": "X", "MS": "X", "MC": "X", "MI": "X", "MA": "X",
+    }
+    assert scoring["score"] == 9.6
+    assert scoring["vector"].startswith("CVSS:3.1/AV:N/AC:L")
+    assert scoring["calculator_version"] == "ots-cvss31-1"
+    assert saved.json()["row_version"] == 2
+
+    with client.app.state.database.session_factory() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment is not None
+        assert assessment.cvss_version == "3.1"
+        assert float(assessment.environmental_score) == 9.6
+        assert assessment.cvss_metrics_json == scoring["metrics"]
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.object_id == str(target_id)).order_by(AuditLog.id.desc())
+        )
+        assert audit is not None
+        assert "cvss_metrics_json" in audit.detail_json["changed_fields"]
+
+
+def test_missing_or_invalid_source_refuses_environmental_save_without_audit(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    missing_detail = client.get(f"/api/v1/assessments/{target_id}")
+    missing_save = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(cvss_metrics={"CR": "H"}),
+    )
+    with client.app.state.database.session_factory.begin() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        vulnerability = session.get(Vulnerability, assessment.vulnerability_id)
+        vulnerability.cvss31_vector = "CVSS:3.1/AV:N/AC:L"
+    invalid_detail = client.get(f"/api/v1/assessments/{target_id}")
+
+    assert missing_detail.json()["environmental_scoring"]["available"] is False
+    assert missing_detail.json()["environmental_scoring"]["unavailable_reason"] == "SOURCE_NOT_PROVIDED"
+    assert missing_save.status_code == 422
+    assert missing_save.json()["code"] == "CVSS31_SOURCE_UNAVAILABLE"
+    assert missing_save.json()["fields"][0]["path"] == "cvss_metrics"
+    assert invalid_detail.json()["environmental_scoring"]["available"] is False
+    assert invalid_detail.json()["environmental_scoring"]["unavailable_reason"] == "SOURCE_VECTOR_INVALID"
+
+
+def test_environmental_payload_rejects_invalid_metrics_and_forged_derived_fields(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    enable_source_cvss31(client, target_id)
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    invalid = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(cvss_metrics={"VC": "H"}),
+    )
+    forged = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(
+            cvss_metrics={"CR": "H"}, environmental_score=0.1,
+            environmental_vector="forged", calculator_version="attacker",
+        ),
+    )
+
+    assert invalid.status_code == 422
+    assert invalid.json()["fields"][0]["path"] == "cvss_metrics.VC"
+    assert forged.status_code == 422
 
 
 def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
