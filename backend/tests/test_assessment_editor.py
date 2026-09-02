@@ -1,0 +1,358 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import func, select
+
+from app.main import create_app
+from app.models.assessments import ProductAssessment
+from app.models.scopes import UserProductScope
+from app.models.user import AuditLog, Base
+from app.services.authentication import AuthenticationService
+from tests.test_vulnerability_workbench import login, seed_catalog
+
+
+@pytest.fixture
+def client(tmp_path: Path, monkeypatch) -> Iterator[TestClient]:
+    monkeypatch.setenv("OTS_DATABASE_URL", f"sqlite:///{tmp_path / 'assessment-editor.db'}")
+    monkeypatch.setenv("OTS_IMPORT_TEMP_DIR", str(tmp_path / "incoming"))
+    monkeypatch.setenv("OTS_IMPORT_ARCHIVE_DIR", str(tmp_path / "archive"))
+    application = create_app()
+    Base.metadata.create_all(application.state.database.engine)
+    AuthenticationService(application.state.database.session_factory).initialize_admin(
+        "admin", "初始管理员", "admin-password"
+    )
+    with TestClient(application, raise_server_exceptions=False) as test_client:
+        yield test_client
+    application.state.database.engine.dispose()
+
+
+def assessment_id(
+    client: TestClient, status: str, *, current: bool = True, last: bool = False
+) -> int:
+    with client.app.state.database.session_factory() as session:
+        return int(
+            session.scalar(
+                select(ProductAssessment.id)
+                .where(
+                    ProductAssessment.status == status,
+                    ProductAssessment.is_current.is_(current),
+                )
+                .order_by(ProductAssessment.id.desc() if last else ProductAssessment.id)
+                .limit(1)
+            )
+        )
+
+
+def draft_payload(row_version: int = 1, **overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "row_version": row_version,
+        "analysis_summary": None,
+        "trigger_conditions": None,
+        "affected_functions": None,
+        "applicability": "pending",
+        "applicability_basis": None,
+        "product_impact": None,
+        "existing_controls": None,
+        "treatment": None,
+        "treatment_detail": None,
+        "evidence_text": None,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_owner_reads_current_and_historical_details_with_server_editability(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    current_id = assessment_id(client, "pending")
+    historical_id = assessment_id(client, "pending", current=False)
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    current = client.get(f"/api/v1/assessments/{current_id}")
+    historical = client.get(f"/api/v1/assessments/{historical_id}")
+
+    assert current.status_code == 200
+    assert current.json() == {
+        "assessment_id": current_id,
+        "revision_no": 1,
+        "is_current": True,
+        "status": "pending",
+        "owner_id": 2,
+        "row_version": 1,
+        "editable": True,
+        "return_reason": None,
+        "reassess_reason": None,
+        "product": {"id": 1, "name": "产品 P-A"},
+        "product_version": {"id": 1, "version_no": "1.0"},
+        "ots": {"id": 1, "name": "OpenSSL", "version": "1.0"},
+        "vulnerability": {
+            "id": 4,
+            "cve_id": "CVE-2026-2001",
+            "source_status": "Analyzed",
+            "description": "队列漏洞 1",
+            "cvss31_score": None,
+            "cvss31_severity": None,
+            "is_kev": False,
+        },
+        "candidate": None,
+        "candidate_disclaimer": "候选不等于产品受影响",
+        "draft": {
+            "analysis_summary": None,
+            "trigger_conditions": None,
+            "affected_functions": None,
+            "applicability": "pending",
+            "applicability_basis": None,
+            "product_impact": None,
+            "existing_controls": None,
+            "treatment": None,
+            "treatment_detail": None,
+            "evidence_text": None,
+        },
+    }
+    assert historical.status_code == 200
+    assert historical.json()["is_current"] is False
+    assert historical.json()["editable"] is False
+
+
+def test_returned_and_reassess_details_expose_reasons_as_read_only_text(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    returned_id = assessment_id(client, "returned")
+    reassess_id = assessment_id(client, "reassess")
+    with client.app.state.database.session_factory.begin() as session:
+        session.get(ProductAssessment, returned_id).review_comment = "<b>补充影响依据</b>"
+        session.get(ProductAssessment, reassess_id).reassess_reason = "来源范围变化"
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    returned = client.get(f"/api/v1/assessments/{returned_id}")
+    reassess = client.get(f"/api/v1/assessments/{reassess_id}")
+
+    assert returned.json()["return_reason"] == "<b>补充影响依据</b>"
+    assert reassess.json()["reassess_reason"] == "来源范围变化"
+
+
+def test_admin_and_reviewer_can_read_but_cannot_edit(client: TestClient) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+
+    for login_name, password in (("admin", "admin-password"), ("reviewer", "user-password")):
+        client.cookies.clear()
+        login(client, login_name, password)
+        detail = client.get(f"/api/v1/assessments/{target_id}")
+        update = client.put(
+            f"/api/v1/assessments/{target_id}/draft",
+            json=draft_payload(analysis_summary="不允许代写"),
+        )
+        assert detail.status_code == 200
+        assert detail.json()["editable"] is False
+        assert update.status_code == 403
+        assert update.json()["code"] == "ASSESSMENT_FORBIDDEN"
+
+
+def test_detail_distinguishes_forbidden_and_not_found_without_leaking_data(
+    client: TestClient,
+) -> None:
+    scope = seed_catalog(client)
+    out_of_scope_id = assessment_id(client, "submitted", last=True)
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    forbidden = client.get(f"/api/v1/assessments/{out_of_scope_id}")
+    missing = client.get("/api/v1/assessments/999999")
+
+    assert forbidden.status_code == 403
+    assert forbidden.json()["code"] == "ASSESSMENT_FORBIDDEN"
+    assert set(forbidden.json()) == {"code", "message", "correlation_id"}
+    assert str(scope["product_b"]["product_name"]) not in forbidden.text
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "ASSESSMENT_NOT_FOUND"
+
+
+def test_owner_saves_partial_draft_with_normalization_and_audit_summary(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    response = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(
+            analysis_summary="  仅保存分析摘要  ",
+            trigger_conditions="   ",
+            evidence_text="<script>alert('x')</script>",
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["revision_no"] == 1
+    assert body["row_version"] == 2
+    assert body["draft"]["analysis_summary"] == "仅保存分析摘要"
+    assert body["draft"]["trigger_conditions"] is None
+    assert body["draft"]["evidence_text"] == "<script>alert('x')</script>"
+    with client.app.state.database.session_factory() as session:
+        audit = session.scalar(
+            select(AuditLog)
+            .where(
+                AuditLog.object_type == "product_assessment",
+                AuditLog.object_id == str(target_id),
+            )
+            .order_by(AuditLog.id.desc())
+        )
+        assert audit is not None
+        assert audit.user_id == 2
+        assert audit.detail_json["revision_no"] == 1
+        assert audit.detail_json["row_version"] == {"from": 1, "to": 2}
+        assert set(audit.detail_json["changed_fields"]) == {
+            "analysis_summary",
+            "evidence_text",
+        }
+        assert "alert" not in str(audit.detail_json)
+        assert audit.detail_json["changes"]["evidence_text"]["to"]["length"] == 27
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field"),
+    [
+        ({"applicability": "not_affected"}, "applicability_basis"),
+        ({"applicability": "affected"}, "applicability_basis"),
+        ({"treatment": "accept_risk"}, "treatment_detail"),
+        ({"treatment": "no_action"}, "treatment_detail"),
+    ],
+)
+def test_conditional_validation_is_atomic(
+    client: TestClient, overrides: dict[str, object], field: str
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    response = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(analysis_summary="不得部分保存", **overrides),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "ASSESSMENT_VALIDATION_ERROR"
+    assert response.json()["fields"] == [{"path": field, "message": "此字段为必填项"}]
+    with client.app.state.database.session_factory() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment.analysis_summary is None
+        assert session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.object_type == "product_assessment",
+                AuditLog.object_id == str(target_id),
+            )
+        ) == 0
+
+
+def test_invalid_enum_and_oversized_text_return_field_paths(client: TestClient) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    invalid = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(applicability="unknown"),
+    )
+    oversized = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(analysis_summary="x" * 10001),
+    )
+
+    assert invalid.status_code == 422
+    assert invalid.json()["code"] == "ASSESSMENT_VALIDATION_ERROR"
+    assert invalid.json()["fields"][0]["path"] == "applicability"
+    assert oversized.status_code == 422
+    assert oversized.json()["fields"][0]["path"] == "analysis_summary"
+
+
+def test_stale_version_and_non_editable_state_do_not_overwrite(client: TestClient) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    submitted_id = assessment_id(client, "submitted")
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    first = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(analysis_summary="客户端一"),
+    )
+    stale = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(analysis_summary="客户端二"),
+    )
+    not_editable = client.put(
+        f"/api/v1/assessments/{submitted_id}/draft",
+        json=draft_payload(analysis_summary="旧修订"),
+    )
+
+    assert first.status_code == 200
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "ASSESSMENT_VERSION_CONFLICT"
+    assert not_editable.status_code == 409
+    assert not_editable.json()["code"] == "ASSESSMENT_NOT_EDITABLE"
+    with client.app.state.database.session_factory() as session:
+        assert session.get(ProductAssessment, target_id).analysis_summary == "客户端一"
+
+
+def test_scope_revocation_and_no_change_save_do_not_write_audit(client: TestClient) -> None:
+    scope = seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    unchanged = client.put(
+        f"/api/v1/assessments/{target_id}/draft", json=draft_payload()
+    )
+    with client.app.state.database.session_factory() as session:
+        audit_count = session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.object_type == "product_assessment",
+                AuditLog.object_id == str(target_id),
+            )
+        )
+    assert unchanged.status_code == 200
+    assert unchanged.json()["row_version"] == 1
+    assert audit_count == 0
+
+    client.cookies.clear()
+    login(client)
+    revoke = client.delete(
+        f"/api/v1/users/{scope['owner']['id']}/scopes/{scope['owner_scope']['id']}"
+    )
+    assert revoke.status_code == 204
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+    forbidden = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(analysis_summary="范围撤销后保存"),
+    )
+    assert forbidden.status_code == 403
+    assert forbidden.json()["code"] == "ASSESSMENT_FORBIDDEN"
+
+
+def test_assessment_editor_openapi_contract(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+
+    assert schema["paths"]["/api/v1/assessments/{assessment_id}"]["get"]["responses"]["200"]
+    draft_operation = schema["paths"]["/api/v1/assessments/{assessment_id}/draft"]["put"]
+    assert draft_operation["responses"]["200"]
+    assert set(draft_operation["responses"]) >= {"200", "403", "404", "409", "422"}
+    request_ref = draft_operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+    request_name = request_ref.rsplit("/", 1)[-1]
+    properties = schema["components"]["schemas"][request_name]["properties"]
+    assert set(properties) == set(draft_payload())
