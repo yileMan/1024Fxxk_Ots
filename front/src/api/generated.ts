@@ -780,6 +780,7 @@ export interface components {
             /** Candidate Disclaimer */
             candidate_disclaimer: string;
             draft: components["schemas"]["AssessmentDraftFields"];
+            environmental_scoring: components["schemas"]["EnvironmentalScoringResponse"];
         };
         /** AssessmentDraftFields */
         AssessmentDraftFields: {
@@ -806,6 +807,7 @@ export interface components {
             treatment_detail?: string | null;
             /** Evidence Text */
             evidence_text?: string | null;
+            cvss_metrics?: components["schemas"]["Cvss31EnvironmentalMetrics"] | null;
         };
         /** AssessmentDraftUpdateRequest */
         AssessmentDraftUpdateRequest: {
@@ -832,6 +834,7 @@ export interface components {
             treatment_detail?: string | null;
             /** Evidence Text */
             evidence_text?: string | null;
+            cvss_metrics?: components["schemas"]["Cvss31EnvironmentalMetrics"] | null;
             /** Row Version */
             row_version: number;
         };
@@ -926,6 +929,10 @@ export interface components {
             cvss31_score: number | null;
             /** Cvss31 Severity */
             cvss31_severity: string | null;
+            /** Cvss31 Vector */
+            cvss31_vector: string | null;
+            /** Cvss31 Source */
+            cvss31_source: string | null;
             /** Is Kev */
             is_kev: boolean;
         };
@@ -1047,6 +1054,75 @@ export interface components {
             /** Existing Relations */
             existing_relations: number;
         };
+        /** Cvss31EnvironmentalMetrics */
+        Cvss31EnvironmentalMetrics: {
+            /**
+             * Cr
+             * @default X
+             * @enum {string}
+             */
+            CR: "X" | "L" | "M" | "H";
+            /**
+             * Ir
+             * @default X
+             * @enum {string}
+             */
+            IR: "X" | "L" | "M" | "H";
+            /**
+             * Ar
+             * @default X
+             * @enum {string}
+             */
+            AR: "X" | "L" | "M" | "H";
+            /**
+             * Mav
+             * @default X
+             * @enum {string}
+             */
+            MAV: "X" | "N" | "A" | "L" | "P";
+            /**
+             * Mac
+             * @default X
+             * @enum {string}
+             */
+            MAC: "X" | "L" | "H";
+            /**
+             * Mpr
+             * @default X
+             * @enum {string}
+             */
+            MPR: "X" | "N" | "L" | "H";
+            /**
+             * Mui
+             * @default X
+             * @enum {string}
+             */
+            MUI: "X" | "N" | "R";
+            /**
+             * Ms
+             * @default X
+             * @enum {string}
+             */
+            MS: "X" | "U" | "C";
+            /**
+             * Mc
+             * @default X
+             * @enum {string}
+             */
+            MC: "X" | "N" | "L" | "H";
+            /**
+             * Mi
+             * @default X
+             * @enum {string}
+             */
+            MI: "X" | "N" | "L" | "H";
+            /**
+             * Ma
+             * @default X
+             * @enum {string}
+             */
+            MA: "X" | "N" | "L" | "H";
+        };
         /** Cvss31Response */
         Cvss31Response: {
             /** Score */
@@ -1062,6 +1138,20 @@ export interface components {
         DisableRequest: {
             /** Row Version */
             row_version: number;
+        };
+        /** EnvironmentalScoringResponse */
+        EnvironmentalScoringResponse: {
+            /** Available */
+            available: boolean;
+            /** Unavailable Reason */
+            unavailable_reason: ("SOURCE_NOT_PROVIDED" | "SOURCE_VECTOR_INVALID") | null;
+            metrics: components["schemas"]["Cvss31EnvironmentalMetrics"] | null;
+            /** Score */
+            score: number | null;
+            /** Vector */
+            vector: string | null;
+            /** Calculator Version */
+            calculator_version: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {

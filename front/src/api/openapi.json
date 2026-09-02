@@ -2674,6 +2674,9 @@
           },
           "draft": {
             "$ref": "#/components/schemas/AssessmentDraftFields"
+          },
+          "environmental_scoring": {
+            "$ref": "#/components/schemas/EnvironmentalScoringResponse"
           }
         },
         "type": "object",
@@ -2693,7 +2696,8 @@
           "vulnerability",
           "candidate",
           "candidate_disclaimer",
-          "draft"
+          "draft",
+          "environmental_scoring"
         ],
         "title": "AssessmentDetailResponse"
       },
@@ -2823,6 +2827,16 @@
               }
             ],
             "title": "Evidence Text"
+          },
+          "cvss_metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cvss31EnvironmentalMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -2958,6 +2972,16 @@
               }
             ],
             "title": "Evidence Text"
+          },
+          "cvss_metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cvss31EnvironmentalMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "row_version": {
             "type": "integer",
@@ -3217,6 +3241,28 @@
             ],
             "title": "Cvss31 Severity"
           },
+          "cvss31_vector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvss31 Vector"
+          },
+          "cvss31_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvss31 Source"
+          },
           "is_kev": {
             "type": "boolean",
             "title": "Is Kev"
@@ -3230,6 +3276,8 @@
           "description",
           "cvss31_score",
           "cvss31_severity",
+          "cvss31_vector",
+          "cvss31_source",
           "is_kev"
         ],
         "title": "AssessmentVulnerabilityResponse"
@@ -3584,6 +3632,132 @@
         ],
         "title": "CsvImportResultResponse"
       },
+      "Cvss31EnvironmentalMetrics": {
+        "properties": {
+          "CR": {
+            "type": "string",
+            "enum": [
+              "X",
+              "L",
+              "M",
+              "H"
+            ],
+            "title": "Cr",
+            "default": "X"
+          },
+          "IR": {
+            "type": "string",
+            "enum": [
+              "X",
+              "L",
+              "M",
+              "H"
+            ],
+            "title": "Ir",
+            "default": "X"
+          },
+          "AR": {
+            "type": "string",
+            "enum": [
+              "X",
+              "L",
+              "M",
+              "H"
+            ],
+            "title": "Ar",
+            "default": "X"
+          },
+          "MAV": {
+            "type": "string",
+            "enum": [
+              "X",
+              "N",
+              "A",
+              "L",
+              "P"
+            ],
+            "title": "Mav",
+            "default": "X"
+          },
+          "MAC": {
+            "type": "string",
+            "enum": [
+              "X",
+              "L",
+              "H"
+            ],
+            "title": "Mac",
+            "default": "X"
+          },
+          "MPR": {
+            "type": "string",
+            "enum": [
+              "X",
+              "N",
+              "L",
+              "H"
+            ],
+            "title": "Mpr",
+            "default": "X"
+          },
+          "MUI": {
+            "type": "string",
+            "enum": [
+              "X",
+              "N",
+              "R"
+            ],
+            "title": "Mui",
+            "default": "X"
+          },
+          "MS": {
+            "type": "string",
+            "enum": [
+              "X",
+              "U",
+              "C"
+            ],
+            "title": "Ms",
+            "default": "X"
+          },
+          "MC": {
+            "type": "string",
+            "enum": [
+              "X",
+              "N",
+              "L",
+              "H"
+            ],
+            "title": "Mc",
+            "default": "X"
+          },
+          "MI": {
+            "type": "string",
+            "enum": [
+              "X",
+              "N",
+              "L",
+              "H"
+            ],
+            "title": "Mi",
+            "default": "X"
+          },
+          "MA": {
+            "type": "string",
+            "enum": [
+              "X",
+              "N",
+              "L",
+              "H"
+            ],
+            "title": "Ma",
+            "default": "X"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Cvss31EnvironmentalMetrics"
+      },
       "Cvss31Response": {
         "properties": {
           "score": {
@@ -3646,6 +3820,82 @@
           "row_version"
         ],
         "title": "DisableRequest"
+      },
+      "EnvironmentalScoringResponse": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "SOURCE_NOT_PROVIDED",
+                  "SOURCE_VECTOR_INVALID"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Cvss31EnvironmentalMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "vector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vector"
+          },
+          "calculator_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculator Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "unavailable_reason",
+          "metrics",
+          "score",
+          "vector",
+          "calculator_version"
+        ],
+        "title": "EnvironmentalScoringResponse"
       },
       "HTTPValidationError": {
         "properties": {
