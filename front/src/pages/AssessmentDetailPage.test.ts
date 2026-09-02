@@ -27,6 +27,8 @@ function detail(overrides: Record<string, unknown> = {}) {
       description: '<img src=x onerror=alert(1)>',
       cvss31_score: 8.1,
       cvss31_severity: 'HIGH',
+      cvss31_vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
+      cvss31_source: 'nvd@nist.gov',
       is_kev: true,
     },
     candidate: {
@@ -57,6 +59,15 @@ function detail(overrides: Record<string, unknown> = {}) {
       treatment: null,
       treatment_detail: null,
       evidence_text: null,
+      cvss_metrics: null,
+    },
+    environmental_scoring: {
+      available: true,
+      unavailable_reason: null,
+      metrics: null,
+      score: null,
+      vector: null,
+      calculator_version: null,
     },
     ...overrides,
   }
@@ -83,8 +94,47 @@ describe('AssessmentDetailPage', () => {
     expect(wrapper.text()).toContain('候选不等于产品受影响')
     expect(wrapper.get<HTMLTextAreaElement>('[name="analysis_summary"]').element.value).toBe('原始分析')
     expect(wrapper.get('button[type="submit"]').text()).toContain('保存草稿')
-    expect(wrapper.find('[name="environmental_score"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('nvd@nist.gov')
+    expect(wrapper.findAll('[data-cvss-metric]').length).toBe(11)
+    expect(wrapper.text()).toContain('未覆盖来源指标')
     expect(wrapper.findAll('button').some(button => button.text() === '提交审核')).toBe(false)
+  })
+
+  it('previews environmental metrics and submits metrics rather than derived values', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail({
+        row_version: 2,
+        draft: { ...detail().draft, cvss_metrics: { CR: 'H', IR: 'X', AR: 'X', MAV: 'X', MAC: 'X', MPR: 'X', MUI: 'X', MS: 'X', MC: 'X', MI: 'X', MA: 'X' } },
+        environmental_scoring: { available: true, unavailable_reason: null, metrics: { CR: 'H', IR: 'X', AR: 'X', MAV: 'X', MAC: 'X', MPR: 'X', MUI: 'X', MS: 'X', MC: 'X', MI: 'X', MA: 'X' }, score: 9.8, vector: 'server-vector', calculator_version: 'ots-cvss31-1' },
+      })), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    await wrapper.get('[name="cvss_metrics.CR"]').setValue('H')
+    expect(wrapper.text()).toContain('未保存预览')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[1][1].body))
+    expect(payload.cvss_metrics.CR).toBe('H')
+    expect(payload).not.toHaveProperty('environmental_score')
+    expect(payload).not.toHaveProperty('environmental_vector')
+    expect(wrapper.text()).toContain('server-vector')
+    expect(wrapper.text()).toContain('ots-cvss31-1')
+  })
+
+  it('shows source unavailable without editable scoring controls', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail({
+      vulnerability: { ...detail().vulnerability, cvss31_score: null, cvss31_severity: null, cvss31_vector: null, cvss31_source: null },
+      environmental_scoring: { available: false, unavailable_reason: 'SOURCE_NOT_PROVIDED', metrics: null, score: null, vector: null, calculator_version: null },
+    })), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('来源未提供')
+    expect(wrapper.find('[data-cvss-metric]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('未保存预览')
   })
 
   it('saves explicitly, blocks duplicate submit and adopts returned row version', async () => {
