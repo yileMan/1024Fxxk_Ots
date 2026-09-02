@@ -8,6 +8,7 @@ describe('OTS-11 routes', () => {
     const routes = new Map(router.getRoutes().map(route => [route.path, route]))
     for (const path of [
       '/system/assessments/tasks',
+      '/system/assessments/:assessmentId',
       '/system/vulnerabilities',
       '/system/vulnerabilities/:vulnerabilityId',
     ]) {
@@ -23,4 +24,3 @@ describe('OTS-11 routes', () => {
     expect(legacy?.meta.requiresAdmin).not.toBe(true)
   })
 })
-

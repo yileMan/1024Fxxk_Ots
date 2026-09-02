@@ -36,6 +36,9 @@ describe('AssessmentTaskPage', () => {
     expect(wrapper.text()).toContain('CVE-2026-0900')
     expect(wrapper.text()).toContain('监护仪 3.0')
     expect(wrapper.text()).toContain('OpenSSL 3.0.0')
+    expect(wrapper.get('[data-action="open-assessment"]').attributes('to')).toBe(
+      '/system/assessments/9?from=returned',
+    )
   })
 
   it('keeps permission failures distinct from empty results', async () => {

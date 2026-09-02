@@ -711,10 +711,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assessments/{assessment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assessment Detail */
+        get: operations["assessment_detail_api_v1_assessments__assessment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/{assessment_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Assessment Draft */
+        put: operations["save_assessment_draft_api_v1_assessments__assessment_id__draft_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AssessmentDetailResponse */
+        AssessmentDetailResponse: {
+            /** Assessment Id */
+            assessment_id: number;
+            /** Revision No */
+            revision_no: number;
+            /** Is Current */
+            is_current: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "submitted" | "returned" | "completed" | "reassess";
+            /** Owner Id */
+            owner_id: number;
+            /** Row Version */
+            row_version: number;
+            /** Editable */
+            editable: boolean;
+            /** Return Reason */
+            return_reason: string | null;
+            /** Reassess Reason */
+            reassess_reason: string | null;
+            product: components["schemas"]["AssessmentProductResponse"];
+            product_version: components["schemas"]["AssessmentProductVersionResponse"];
+            ots: components["schemas"]["AssessmentOtsResponse"];
+            vulnerability: components["schemas"]["AssessmentVulnerabilityResponse"];
+            candidate: components["schemas"]["VulnerabilityCandidateResponse"] | null;
+            /** Candidate Disclaimer */
+            candidate_disclaimer: string;
+            draft: components["schemas"]["AssessmentDraftFields"];
+        };
+        /** AssessmentDraftFields */
+        AssessmentDraftFields: {
+            /** Analysis Summary */
+            analysis_summary?: string | null;
+            /** Trigger Conditions */
+            trigger_conditions?: string | null;
+            /** Affected Functions */
+            affected_functions?: string | null;
+            /**
+             * Applicability
+             * @enum {string}
+             */
+            applicability: "affected" | "not_affected" | "partly_affected" | "pending";
+            /** Applicability Basis */
+            applicability_basis?: string | null;
+            /** Product Impact */
+            product_impact?: string | null;
+            /** Existing Controls */
+            existing_controls?: string | null;
+            /** Treatment */
+            treatment?: ("patch_or_upgrade" | "configuration_mitigation" | "isolation_or_compensating_control" | "accept_risk" | "no_action" | "further_investigation") | null;
+            /** Treatment Detail */
+            treatment_detail?: string | null;
+            /** Evidence Text */
+            evidence_text?: string | null;
+        };
+        /** AssessmentDraftUpdateRequest */
+        AssessmentDraftUpdateRequest: {
+            /** Analysis Summary */
+            analysis_summary?: string | null;
+            /** Trigger Conditions */
+            trigger_conditions?: string | null;
+            /** Affected Functions */
+            affected_functions?: string | null;
+            /**
+             * Applicability
+             * @enum {string}
+             */
+            applicability: "affected" | "not_affected" | "partly_affected" | "pending";
+            /** Applicability Basis */
+            applicability_basis?: string | null;
+            /** Product Impact */
+            product_impact?: string | null;
+            /** Existing Controls */
+            existing_controls?: string | null;
+            /** Treatment */
+            treatment?: ("patch_or_upgrade" | "configuration_mitigation" | "isolation_or_compensating_control" | "accept_risk" | "no_action" | "further_investigation") | null;
+            /** Treatment Detail */
+            treatment_detail?: string | null;
+            /** Evidence Text */
+            evidence_text?: string | null;
+            /** Row Version */
+            row_version: number;
+        };
+        /** AssessmentOtsResponse */
+        AssessmentOtsResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Version */
+            version: string;
+        };
+        /** AssessmentProductResponse */
+        AssessmentProductResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** AssessmentProductVersionResponse */
+        AssessmentProductVersionResponse: {
+            /** Id */
+            id: number;
+            /** Version No */
+            version_no: string;
+        };
         /** AssessmentTaskPageResponse */
         AssessmentTaskPageResponse: {
             /** Items */
@@ -768,6 +911,23 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** AssessmentVulnerabilityResponse */
+        AssessmentVulnerabilityResponse: {
+            /** Id */
+            id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Source Status */
+            source_status: string;
+            /** Description */
+            description: string | null;
+            /** Cvss31 Score */
+            cvss31_score: number | null;
+            /** Cvss31 Severity */
+            cvss31_severity: string | null;
+            /** Is Kev */
+            is_kev: boolean;
         };
         /** Body_validate_import_package_api_v1_import_packages_validate_post */
         Body_validate_import_package_api_v1_import_packages_validate_post: {
@@ -3231,6 +3391,110 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    assessment_detail_api_v1_assessments__assessment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentDetailResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    save_assessment_draft_api_v1_assessments__assessment_id__draft_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentDraftUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentDetailResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

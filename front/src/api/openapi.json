@@ -2485,10 +2485,553 @@
           }
         }
       }
+    },
+    "/api/v1/assessments/{assessment_id}": {
+      "get": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Assessment Detail",
+        "operationId": "assessment_detail_api_v1_assessments__assessment_id__get",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentDetailResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
+    },
+    "/api/v1/assessments/{assessment_id}/draft": {
+      "put": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Save Assessment Draft",
+        "operationId": "save_assessment_draft_api_v1_assessments__assessment_id__draft_put",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentDraftUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentDetailResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AssessmentDetailResponse": {
+        "properties": {
+          "assessment_id": {
+            "type": "integer",
+            "title": "Assessment Id"
+          },
+          "revision_no": {
+            "type": "integer",
+            "title": "Revision No"
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "submitted",
+              "returned",
+              "completed",
+              "reassess"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "type": "integer",
+            "title": "Owner Id"
+          },
+          "row_version": {
+            "type": "integer",
+            "title": "Row Version"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          },
+          "return_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Reason"
+          },
+          "reassess_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reassess Reason"
+          },
+          "product": {
+            "$ref": "#/components/schemas/AssessmentProductResponse"
+          },
+          "product_version": {
+            "$ref": "#/components/schemas/AssessmentProductVersionResponse"
+          },
+          "ots": {
+            "$ref": "#/components/schemas/AssessmentOtsResponse"
+          },
+          "vulnerability": {
+            "$ref": "#/components/schemas/AssessmentVulnerabilityResponse"
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VulnerabilityCandidateResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate_disclaimer": {
+            "type": "string",
+            "title": "Candidate Disclaimer"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/AssessmentDraftFields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assessment_id",
+          "revision_no",
+          "is_current",
+          "status",
+          "owner_id",
+          "row_version",
+          "editable",
+          "return_reason",
+          "reassess_reason",
+          "product",
+          "product_version",
+          "ots",
+          "vulnerability",
+          "candidate",
+          "candidate_disclaimer",
+          "draft"
+        ],
+        "title": "AssessmentDetailResponse"
+      },
+      "AssessmentDraftFields": {
+        "properties": {
+          "analysis_summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Summary"
+          },
+          "trigger_conditions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Conditions"
+          },
+          "affected_functions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Functions"
+          },
+          "applicability": {
+            "type": "string",
+            "enum": [
+              "affected",
+              "not_affected",
+              "partly_affected",
+              "pending"
+            ],
+            "title": "Applicability"
+          },
+          "applicability_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicability Basis"
+          },
+          "product_impact": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Impact"
+          },
+          "existing_controls": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Controls"
+          },
+          "treatment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "patch_or_upgrade",
+                  "configuration_mitigation",
+                  "isolation_or_compensating_control",
+                  "accept_risk",
+                  "no_action",
+                  "further_investigation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treatment"
+          },
+          "treatment_detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treatment Detail"
+          },
+          "evidence_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "applicability"
+        ],
+        "title": "AssessmentDraftFields"
+      },
+      "AssessmentDraftUpdateRequest": {
+        "properties": {
+          "analysis_summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Summary"
+          },
+          "trigger_conditions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Conditions"
+          },
+          "affected_functions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Functions"
+          },
+          "applicability": {
+            "type": "string",
+            "enum": [
+              "affected",
+              "not_affected",
+              "partly_affected",
+              "pending"
+            ],
+            "title": "Applicability"
+          },
+          "applicability_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicability Basis"
+          },
+          "product_impact": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Impact"
+          },
+          "existing_controls": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Controls"
+          },
+          "treatment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "patch_or_upgrade",
+                  "configuration_mitigation",
+                  "isolation_or_compensating_control",
+                  "accept_risk",
+                  "no_action",
+                  "further_investigation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treatment"
+          },
+          "treatment_detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treatment Detail"
+          },
+          "evidence_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Text"
+          },
+          "row_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Row Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "applicability",
+          "row_version"
+        ],
+        "title": "AssessmentDraftUpdateRequest"
+      },
+      "AssessmentOtsResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "title": "AssessmentOtsResponse"
+      },
+      "AssessmentProductResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "AssessmentProductResponse"
+      },
+      "AssessmentProductVersionResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "version_no": {
+            "type": "string",
+            "title": "Version No"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version_no"
+        ],
+        "title": "AssessmentProductVersionResponse"
+      },
       "AssessmentTaskPageResponse": {
         "properties": {
           "items": {
@@ -2626,6 +3169,70 @@
           "updated_at"
         ],
         "title": "AssessmentTaskResponse"
+      },
+      "AssessmentVulnerabilityResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "source_status": {
+            "type": "string",
+            "title": "Source Status"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "cvss31_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvss31 Score"
+          },
+          "cvss31_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cvss31 Severity"
+          },
+          "is_kev": {
+            "type": "boolean",
+            "title": "Is Kev"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cve_id",
+          "source_status",
+          "description",
+          "cvss31_score",
+          "cvss31_severity",
+          "is_kev"
+        ],
+        "title": "AssessmentVulnerabilityResponse"
       },
       "Body_validate_import_package_api_v1_import_packages_validate_post": {
         "properties": {
