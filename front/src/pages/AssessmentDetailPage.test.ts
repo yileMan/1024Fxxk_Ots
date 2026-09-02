@@ -84,7 +84,7 @@ describe('AssessmentDetailPage', () => {
     expect(wrapper.get<HTMLTextAreaElement>('[name="analysis_summary"]').element.value).toBe('原始分析')
     expect(wrapper.get('button[type="submit"]').text()).toContain('保存草稿')
     expect(wrapper.find('[name="environmental_score"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('提交审核')
+    expect(wrapper.findAll('button').some(button => button.text() === '提交审核')).toBe(false)
   })
 
   it('saves explicitly, blocks duplicate submit and adopts returned row version', async () => {

@@ -19,7 +19,10 @@
           <p>{{ task.product_name }} {{ task.version_no }}</p>
           <p class="ots">{{ task.ots_name }} {{ task.ots_version }}</p>
         </div>
-        <RouterLink :to="`/system/vulnerabilities/${task.vulnerability_id}`" class="detail-link">查看漏洞事实 ↗</RouterLink>
+        <div class="task-actions">
+          <RouterLink :to="`/system/vulnerabilities/${task.vulnerability_id}`" class="detail-link">漏洞事实</RouterLink>
+          <RouterLink :to="`/system/assessments/${task.assessment_id}?from=${task.status}`" class="detail-link" data-action="open-assessment">{{ task.status === 'submitted' ? '查看评估' : '填写评估' }} ↗</RouterLink>
+        </div>
       </article>
     </section>
     <section v-else-if="page" class="state empty" data-state="empty"><h2>当前队列为空</h2><p>没有符合当前身份、状态和产品范围的任务。</p></section>

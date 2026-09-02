@@ -14,6 +14,7 @@ import CollectorScopePage from './pages/CollectorScopePage.vue'
 import ImportPackagePage from './pages/ImportPackagePage.vue'
 import VulnerabilityMatchPage from './pages/VulnerabilityMatchPage.vue'
 import AssessmentTaskPage from './pages/AssessmentTaskPage.vue'
+import AssessmentDetailPage from './pages/AssessmentDetailPage.vue'
 import VulnerabilityCatalogPage from './pages/VulnerabilityCatalogPage.vue'
 import VulnerabilityDetailPage from './pages/VulnerabilityDetailPage.vue'
 
@@ -31,6 +32,12 @@ export const router = createRouter({
     { path: '/system/data-exchange/collector-scope', component: CollectorScopePage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/data-exchange/import-packages', component: ImportPackagePage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/assessments/tasks', component: AssessmentTaskPage, meta: { requiresAuthentication: true } },
+    {
+      path: '/system/assessments/:assessmentId',
+      component: AssessmentDetailPage,
+      props: route => ({ assessmentId: Number(route.params.assessmentId) }),
+      meta: { requiresAuthentication: true },
+    },
     { path: '/system/vulnerabilities', component: VulnerabilityCatalogPage, meta: { requiresAuthentication: true } },
     {
       path: '/system/vulnerabilities/:vulnerabilityId',
