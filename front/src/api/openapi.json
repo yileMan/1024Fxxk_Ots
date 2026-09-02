@@ -5476,6 +5476,71 @@
         ],
         "title": "VersionUpdateRequest"
       },
+      "VulnerabilityAssessmentEntryResponse": {
+        "properties": {
+          "assessment_id": {
+            "type": "integer",
+            "title": "Assessment Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "returned",
+              "reassess",
+              "submitted",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "product_version_id": {
+            "type": "integer",
+            "title": "Product Version Id"
+          },
+          "version_no": {
+            "type": "string",
+            "title": "Version No"
+          },
+          "product_ots_id": {
+            "type": "integer",
+            "title": "Product Ots Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assessment_id",
+          "status",
+          "product_id",
+          "product_name",
+          "product_version_id",
+          "version_no",
+          "product_ots_id",
+          "ots_component_id",
+          "ots_name",
+          "ots_version"
+        ],
+        "title": "VulnerabilityAssessmentEntryResponse"
+      },
       "VulnerabilityCandidateResponse": {
         "properties": {
           "vulnerability_id": {
@@ -5629,6 +5694,13 @@
             "type": "array",
             "title": "Candidates"
           },
+          "assessment_entries": {
+            "items": {
+              "$ref": "#/components/schemas/VulnerabilityAssessmentEntryResponse"
+            },
+            "type": "array",
+            "title": "Assessment Entries"
+          },
           "candidate_disclaimer": {
             "type": "string",
             "title": "Candidate Disclaimer"
@@ -5646,6 +5718,7 @@
           "kev",
           "ai_analysis_suggestion",
           "candidates",
+          "assessment_entries",
           "candidate_disclaimer"
         ],
         "title": "VulnerabilityDetailResponse"

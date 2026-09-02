@@ -1695,6 +1695,32 @@ export interface components {
             /** Row Version */
             row_version: number;
         };
+        /** VulnerabilityAssessmentEntryResponse */
+        VulnerabilityAssessmentEntryResponse: {
+            /** Assessment Id */
+            assessment_id: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "returned" | "reassess" | "submitted" | "completed";
+            /** Product Id */
+            product_id: number;
+            /** Product Name */
+            product_name: string;
+            /** Product Version Id */
+            product_version_id: number;
+            /** Version No */
+            version_no: string;
+            /** Product Ots Id */
+            product_ots_id: number;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+        };
         /** VulnerabilityCandidateResponse */
         VulnerabilityCandidateResponse: {
             /** Vulnerability Id */
@@ -1747,6 +1773,8 @@ export interface components {
             ai_analysis_suggestion: string | null;
             /** Candidates */
             candidates: components["schemas"]["VulnerabilityCandidateResponse"][];
+            /** Assessment Entries */
+            assessment_entries: components["schemas"]["VulnerabilityAssessmentEntryResponse"][];
             /** Candidate Disclaimer */
             candidate_disclaimer: string;
         };
