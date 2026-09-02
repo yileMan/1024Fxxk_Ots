@@ -18,6 +18,22 @@ Treatment = Literal[
 ]
 
 
+class Cvss31EnvironmentalMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    CR: Literal["X", "L", "M", "H"] = "X"
+    IR: Literal["X", "L", "M", "H"] = "X"
+    AR: Literal["X", "L", "M", "H"] = "X"
+    MAV: Literal["X", "N", "A", "L", "P"] = "X"
+    MAC: Literal["X", "L", "H"] = "X"
+    MPR: Literal["X", "N", "L", "H"] = "X"
+    MUI: Literal["X", "N", "R"] = "X"
+    MS: Literal["X", "U", "C"] = "X"
+    MC: Literal["X", "N", "L", "H"] = "X"
+    MI: Literal["X", "N", "L", "H"] = "X"
+    MA: Literal["X", "N", "L", "H"] = "X"
+
+
 class AssessmentDraftFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -31,6 +47,7 @@ class AssessmentDraftFields(BaseModel):
     treatment: Treatment | None = None
     treatment_detail: str | None = Field(None, max_length=10_000)
     evidence_text: str | None = Field(None, max_length=10_000)
+    cvss_metrics: Cvss31EnvironmentalMetrics | None = None
 
 
 class AssessmentDraftUpdateRequest(AssessmentDraftFields):
@@ -60,7 +77,18 @@ class AssessmentVulnerabilityResponse(BaseModel):
     description: str | None
     cvss31_score: float | None
     cvss31_severity: str | None
+    cvss31_vector: str | None
+    cvss31_source: str | None
     is_kev: bool
+
+
+class EnvironmentalScoringResponse(BaseModel):
+    available: bool
+    unavailable_reason: Literal["SOURCE_NOT_PROVIDED", "SOURCE_VECTOR_INVALID"] | None
+    metrics: Cvss31EnvironmentalMetrics | None
+    score: float | None
+    vector: str | None
+    calculator_version: str | None
 
 
 class AssessmentDetailResponse(BaseModel):
@@ -80,3 +108,4 @@ class AssessmentDetailResponse(BaseModel):
     candidate: VulnerabilityCandidateResponse | None
     candidate_disclaimer: str
     draft: AssessmentDraftFields
+    environmental_scoring: EnvironmentalScoringResponse

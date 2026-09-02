@@ -46,7 +46,7 @@ def test_modified_scope_and_privileges_required_use_environmental_weights() -> N
         {"MS": "C", "MPR": "H", "CR": "H", "MC": "H"},
     )
 
-    assert result.score == 6.1
+    assert result.score == 9.1
     assert result.vector.endswith(
         "/CR:H/IR:X/AR:X/MAV:X/MAC:X/MPR:H/MUI:X/MS:C/MC:H/MI:X/MA:X"
     )

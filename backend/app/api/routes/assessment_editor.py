@@ -8,6 +8,7 @@ from app.services.assessment_editor import (
     AssessmentNotEditableError,
     AssessmentNotFoundError,
     AssessmentValidationError,
+    CvssSourceUnavailableError,
     AssessmentVersionConflictError,
 )
 from app.services.authentication import PublicUser
@@ -32,7 +33,13 @@ def _raise_error(error: AssessmentEditorError) -> None:
     if isinstance(error, AssessmentValidationError):
         raise HTTPException(
             422,
-            detail={"code": error.code, "message": "评估草稿校验失败", "fields": error.fields},
+            detail={
+                "code": error.code,
+                "message": "来源 CVSS v3.1 不可用"
+                if isinstance(error, CvssSourceUnavailableError)
+                else "评估草稿校验失败",
+                "fields": error.fields,
+            },
         ) from error
     if isinstance(error, (AssessmentNotEditableError, AssessmentVersionConflictError)):
         message = "评估当前不可编辑" if isinstance(error, AssessmentNotEditableError) else "评估已被其他操作更新，请刷新"

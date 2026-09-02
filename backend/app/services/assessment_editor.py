@@ -11,6 +11,7 @@ from app.repositories.assessment_editor import EDITABLE_STATUSES, AssessmentEdit
 from app.repositories.vulnerability_catalog import VulnerabilityCatalogRepository
 from app.schemas.assessment_editor import AssessmentDraftUpdateRequest
 from app.services.authentication import PublicUser
+from app.services.cvss31 import Cvss31Error, calculate_environmental, parse_base_vector
 from app.services.vulnerability_matching import CANDIDATE_DISCLAIMER
 
 
@@ -25,6 +26,13 @@ DRAFT_FIELDS = (
     "treatment",
     "treatment_detail",
     "evidence_text",
+)
+SCORING_FIELDS = (
+    "cvss_version",
+    "environmental_score",
+    "environmental_vector",
+    "cvss_metrics_json",
+    "calculator_version",
 )
 TEXT_FIELDS = set(DRAFT_FIELDS) - {"applicability", "treatment"}
 
@@ -52,8 +60,12 @@ class AssessmentVersionConflictError(AssessmentEditorError):
 class AssessmentValidationError(AssessmentEditorError):
     code = "ASSESSMENT_VALIDATION_ERROR"
 
-    def __init__(self, field: str) -> None:
-        self.fields = [{"path": field, "message": "此字段为必填项"}]
+    def __init__(self, field: str, message: str = "此字段为必填项") -> None:
+        self.fields = [{"path": field, "message": message}]
+
+
+class CvssSourceUnavailableError(AssessmentValidationError):
+    code = "CVSS31_SOURCE_UNAVAILABLE"
 
 
 class AssessmentEditorService:
@@ -89,9 +101,29 @@ class AssessmentEditorService:
             if assessment.row_version != request.row_version:
                 raise AssessmentVersionConflictError()
 
+            metrics = values.pop("cvss_metrics")
+            if metrics is not None:
+                source_vector = context["cvss31_vector"]
+                if not source_vector:
+                    raise CvssSourceUnavailableError("cvss_metrics", "来源未提供 CVSS v3.1")
+                try:
+                    result = calculate_environmental(str(source_vector), metrics)
+                except Cvss31Error as error:
+                    raise CvssSourceUnavailableError(
+                        "cvss_metrics", "来源 CVSS v3.1 向量无效"
+                    ) from error
+                values.update(
+                    cvss_version="3.1",
+                    environmental_score=result.score,
+                    environmental_vector=result.vector,
+                    cvss_metrics_json=result.metrics,
+                    calculator_version=result.calculator_version,
+                )
+
             changes = {
                 field: (getattr(assessment, field), values[field])
-                for field in DRAFT_FIELDS
+                for field in (*DRAFT_FIELDS, *SCORING_FIELDS)
+                if field in values
                 if getattr(assessment, field) != values[field]
             }
             if not changes:
@@ -202,11 +234,41 @@ class AssessmentEditorService:
                 if context["cvss31_score"] is not None
                 else None,
                 "cvss31_severity": context["cvss31_severity"],
+                "cvss31_vector": context["cvss31_vector"],
+                "cvss31_source": context["cvss31_source"],
                 "is_kev": context["is_kev"],
             },
             "candidate": candidate,
             "candidate_disclaimer": CANDIDATE_DISCLAIMER,
-            "draft": {field: getattr(assessment, field) for field in DRAFT_FIELDS},
+            "draft": {
+                **{field: getattr(assessment, field) for field in DRAFT_FIELDS},
+                "cvss_metrics": assessment.cvss_metrics_json,
+            },
+            "environmental_scoring": self._serialize_scoring(assessment, context),
+        }
+
+    @staticmethod
+    def _serialize_scoring(
+        assessment: ProductAssessment, context: dict[str, object]
+    ) -> dict[str, object]:
+        source_vector = context["cvss31_vector"]
+        unavailable_reason = None
+        if not source_vector:
+            unavailable_reason = "SOURCE_NOT_PROVIDED"
+        else:
+            try:
+                parse_base_vector(str(source_vector))
+            except Cvss31Error:
+                unavailable_reason = "SOURCE_VECTOR_INVALID"
+        return {
+            "available": unavailable_reason is None,
+            "unavailable_reason": unavailable_reason,
+            "metrics": assessment.cvss_metrics_json,
+            "score": float(assessment.environmental_score)
+            if assessment.environmental_score is not None
+            else None,
+            "vector": assessment.environmental_vector,
+            "calculator_version": assessment.calculator_version,
         }
 
     @staticmethod
@@ -216,6 +278,9 @@ class AssessmentEditorService:
             value = values[field]
             if isinstance(value, str):
                 values[field] = value.strip() or None
+        metrics = values["cvss_metrics"]
+        if metrics is not None:
+            values["cvss_metrics"] = metrics
         return values
 
     @staticmethod
@@ -247,6 +312,14 @@ class AssessmentEditorService:
 
     @staticmethod
     def _audit_value(field: str, value: object) -> object:
+        if field == "environmental_vector":
+            text = value if isinstance(value, str) else ""
+            return {
+                "present": value is not None,
+                "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()
+                if value is not None
+                else None,
+            }
         if field not in TEXT_FIELDS:
             return value
         text = value if isinstance(value, str) else ""

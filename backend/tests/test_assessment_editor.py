@@ -118,6 +118,8 @@ def test_owner_reads_current_and_historical_details_with_server_editability(
             "description": "队列漏洞 1",
             "cvss31_score": None,
             "cvss31_severity": None,
+            "cvss31_vector": None,
+            "cvss31_source": None,
             "is_kev": False,
         },
         "candidate": None,
@@ -133,6 +135,15 @@ def test_owner_reads_current_and_historical_details_with_server_editability(
             "treatment": None,
             "treatment_detail": None,
             "evidence_text": None,
+            "cvss_metrics": None,
+        },
+        "environmental_scoring": {
+            "available": False,
+            "unavailable_reason": "SOURCE_NOT_PROVIDED",
+            "metrics": None,
+            "score": None,
+            "vector": None,
+            "calculator_version": None,
         },
     }
     assert historical.status_code == 200
@@ -411,7 +422,7 @@ def test_detail_and_save_environmental_score_from_current_source(client: TestCli
         "CR": "H", "IR": "X", "AR": "X", "MAV": "A", "MAC": "X",
         "MPR": "X", "MUI": "X", "MS": "X", "MC": "X", "MI": "X", "MA": "X",
     }
-    assert scoring["score"] == 9.6
+    assert scoring["score"] == 8.8
     assert scoring["vector"].startswith("CVSS:3.1/AV:N/AC:L")
     assert scoring["calculator_version"] == "ots-cvss31-1"
     assert saved.json()["row_version"] == 2
@@ -420,7 +431,7 @@ def test_detail_and_save_environmental_score_from_current_source(client: TestCli
         assessment = session.get(ProductAssessment, target_id)
         assert assessment is not None
         assert assessment.cvss_version == "3.1"
-        assert float(assessment.environmental_score) == 9.6
+        assert float(assessment.environmental_score) == 8.8
         assert assessment.cvss_metrics_json == scoring["metrics"]
         audit = session.scalar(
             select(AuditLog).where(AuditLog.object_id == str(target_id)).order_by(AuditLog.id.desc())

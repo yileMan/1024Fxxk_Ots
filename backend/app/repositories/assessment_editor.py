@@ -40,6 +40,8 @@ class AssessmentEditorRepository:
                 Vulnerability.description,
                 Vulnerability.cvss31_score,
                 Vulnerability.cvss31_severity,
+                Vulnerability.cvss31_vector,
+                Vulnerability.cvss31_source,
                 Vulnerability.is_kev,
             )
             .select_from(ProductAssessment)
