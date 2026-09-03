@@ -266,19 +266,188 @@ def test_return_requires_comment_rejects_extra_fields_and_preserves_conclusion(
     )
     assert returned.status_code == 200
     body = returned.json()
-    assert body["status"] == "returned"
-    assert body["review_decision"] == "returned"
-    assert body["review_comment"] == "请补充影响依据"
-    assert body["return_reason"] == "请补充影响依据"
-    assert body["editable"] is False
-    assert body["draft"]["analysis_summary"] == "完整分析摘要"
+    current = body["current_revision"]
+    reviewed = body["reviewed_revision"]
+    assert current["assessment_id"] != target_id
+    assert current["revision_no"] == reviewed["revision_no"] + 1
+    assert current["parent_revision_id"] == target_id
+    assert current["status"] == "returned"
+    assert current["is_current"] is True
+    assert current["review_decision"] is None
+    assert current["review_comment"] is None
+    assert current["submitted_by"] is None
+    assert current["submitted_at"] is None
+    assert current["reviewer_id"] is None
+    assert current["reviewed_at"] is None
+    assert current["return_reason"] == "请补充影响依据"
+    assert current["reason_type"] == "review_return"
+    assert current["editable"] is False
+    assert current["draft"]["analysis_summary"] == "完整分析摘要"
+    assert reviewed == {
+        "assessment_id": target_id,
+        "revision_no": 1,
+        "status": "returned",
+        "review_decision": "returned",
+        "review_comment": "请补充影响依据",
+        "reviewer_id": 3,
+        "reviewed_at": reviewed["reviewed_at"],
+    }
     client.cookies.clear()
     login(client, "owner", "user-password")
-    refused = client.put(
+    parent_refused = client.put(
         f"/api/v1/assessments/{target_id}/draft",
         json=draft_payload(row_version=3, analysis_summary="覆盖提交结论"),
     )
-    assert refused.status_code == 409
+    edited = client.put(
+        f"/api/v1/assessments/{current['assessment_id']}/draft",
+        json=draft_payload(row_version=1, analysis_summary="修订后的分析"),
+    )
+    assert parent_refused.status_code == 409
+    assert edited.status_code == 200
+    assert edited.json()["draft"]["analysis_summary"] == "修订后的分析"
+
+    with client.app.state.database.session_factory() as session:
+        parent = session.get(ProductAssessment, target_id)
+        child = session.get(ProductAssessment, current["assessment_id"])
+        assert parent is not None and child is not None
+        assert parent.is_current is False
+        assert parent.submitted_by == 2
+        assert parent.review_decision == "returned"
+        assert parent.review_comment == "请补充影响依据"
+        assert child.is_current is True
+        assert session.scalar(
+            select(func.count(ProductAssessment.id)).where(
+                ProductAssessment.product_ots_id == parent.product_ots_id,
+                ProductAssessment.vulnerability_id == parent.vulnerability_id,
+                ProductAssessment.is_current.is_(True),
+            )
+        ) == 1
+
+
+def test_completed_owner_creates_revision_and_resubmits_without_overwriting_parent(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    assert submit_assessment(client, target_id).status_code == 200
+    client.cookies.clear()
+    login(client, "reviewer", "user-password")
+    approved = client.post(
+        f"/api/v1/assessments/{target_id}/approve", json={"row_version": 2}
+    )
+    assert approved.status_code == 200
+
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+    blank = client.post(
+        f"/api/v1/assessments/{target_id}/revisions",
+        json={"row_version": 3, "revision_reason": "   "},
+    )
+    extra = client.post(
+        f"/api/v1/assessments/{target_id}/revisions",
+        json={"row_version": 3, "revision_reason": "重新验证", "revision_no": 99},
+    )
+    assert blank.status_code == 422
+    assert blank.json()["fields"][0]["path"] == "revision_reason"
+    assert extra.status_code == 422
+
+    created = client.post(
+        f"/api/v1/assessments/{target_id}/revisions",
+        json={"row_version": 3, "revision_reason": "  产品配置发生调整  "},
+    )
+    assert created.status_code == 200
+    child = created.json()
+    assert child["parent_revision_id"] == target_id
+    assert child["revision_no"] == 2
+    assert child["status"] == "reassess"
+    assert child["reason_type"] == "manual_revision"
+    assert child["reassess_reason"] == "产品配置发生调整"
+    assert child["editable"] is True
+    assert child["actions"]["can_submit"] is True
+
+    saved = client.put(
+        f"/api/v1/assessments/{child['assessment_id']}/draft",
+        json=draft_payload(
+            row_version=1,
+            analysis_summary="修订分析",
+            trigger_conditions="存在可达攻击路径",
+            affected_functions="网络服务接口",
+            applicability="affected",
+            applicability_basis="产品使用受影响版本",
+            product_impact="可能导致远程代码执行",
+            existing_controls="当前仅有网络隔离",
+            treatment="patch_or_upgrade",
+            treatment_detail="升级到修复版本",
+            evidence_text="内部验证记录 SEC-002",
+        ),
+    )
+    assert saved.status_code == 200
+    resubmitted = client.post(
+        f"/api/v1/assessments/{child['assessment_id']}/submit",
+        json={"row_version": 2},
+    )
+    assert resubmitted.status_code == 200
+    assert resubmitted.json()["status"] == "submitted"
+
+    with client.app.state.database.session_factory() as session:
+        parent = session.get(ProductAssessment, target_id)
+        assert parent is not None
+        assert parent.status == "completed"
+        assert parent.review_decision == "approved"
+        assert parent.submitted_by == 2
+        assert parent.reviewer_id == 3
+
+
+def test_revision_history_detail_and_comparison_are_scoped_and_read_only(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    assert submit_assessment(client, target_id).status_code == 200
+    client.cookies.clear()
+    login(client, "reviewer", "user-password")
+    returned = client.post(
+        f"/api/v1/assessments/{target_id}/return",
+        json={"row_version": 2, "review_comment": "<b>补充依据</b>"},
+    )
+    assert returned.status_code == 200
+    current_id = returned.json()["current_revision"]["assessment_id"]
+
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+    history = client.get(f"/api/v1/assessments/{current_id}/revisions")
+    assert history.status_code == 200
+    assert [item["revision_no"] for item in history.json()["items"]] == [2, 1]
+    assert history.json()["items"][0]["is_current"] is True
+    assert history.json()["items"][1]["review_comment"] == "<b>补充依据</b>"
+
+    historical = client.get(f"/api/v1/assessments/{target_id}")
+    assert historical.status_code == 200
+    assert historical.json()["editable"] is False
+    assert historical.json()["current_revision_id"] == current_id
+    assert not any(historical.json()["actions"].values())
+
+    comparison = client.get(
+        f"/api/v1/assessments/{current_id}/revision-comparison"
+        f"?base_revision_id={target_id}&target_revision_id={current_id}"
+    )
+    assert comparison.status_code == 200
+    assert comparison.json()["base_revision_id"] == target_id
+    assert comparison.json()["target_revision_id"] == current_id
+    assert {change["field"] for change in comparison.json()["changes"]} >= {
+        "status", "submitted_by", "review_decision"
+    }
+
+    out_of_scope = assessment_id(client, "submitted", last=True)
+    forbidden = client.get(f"/api/v1/assessments/{out_of_scope}/revisions")
+    assert forbidden.status_code == 403
+    cross_chain = client.get(
+        f"/api/v1/assessments/{current_id}/revision-comparison"
+        f"?base_revision_id={target_id}&target_revision_id={out_of_scope}"
+    )
+    assert cross_chain.status_code in {403, 422}
 
 
 def test_review_uses_current_assignment_scope_role_and_blocks_submitter(
@@ -352,7 +521,18 @@ def test_assessment_actions_openapi_contract(client: TestClient) -> None:
         operation = schema["paths"][f"/api/v1/assessments/{{assessment_id}}/{action}"]["post"]
         assert set(operation["responses"]) >= {"200", "403", "404", "409", "422"}
     detail_schema = schema["components"]["schemas"]["AssessmentDetailResponse"]["properties"]
-    assert {"actions", "submitted_by", "submitted_at", "review_decision", "review_comment", "reviewer_id", "reviewed_at"} <= set(detail_schema)
+    assert {
+        "actions", "submitted_by", "submitted_at", "review_decision", "review_comment",
+        "reviewer_id", "reviewed_at", "parent_revision_id", "current_revision_id",
+        "reason_type",
+    } <= set(detail_schema)
+    action_schema = schema["components"]["schemas"]["AssessmentActionsResponse"]["properties"]
+    assert "can_create_revision" in action_schema
+    assert "/api/v1/assessments/{assessment_id}/revisions" in schema["paths"]
+    assert "/api/v1/assessments/{assessment_id}/revision-comparison" in schema["paths"]
+    return_operation = schema["paths"]["/api/v1/assessments/{assessment_id}/return"]["post"]
+    return_schema = return_operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert return_schema["$ref"].endswith("/AssessmentReturnResponse")
 
 
 def test_owner_reads_current_and_historical_details_with_server_editability(
