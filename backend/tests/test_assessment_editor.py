@@ -85,6 +85,185 @@ def enable_source_cvss31(client: TestClient, target_id: int) -> None:
         vulnerability.cvss31_source = "nvd@nist.gov"
 
 
+def complete_assessment(client: TestClient, target_id: int) -> None:
+    with client.app.state.database.session_factory.begin() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment is not None
+        assessment.analysis_summary = "完整分析摘要"
+        assessment.trigger_conditions = "存在可达攻击路径"
+        assessment.affected_functions = "网络服务接口"
+        assessment.applicability = "affected"
+        assessment.applicability_basis = "产品使用受影响版本"
+        assessment.product_impact = "可能导致远程代码执行"
+        assessment.existing_controls = "当前仅有网络隔离"
+        assessment.treatment = "patch_or_upgrade"
+        assessment.treatment_detail = "升级到修复版本"
+        assessment.evidence_text = "内部验证记录 SEC-001"
+
+
+def submit_assessment(client: TestClient, target_id: int, row_version: int = 1):
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+    return client.post(
+        f"/api/v1/assessments/{target_id}/submit",
+        json={"row_version": row_version},
+    )
+
+
+def test_submit_requires_complete_persisted_snapshot_and_freezes_revision(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+
+    incomplete = submit_assessment(client, target_id)
+    assert incomplete.status_code == 422
+    assert incomplete.json()["code"] == "ASSESSMENT_SUBMIT_INCOMPLETE"
+    assert {item["path"] for item in incomplete.json()["fields"]} == {
+        "analysis_summary", "trigger_conditions", "affected_functions", "applicability",
+        "applicability_basis", "product_impact", "existing_controls", "treatment",
+        "treatment_detail", "evidence_text",
+    }
+
+    complete_assessment(client, target_id)
+    submitted = submit_assessment(client, target_id)
+    assert submitted.status_code == 200
+    body = submitted.json()
+    assert body["status"] == "submitted"
+    assert body["row_version"] == 2
+    assert body["editable"] is False
+    assert body["submitted_by"] == 2
+    assert body["submitted_at"] is not None
+    assert body["actions"] == {
+        "can_submit": False, "can_approve": False, "can_return": False,
+        "unavailable_reason": "ASSESSMENT_ALREADY_SUBMITTED",
+    }
+    with client.app.state.database.session_factory() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment is not None
+        assert assessment.status == "submitted"
+        assert assessment.submitted_by == 2
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.object_id == str(target_id))
+        ).all()
+        assert len(audits) == 1
+        assert audits[0].detail_json["action"] == "submit"
+        assert "完整分析摘要" not in str(audits[0].detail_json)
+
+
+def test_submit_rejects_self_review_assignment_stale_and_non_pending(
+    client: TestClient,
+) -> None:
+    scope = seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    with client.app.state.database.session_factory.begin() as session:
+        from app.models.products import ProductVersion
+        version = session.get(ProductVersion, int(scope["version_a"]["id"]))
+        assert version is not None
+        version.reviewer_id = int(scope["owner"]["id"])
+
+    self_review = submit_assessment(client, target_id)
+    assert self_review.status_code == 409
+    assert self_review.json()["code"] == "REVIEWER_REASSIGNMENT_REQUIRED"
+
+    with client.app.state.database.session_factory.begin() as session:
+        from app.models.products import ProductVersion
+        version = session.get(ProductVersion, int(scope["version_a"]["id"]))
+        assert version is not None
+        version.reviewer_id = int(scope["reviewer"]["id"])
+    assert submit_assessment(client, target_id, row_version=99).status_code == 409
+    submitted = submit_assessment(client, target_id)
+    assert submitted.status_code == 200
+    repeated = submit_assessment(client, target_id, row_version=2)
+    assert repeated.status_code == 409
+    assert repeated.json()["code"] == "ASSESSMENT_ACTION_CONFLICT"
+
+
+def test_current_reviewer_can_approve_but_cannot_self_review_or_repeat(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    assert submit_assessment(client, target_id).status_code == 200
+
+    client.cookies.clear()
+    login(client, "reviewer", "user-password")
+    detail = client.get(f"/api/v1/assessments/{target_id}")
+    assert detail.json()["actions"]["can_approve"] is True
+    approved = client.post(
+        f"/api/v1/assessments/{target_id}/approve", json={"row_version": 2}
+    )
+    assert approved.status_code == 200
+    body = approved.json()
+    assert body["status"] == "completed"
+    assert body["review_decision"] == "approved"
+    assert body["reviewer_id"] == 3
+    assert body["reviewed_at"] is not None
+    assert body["row_version"] == 3
+    repeated = client.post(
+        f"/api/v1/assessments/{target_id}/approve", json={"row_version": 3}
+    )
+    assert repeated.status_code == 409
+    with client.app.state.database.session_factory() as session:
+        assert session.scalar(
+            select(func.count(AuditLog.id)).where(AuditLog.object_id == str(target_id))
+        ) == 2
+
+
+def test_return_requires_comment_rejects_extra_fields_and_preserves_conclusion(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    assert submit_assessment(client, target_id).status_code == 200
+    client.cookies.clear()
+    login(client, "reviewer", "user-password")
+
+    blank = client.post(
+        f"/api/v1/assessments/{target_id}/return",
+        json={"row_version": 2, "review_comment": "   "},
+    )
+    extra = client.post(
+        f"/api/v1/assessments/{target_id}/return",
+        json={"row_version": 2, "review_comment": "补充依据", "applicability": "not_affected"},
+    )
+    assert blank.status_code == 422
+    assert blank.json()["fields"][0]["path"] == "review_comment"
+    assert extra.status_code == 422
+
+    returned = client.post(
+        f"/api/v1/assessments/{target_id}/return",
+        json={"row_version": 2, "review_comment": "  请补充影响依据  "},
+    )
+    assert returned.status_code == 200
+    body = returned.json()
+    assert body["status"] == "returned"
+    assert body["review_decision"] == "returned"
+    assert body["review_comment"] == "请补充影响依据"
+    assert body["return_reason"] == "请补充影响依据"
+    assert body["editable"] is False
+    assert body["draft"]["analysis_summary"] == "完整分析摘要"
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+    refused = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(row_version=3, analysis_summary="覆盖提交结论"),
+    )
+    assert refused.status_code == 409
+
+
+def test_assessment_actions_openapi_contract(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+    for action in ("submit", "approve", "return"):
+        operation = schema["paths"][f"/api/v1/assessments/{{assessment_id}}/{action}"]["post"]
+        assert set(operation["responses"]) >= {"200", "403", "404", "409", "422"}
+    detail_schema = schema["components"]["schemas"]["AssessmentDetailResponse"]["properties"]
+    assert {"actions", "submitted_by", "submitted_at", "review_decision", "review_comment", "reviewer_id", "reviewed_at"} <= set(detail_schema)
+
+
 def test_owner_reads_current_and_historical_details_with_server_editability(
     client: TestClient,
 ) -> None:
