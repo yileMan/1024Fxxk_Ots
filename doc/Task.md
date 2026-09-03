@@ -319,7 +319,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：实现提交 `a04b5d8`、`b61698d`、`b122318`，测试提交 `663d04c`、`84e3739`、`2132cce`、`33f4984`；后端 pytest 161 项通过，包含 MySQL 双 session 乐观锁、事务审计和 11 表校验；前端 Vitest 108 项通过，语句/行覆盖率 97.09%，系统 Chrome Playwright 23 项通过；类型检查、生产构建、OpenAPI 漂移检查和 OpenSpec 严格校验通过。未新增表、字段、索引或迁移。
 
-#### [ ] OTS-13 `ots-13-cvss31-environmental-scoring`（复杂度：L，依赖：OTS-12）
+#### [x] OTS-13 `ots-13-cvss31-environmental-scoring`（复杂度：L，依赖：OTS-12）
 
 **目标**：完成 CVSS v3.1 产品环境指标、服务端计算和展示。
 
@@ -332,6 +332,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：官方示例向量结果一致；前端篡改分数无效；来源未提供 v3.1 时明确提示，且不自动生成评分。
 
 **需求映射**：FR-MASTER-007、FR-ASSESS-005、FR-VULN-002、FR-VULN-003，系统方案 6。
+
+**完成证据**：实现提交 `fc245e6`、`6d1c542`，测试提交 `4efc393`、`2a1d133`，交付验证提交 `96905b7`；后端 pytest 177 项通过，整体覆盖率 92%，CVSS 模块覆盖率 97%；前端 Vitest 113 项通过，整体覆盖率 97.10%，CVSS 工具覆盖率 96.42%；类型检查、生产构建、OpenAPI 漂移检查、系统 Chrome Playwright 23 项及 OpenSpec 严格校验通过。未新增表、字段、索引或迁移。
 
 #### [ ] OTS-14 `ots-14-assessment-submit-and-review`（复杂度：L，依赖：OTS-05/12/13）
 
