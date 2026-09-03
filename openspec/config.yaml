@@ -58,4 +58,5 @@ operations:
   archive:
     guidance:
       - 仅在严格校验、测试、构建和业务验收通过后归档。
+      - 除非用户明确要求跳过同步，归档 change 前默认先将全部 delta specs 同步到主规格，验证通过后再归档并提交。
       - 使用中文总结归档结果，并更新 doc/Task.md 中的状态和完成证据。

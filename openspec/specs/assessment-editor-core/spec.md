@@ -7,12 +7,12 @@
 ## Requirements
 
 ### Requirement: 独立评估详情
-系统 SHALL 按评估 ID 返回唯一“产品版本 + 产品 OTS + CVE”的当前评估修订，并将来源事实、候选匹配与当前产品结论明确分区；响应 SHALL 包含产品、版本、OTS、CVE、修订号、状态、责任人、`row_version`、可编辑标志、核心草稿字段，以及适用的退回或复评原因。
+系统 SHALL 按评估 ID 返回唯一“产品版本 + 产品 OTS + CVE”的当前评估修订，并将来源事实、候选匹配与当前产品结论明确分区；响应 SHALL 包含产品、版本、OTS、CVE、修订号、状态、责任人、`row_version`、可编辑标志、服务端判定的提交/审核动作能力、提交与审核留痕、核心草稿字段，以及适用的退回或复评原因。
 
 #### Scenario: 负责人打开当前草稿
-- **WHEN** 当前责任人在有效产品范围内打开状态为 `pending`、`returned` 或 `reassess` 的当前评估
+- **WHEN** 当前责任人在有效产品范围内打开状态为 `pending` 或 `reassess` 的当前评估
 - **THEN** 系统返回当前修订、产品上下文、来源事实、候选依据和全部核心草稿字段
-- **AND** 系统标记该记录可编辑
+- **AND** 仅当该状态属于当前 change 已开放的编辑流程时，系统标记该记录可编辑
 
 #### Scenario: 退回或复评原因置顶展示
 - **WHEN** 当前修订状态为 `returned` 或 `reassess` 且存在对应原因
@@ -26,9 +26,10 @@
 - **THEN** 系统返回 `404`
 
 #### Scenario: 历史或非草稿状态只读
-- **WHEN** 用户打开非当前修订，或当前修订状态为 `submitted` 或 `completed`
+- **WHEN** 用户打开非当前修订，或当前修订状态为 `submitted`、`returned` 或 `completed`
 - **THEN** 系统可在其有权读取时返回详情但标记为只读
 - **AND** 页面不显示可用的草稿保存操作
+- **AND** `returned` 修订在 OTS-15 创建下一可编辑修订前不得直接覆盖
 
 ### Requirement: 核心草稿字段
 系统 SHALL 支持保存 `analysis_summary`、`trigger_conditions`、`affected_functions`、`applicability`、`applicability_basis`、`product_impact`、`existing_controls`、`treatment`、`treatment_detail` 和 `evidence_text`；适用性仅允许 `affected`、`not_affected`、`partly_affected`、`pending`，处置仅允许 `patch_or_upgrade`、`configuration_mitigation`、`isolation_or_compensating_control`、`accept_risk`、`no_action`、`further_investigation` 或空值。
@@ -60,10 +61,10 @@
 - **AND** 后续页面将证据说明作为纯文本展示而不执行其中内容
 
 ### Requirement: 草稿编辑授权
-系统 MUST 仅允许同时满足“当前修订、状态为 `pending`/`returned`/`reassess`、请求用户等于当前 `owner_id`、用户仍具有效产品范围”的记录更新草稿；管理员、指定审核人或拥有范围的其他用户均不得代替负责人编辑。
+系统 MUST 仅允许同时满足“当前修订、状态为当前已开放编辑流程的 `pending` 或 `reassess`、请求用户等于当前 `owner_id`、用户仍具有效产品范围”的记录更新草稿；OTS-14 已记录退回决定的 `returned` 修订保持只读，直至 OTS-15 通过新修订开放编辑。管理员、指定审核人或拥有范围的其他用户均不得代替负责人编辑。
 
 #### Scenario: 当前负责人成功更新
-- **WHEN** 当前修订的当前负责人在有效产品范围内提交合法草稿和匹配的 `row_version`
+- **WHEN** 当前修订的当前负责人在有效产品范围内提交合法草稿和匹配的 `row_version`，且状态属于当前已开放的可编辑流程
 - **THEN** 系统原子保存草稿、保持状态与修订号不变并返回更新后的详情
 
 #### Scenario: 非负责人不能编辑
@@ -77,7 +78,7 @@
 - **AND** 不修改评估或审计记录
 
 #### Scenario: 状态或当前修订已变化
-- **WHEN** 页面加载后目标记录已不再是当前可编辑草稿或状态已离开可编辑集合
+- **WHEN** 页面加载后目标记录已不再是当前可编辑草稿、状态已离开可编辑集合或已成为 OTS-14 的退回修订
 - **THEN** 系统拒绝更新并返回稳定冲突错误
 - **AND** 提示用户刷新当前修订
 

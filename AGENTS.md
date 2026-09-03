@@ -12,3 +12,7 @@
 - 运行 Playwright E2E 时，优先使用系统已安装的 Chrome，例如 PowerShell：`$env:PLAYWRIGHT_CHANNEL='chrome'; npm run test:e2e`。
 - 如果系统 Chrome 不可用，再检查并使用系统 Edge。
 - 如果 Chrome 和 Edge 都不可用，应保留实际错误并将 E2E 标记为环境阻塞，不得反复尝试下载浏览器，也不得把依赖安装结果当作业务测试结果。
+
+## OpenSpec 归档
+
+- 归档 change 时，除非用户明确要求跳过同步，默认先将全部 delta specs 同步到主规格，验证通过后再归档并提交；无需为默认同步选择再次确认。
