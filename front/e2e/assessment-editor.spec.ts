@@ -12,6 +12,7 @@ type Draft = {
   treatment: string | null
   treatment_detail: string | null
   evidence_text: string | null
+  cvss_metrics: Record<string, string> | null
 }
 
 const owner = { id: 2, login_name: 'owner', display_name: '产品负责人', roles: ['product_owner'] }
@@ -38,6 +39,8 @@ function assessmentDetail(editable = true) {
       description: '来源事实',
       cvss31_score: 8.1,
       cvss31_severity: 'HIGH',
+      cvss31_vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
+      cvss31_source: 'nvd@nist.gov',
       is_kev: false,
     },
     candidate: null,
@@ -53,7 +56,16 @@ function assessmentDetail(editable = true) {
       treatment: null,
       treatment_detail: null,
       evidence_text: null,
+      cvss_metrics: null,
     } as Draft,
+    environmental_scoring: {
+      available: true,
+      unavailable_reason: null,
+      metrics: null,
+      score: null,
+      vector: null,
+      calculator_version: null,
+    },
   }
 }
 
@@ -108,6 +120,12 @@ test('负责人从待办进入、保存部分草稿并看到条件校验', async
       return
     }
     detail.draft = { ...payload }
+    if (payload.cvss_metrics) {
+      detail.environmental_scoring = {
+        available: true, unavailable_reason: null, metrics: payload.cvss_metrics,
+        score: 9.8, vector: 'CVSS:3.1/server-authoritative-vector', calculator_version: 'ots-cvss31-1',
+      }
+    }
     detail.row_version += 1
     await route.fulfill({ status: 200, json: detail })
   })
@@ -115,8 +133,11 @@ test('负责人从待办进入、保存部分草稿并看到条件校验', async
   await page.goto('/system/assessments/tasks?queue=pending&page=1')
   await page.getByRole('link', { name: /填写评估/ }).click()
   await page.getByLabel('分析摘要').fill('部分草稿分析')
+  await page.getByLabel(/机密性要求/).selectOption('H')
+  await expect(page.getByText('未保存预览')).toBeVisible()
   await page.getByRole('button', { name: '保存草稿' }).click()
   await expect(page.getByText('草稿已保存')).toBeVisible()
+  await expect(page.getByText('CVSS:3.1/server-authoritative-vector')).toBeVisible()
 
   await page.getByLabel('适用性', { exact: true }).selectOption('not_affected')
   await page.getByRole('button', { name: '保存草稿' }).click()

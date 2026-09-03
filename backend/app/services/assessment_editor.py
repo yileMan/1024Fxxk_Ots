@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -124,7 +125,7 @@ class AssessmentEditorService:
                 field: (getattr(assessment, field), values[field])
                 for field in (*DRAFT_FIELDS, *SCORING_FIELDS)
                 if field in values
-                if getattr(assessment, field) != values[field]
+                if not self._values_equal(field, getattr(assessment, field), values[field])
             }
             if not changes:
                 return self._serialize(session, user, context)
@@ -321,7 +322,7 @@ class AssessmentEditorService:
                 else None,
             }
         if field not in TEXT_FIELDS:
-            return value
+            return float(value) if isinstance(value, Decimal) else value
         text = value if isinstance(value, str) else ""
         return {
             "present": value is not None,
@@ -330,3 +331,9 @@ class AssessmentEditorService:
             if value is not None
             else None,
         }
+
+    @staticmethod
+    def _values_equal(field: str, before: object, after: object) -> bool:
+        if field == "environmental_score" and before is not None and after is not None:
+            return Decimal(str(before)) == Decimal(str(after))
+        return before == after

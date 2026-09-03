@@ -440,6 +440,32 @@ def test_detail_and_save_environmental_score_from_current_source(client: TestCli
         assert "cvss_metrics_json" in audit.detail_json["changed_fields"]
 
 
+def test_repeating_same_environmental_metrics_is_an_audit_free_noop(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    enable_source_cvss31(client, target_id)
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    first = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(cvss_metrics={"CR": "H"}),
+    )
+    second = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(row_version=2, cvss_metrics={"CR": "H"}),
+    )
+
+    assert first.status_code == second.status_code == 200
+    assert first.json()["row_version"] == second.json()["row_version"] == 2
+    with client.app.state.database.session_factory() as session:
+        assert session.scalar(
+            select(func.count(AuditLog.id)).where(AuditLog.object_id == str(target_id))
+        ) == 1
+
+
 def test_missing_or_invalid_source_refuses_environmental_save_without_audit(
     client: TestClient,
 ) -> None:
