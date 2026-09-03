@@ -796,6 +796,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assessments/{assessment_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assessment Revision History */
+        get: operations["assessment_revision_history_api_v1_assessments__assessment_id__revisions_get"];
+        put?: never;
+        /** Create Assessment Revision */
+        post: operations["create_assessment_revision_api_v1_assessments__assessment_id__revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/{assessment_id}/revision-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare Assessment Revisions */
+        get: operations["compare_assessment_revisions_api_v1_assessments__assessment_id__revision_comparison_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -813,6 +848,8 @@ export interface components {
             can_approve: boolean;
             /** Can Return */
             can_return: boolean;
+            /** Can Create Revision */
+            can_create_revision: boolean;
             /** Unavailable Reason */
             unavailable_reason: string | null;
         };
@@ -822,6 +859,10 @@ export interface components {
             assessment_id: number;
             /** Revision No */
             revision_no: number;
+            /** Parent Revision Id */
+            parent_revision_id: number | null;
+            /** Current Revision Id */
+            current_revision_id: number;
             /** Is Current */
             is_current: boolean;
             /**
@@ -852,6 +893,8 @@ export interface components {
             return_reason: string | null;
             /** Reassess Reason */
             reassess_reason: string | null;
+            /** Reason Type */
+            reason_type: ("review_return" | "manual_revision" | "automatic_reassessment") | null;
             product: components["schemas"]["AssessmentProductResponse"];
             product_version: components["schemas"]["AssessmentProductVersionResponse"];
             ots: components["schemas"]["AssessmentOtsResponse"];
@@ -947,6 +990,118 @@ export interface components {
             row_version: number;
             /** Review Comment */
             review_comment: string;
+        };
+        /** AssessmentReturnResponse */
+        AssessmentReturnResponse: {
+            current_revision: components["schemas"]["AssessmentDetailResponse"];
+            reviewed_revision: components["schemas"]["AssessmentReviewedRevisionResponse"];
+        };
+        /** AssessmentReviewedRevisionResponse */
+        AssessmentReviewedRevisionResponse: {
+            /** Assessment Id */
+            assessment_id: number;
+            /** Revision No */
+            revision_no: number;
+            /**
+             * Status
+             * @constant
+             */
+            status: "returned";
+            /**
+             * Review Decision
+             * @constant
+             */
+            review_decision: "returned";
+            /** Review Comment */
+            review_comment: string;
+            /** Reviewer Id */
+            reviewer_id: number;
+            /**
+             * Reviewed At
+             * Format: date-time
+             */
+            reviewed_at: string;
+        };
+        /** AssessmentRevisionChangeResponse */
+        AssessmentRevisionChangeResponse: {
+            /** Field */
+            field: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "business" | "event";
+            /** Before */
+            before: unknown | null;
+            /** After */
+            after: unknown | null;
+        };
+        /** AssessmentRevisionComparisonResponse */
+        AssessmentRevisionComparisonResponse: {
+            /** Base Revision Id */
+            base_revision_id: number;
+            /** Target Revision Id */
+            target_revision_id: number;
+            /** Changes */
+            changes: components["schemas"]["AssessmentRevisionChangeResponse"][];
+        };
+        /** AssessmentRevisionCreateRequest */
+        AssessmentRevisionCreateRequest: {
+            /** Row Version */
+            row_version: number;
+            /** Revision Reason */
+            revision_reason: string;
+        };
+        /** AssessmentRevisionHistoryResponse */
+        AssessmentRevisionHistoryResponse: {
+            /** Items */
+            items: components["schemas"]["AssessmentRevisionSummaryResponse"][];
+        };
+        /** AssessmentRevisionSummaryResponse */
+        AssessmentRevisionSummaryResponse: {
+            /** Assessment Id */
+            assessment_id: number;
+            /** Revision No */
+            revision_no: number;
+            /** Parent Revision Id */
+            parent_revision_id: number | null;
+            /** Is Current */
+            is_current: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "submitted" | "returned" | "completed" | "reassess";
+            /** Owner Id */
+            owner_id: number;
+            /** Submitted By */
+            submitted_by: number | null;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Review Decision */
+            review_decision: ("approved" | "returned") | null;
+            /** Review Comment */
+            review_comment: string | null;
+            /** Reviewer Id */
+            reviewer_id: number | null;
+            /** Reviewed At */
+            reviewed_at: string | null;
+            /** Return Reason */
+            return_reason: string | null;
+            /** Reassess Reason */
+            reassess_reason: string | null;
+            /** Reason Type */
+            reason_type: ("review_return" | "manual_revision" | "automatic_reassessment") | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** AssessmentTaskPageResponse */
         AssessmentTaskPageResponse: {
@@ -3832,7 +3987,164 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["AssessmentReturnResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assessment_revision_history_api_v1_assessments__assessment_id__revisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentRevisionHistoryResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_assessment_revision_api_v1_assessments__assessment_id__revisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentRevisionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["AssessmentDetailResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    compare_assessment_revisions_api_v1_assessments__assessment_id__revision_comparison_get: {
+        parameters: {
+            query: {
+                base_revision_id: number;
+                target_revision_id: number;
+            };
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentRevisionComparisonResponse"];
                 };
             };
             /** @description 无权访问或编辑 */

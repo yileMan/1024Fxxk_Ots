@@ -2726,7 +2726,165 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "$ref": "#/components/schemas/AssessmentReturnResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
+    },
+    "/api/v1/assessments/{assessment_id}/revisions": {
+      "post": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Create Assessment Revision",
+        "operationId": "create_assessment_revision_api_v1_assessments__assessment_id__revisions_post",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentRevisionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
                   "$ref": "#/components/schemas/AssessmentDetailResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Assessment Revision History",
+        "operationId": "assessment_revision_history_api_v1_assessments__assessment_id__revisions_get",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentRevisionHistoryResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
+    },
+    "/api/v1/assessments/{assessment_id}/revision-comparison": {
+      "get": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Compare Assessment Revisions",
+        "operationId": "compare_assessment_revisions_api_v1_assessments__assessment_id__revision_comparison_get",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          },
+          {
+            "name": "base_revision_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Base Revision Id"
+            }
+          },
+          {
+            "name": "target_revision_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Target Revision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentRevisionComparisonResponse"
                 }
               }
             }
@@ -2778,6 +2936,10 @@
             "type": "boolean",
             "title": "Can Return"
           },
+          "can_create_revision": {
+            "type": "boolean",
+            "title": "Can Create Revision"
+          },
           "unavailable_reason": {
             "anyOf": [
               {
@@ -2795,6 +2957,7 @@
           "can_submit",
           "can_approve",
           "can_return",
+          "can_create_revision",
           "unavailable_reason"
         ],
         "title": "AssessmentActionsResponse"
@@ -2808,6 +2971,21 @@
           "revision_no": {
             "type": "integer",
             "title": "Revision No"
+          },
+          "parent_revision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Revision Id"
+          },
+          "current_revision_id": {
+            "type": "integer",
+            "title": "Current Revision Id"
           },
           "is_current": {
             "type": "boolean",
@@ -2933,6 +3111,22 @@
             ],
             "title": "Reassess Reason"
           },
+          "reason_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "review_return",
+                  "manual_revision",
+                  "automatic_reassessment"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Type"
+          },
           "product": {
             "$ref": "#/components/schemas/AssessmentProductResponse"
           },
@@ -2970,6 +3164,8 @@
         "required": [
           "assessment_id",
           "revision_no",
+          "parent_revision_id",
+          "current_revision_id",
           "is_current",
           "status",
           "owner_id",
@@ -2984,6 +3180,7 @@
           "actions",
           "return_reason",
           "reassess_reason",
+          "reason_type",
           "product",
           "product_version",
           "ots",
@@ -3371,6 +3568,357 @@
           "review_comment"
         ],
         "title": "AssessmentReturnRequest"
+      },
+      "AssessmentReturnResponse": {
+        "properties": {
+          "current_revision": {
+            "$ref": "#/components/schemas/AssessmentDetailResponse"
+          },
+          "reviewed_revision": {
+            "$ref": "#/components/schemas/AssessmentReviewedRevisionResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_revision",
+          "reviewed_revision"
+        ],
+        "title": "AssessmentReturnResponse"
+      },
+      "AssessmentReviewedRevisionResponse": {
+        "properties": {
+          "assessment_id": {
+            "type": "integer",
+            "title": "Assessment Id"
+          },
+          "revision_no": {
+            "type": "integer",
+            "title": "Revision No"
+          },
+          "status": {
+            "type": "string",
+            "const": "returned",
+            "title": "Status"
+          },
+          "review_decision": {
+            "type": "string",
+            "const": "returned",
+            "title": "Review Decision"
+          },
+          "review_comment": {
+            "type": "string",
+            "title": "Review Comment"
+          },
+          "reviewer_id": {
+            "type": "integer",
+            "title": "Reviewer Id"
+          },
+          "reviewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Reviewed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assessment_id",
+          "revision_no",
+          "status",
+          "review_decision",
+          "review_comment",
+          "reviewer_id",
+          "reviewed_at"
+        ],
+        "title": "AssessmentReviewedRevisionResponse"
+      },
+      "AssessmentRevisionChangeResponse": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "business",
+              "event"
+            ],
+            "title": "Category"
+          },
+          "before": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "category",
+          "before",
+          "after"
+        ],
+        "title": "AssessmentRevisionChangeResponse"
+      },
+      "AssessmentRevisionComparisonResponse": {
+        "properties": {
+          "base_revision_id": {
+            "type": "integer",
+            "title": "Base Revision Id"
+          },
+          "target_revision_id": {
+            "type": "integer",
+            "title": "Target Revision Id"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/AssessmentRevisionChangeResponse"
+            },
+            "type": "array",
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "base_revision_id",
+          "target_revision_id",
+          "changes"
+        ],
+        "title": "AssessmentRevisionComparisonResponse"
+      },
+      "AssessmentRevisionCreateRequest": {
+        "properties": {
+          "row_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Row Version"
+          },
+          "revision_reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Revision Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "row_version",
+          "revision_reason"
+        ],
+        "title": "AssessmentRevisionCreateRequest"
+      },
+      "AssessmentRevisionHistoryResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AssessmentRevisionSummaryResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "AssessmentRevisionHistoryResponse"
+      },
+      "AssessmentRevisionSummaryResponse": {
+        "properties": {
+          "assessment_id": {
+            "type": "integer",
+            "title": "Assessment Id"
+          },
+          "revision_no": {
+            "type": "integer",
+            "title": "Revision No"
+          },
+          "parent_revision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Revision Id"
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "submitted",
+              "returned",
+              "completed",
+              "reassess"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "type": "integer",
+            "title": "Owner Id"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "review_decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approved",
+                  "returned"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Decision"
+          },
+          "review_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Comment"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "return_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Reason"
+          },
+          "reassess_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reassess Reason"
+          },
+          "reason_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "review_return",
+                  "manual_revision",
+                  "automatic_reassessment"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Type"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assessment_id",
+          "revision_no",
+          "parent_revision_id",
+          "is_current",
+          "status",
+          "owner_id",
+          "submitted_by",
+          "submitted_at",
+          "review_decision",
+          "review_comment",
+          "reviewer_id",
+          "reviewed_at",
+          "return_reason",
+          "reassess_reason",
+          "reason_type",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AssessmentRevisionSummaryResponse"
       },
       "AssessmentTaskPageResponse": {
         "properties": {

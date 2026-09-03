@@ -369,7 +369,7 @@ describe('AssessmentDetailPage', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(detail({
         assessment_id: 10, revision_no: 3, parent_revision_id: 9,
         current_revision_id: 10, status: 'reassess', editable: true, row_version: 1,
-        reassess_reason: '产品配置变化', reason_type: 'manual_revision',
+        return_reason: null, reassess_reason: '产品配置变化', reason_type: 'manual_revision',
         actions: {
           can_submit: true, can_approve: false, can_return: false,
           can_create_revision: false, unavailable_reason: null,

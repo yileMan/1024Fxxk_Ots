@@ -20,6 +20,43 @@
         <div><small>修订 / 状态</small><strong>REV {{ detail.revision_no }} · {{ statusLabels[detail.status] }}</strong></div>
       </section>
 
+      <section class="revision-panel" aria-label="评估修订历史">
+        <header>
+          <div><small>REVISION HISTORY</small><h2>修订历史</h2></div>
+          <button type="button" data-action="load-revisions" :disabled="historyLoading" @click="loadHistory">
+            {{ historyLoading ? '正在加载…' : historyLoaded ? '刷新历史' : '查看修订历史' }}
+          </button>
+        </header>
+        <p v-if="historyError" class="feedback error" role="alert">{{ historyError }}</p>
+        <ol v-if="historyLoaded" class="revision-list">
+          <li v-for="revision in revisions" :key="revision.assessment_id">
+            <button
+              type="button"
+              :data-revision-id="revision.assessment_id"
+              :class="{ selected: revision.assessment_id === detail.assessment_id }"
+              @click="openRevision(revision.assessment_id)"
+            >
+              <strong>REV {{ revision.revision_no }}</strong>
+              <span>{{ statusLabels[revision.status] }}{{ revision.is_current ? ' · 当前' : '' }}</span>
+            </button>
+          </li>
+        </ol>
+        <p v-if="!detail.is_current" class="history-notice">历史修订只读。当前修订为 REV {{ currentRevision?.revision_no ?? '—' }}。</p>
+        <button
+          v-if="comparisonPair"
+          type="button"
+          data-action="compare-parent"
+          :disabled="comparisonLoading"
+          @click="loadComparison"
+        >{{ comparisonLoading ? '正在比较…' : '比较版本' }}</button>
+        <dl v-if="comparison" class="revision-diff">
+          <div v-for="change in comparison.changes" :key="change.field">
+            <dt>{{ change.field }}</dt>
+            <dd><del>{{ displayDiffValue(change.before) }}</del><ins>{{ displayDiffValue(change.after) }}</ins></dd>
+          </div>
+        </dl>
+      </section>
+
       <div class="evidence-layout">
         <section class="evidence-card source">
           <small>SOURCE FACT / 来源事实</small>
@@ -114,7 +151,7 @@
           </footer>
         </form>
 
-        <section v-if="detail.actions.can_submit || detail.actions.can_approve || detail.actions.can_return || detail.submitted_at || detail.reviewed_at" class="action-panel" aria-label="评估提交与审核">
+        <section v-if="detail.actions.can_submit || detail.actions.can_approve || detail.actions.can_return || detail.actions.can_create_revision || detail.submitted_at || detail.reviewed_at" class="action-panel" aria-label="评估提交与审核">
           <div>
             <small>WORKFLOW ACTIONS</small><h3>提交与审核</h3>
             <p v-if="detail.submitted_at">提交人 #{{ detail.submitted_by }} · {{ formatTime(detail.submitted_at) }}</p>
@@ -126,21 +163,26 @@
             <button v-if="detail.actions.can_submit" type="button" data-action="submit-assessment" :disabled="acting" @click="dialog = 'submit'">提交审核</button>
             <button v-if="detail.actions.can_approve" type="button" data-action="approve-assessment" :disabled="acting" @click="dialog = 'approve'">审核通过</button>
             <button v-if="detail.actions.can_return" type="button" data-action="return-assessment" :disabled="acting" @click="dialog = 'return'">退回修改</button>
+            <button v-if="detail.actions.can_create_revision" type="button" data-action="create-revision" :disabled="acting" @click="dialog = 'revision'">创建新修订</button>
           </div>
         </section>
 
         <div v-if="dialog" class="dialog-backdrop" role="presentation">
           <section class="action-dialog" role="dialog" aria-modal="true" :aria-labelledby="`${dialog}-title`">
-            <h3 :id="`${dialog}-title`">{{ dialog === 'submit' ? '确认提交审核' : dialog === 'approve' ? '确认审核通过' : '确认退回修改' }}</h3>
-            <p>{{ dialog === 'submit' ? '提交后当前修订将冻结，不能再直接修改。' : dialog === 'approve' ? '通过后评估将直接进入已完成。' : '退回只记录意见，当前修订仍保持只读。' }}</p>
+            <h3 :id="`${dialog}-title`">{{ dialog === 'submit' ? '确认提交审核' : dialog === 'approve' ? '确认审核通过' : dialog === 'return' ? '确认退回修改' : '创建新修订' }}</h3>
+            <p>{{ dialog === 'submit' ? '提交后当前修订将冻结，不能再直接修改。' : dialog === 'approve' ? '通过后评估将直接进入已完成。' : dialog === 'return' ? '退回将保留审核快照，并创建可修改的新修订。' : '已完成修订保持只读；新修订需要重新提交审核。' }}</p>
             <label v-if="dialog === 'return'" for="review_comment">退回意见</label>
             <textarea v-if="dialog === 'return'" id="review_comment" v-model="reviewComment" name="review_comment" maxlength="10000" rows="5" :disabled="acting" />
             <p v-if="fieldErrors.review_comment" data-error-for="review_comment" class="field-error">{{ fieldErrors.review_comment }}</p>
+            <label v-if="dialog === 'revision'" for="revision_reason">修订原因</label>
+            <textarea v-if="dialog === 'revision'" id="revision_reason" v-model="revisionReason" name="revision_reason" maxlength="500" rows="4" :disabled="acting" />
+            <p v-if="fieldErrors.revision_reason" data-error-for="revision_reason" class="field-error">{{ fieldErrors.revision_reason }}</p>
             <footer>
               <button type="button" :disabled="acting" @click="closeDialog">取消</button>
               <button v-if="dialog === 'submit'" type="button" data-action="confirm-submit" :disabled="acting" @click="executeAction('submit')">{{ acting ? '正在提交…' : '确认提交' }}</button>
               <button v-else-if="dialog === 'approve'" type="button" data-action="confirm-approve" :disabled="acting" @click="executeAction('approve')">{{ acting ? '正在处理…' : '确认通过' }}</button>
-              <button v-else type="button" data-action="confirm-return" :disabled="acting" @click="executeAction('return')">{{ acting ? '正在处理…' : '确认退回' }}</button>
+              <button v-else-if="dialog === 'return'" type="button" data-action="confirm-return" :disabled="acting" @click="executeAction('return')">{{ acting ? '正在处理…' : '确认退回' }}</button>
+              <button v-else type="button" data-action="confirm-create-revision" :disabled="acting" @click="executeAction('revision')">{{ acting ? '正在创建…' : '确认创建' }}</button>
             </footer>
           </section>
         </div>
@@ -152,7 +194,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, nextTick, onMounted, reactive, ref, type PropType } from 'vue'
 
-import { AssessmentApiError, approveAssessment, getAssessmentDetail, returnAssessment, saveAssessmentDraft, submitAssessment, type AssessmentDetail, type AssessmentDraftUpdate } from '../api/assessmentEditor'
+import { AssessmentApiError, approveAssessment, compareAssessmentRevisions, createAssessmentRevision, getAssessmentDetail, getAssessmentRevisionHistory, returnAssessment, saveAssessmentDraft, submitAssessment, type AssessmentDetail, type AssessmentDraftUpdate, type AssessmentRevisionComparison, type AssessmentRevisionHistory } from '../api/assessmentEditor'
 import { calculateEnvironmental, defaultEnvironmentalMetrics, type EnvironmentalMetric, type EnvironmentalMetrics } from '../utils/cvss31'
 
 type TextKey = 'analysis_summary' | 'trigger_conditions' | 'affected_functions' | 'applicability_basis' | 'product_impact' | 'existing_controls' | 'treatment_detail' | 'evidence_text'
@@ -169,8 +211,15 @@ const conflict = ref(false)
 const acting = ref(false)
 const actionError = ref('')
 const actionSuccess = ref('')
-const dialog = ref<'' | 'submit' | 'approve' | 'return'>('')
+const dialog = ref<'' | 'submit' | 'approve' | 'return' | 'revision'>('')
 const reviewComment = ref('')
+const revisionReason = ref('')
+const revisions = ref<AssessmentRevisionHistory['items']>([])
+const historyLoading = ref(false)
+const historyLoaded = ref(false)
+const historyError = ref('')
+const comparison = ref<AssessmentRevisionComparison | null>(null)
+const comparisonLoading = ref(false)
 const cvssMetrics = reactive<EnvironmentalMetrics>(defaultEnvironmentalMetrics())
 const savedMetrics = ref(JSON.stringify(defaultEnvironmentalMetrics()))
 const fieldErrors = reactive<Record<string, string>>({})
@@ -206,8 +255,23 @@ const preview = computed(() => {
   try { return calculateEnvironmental(vector, cvssMetrics) } catch { return null }
 })
 const readonlyMessage = computed(() => detail.value?.status === 'returned'
-  ? '已退回，等待创建新修订；当前已提交修订保持只读。'
+  ? detail.value.is_current && detail.value.editable
+    ? '当前退回修订可由负责人修改并重新提交。'
+    : detail.value.is_current
+      ? '已退回，等待创建新修订；当前已提交修订保持只读。'
+      : '历史退回修订保持只读。'
   : '当前评估为只读状态，人员分配、产品范围或评估状态可能已变化。')
+const currentRevision = computed(() => revisions.value.find(item => item.is_current))
+const comparisonPair = computed(() => {
+  if (!detail.value) return null
+  if (!detail.value.is_current) {
+    return { base: detail.value.assessment_id, target: detail.value.current_revision_id }
+  }
+  if (detail.value.parent_revision_id) {
+    return { base: detail.value.parent_revision_id, target: detail.value.assessment_id }
+  }
+  return null
+})
 const option = (value: string, label: string) => ({ value, label })
 const commonX = option('X', '未定义 / 沿用来源')
 const metricDefinitions: { key: EnvironmentalMetric; label: string; options: { value: string; label: string }[] }[] = [
@@ -272,6 +336,52 @@ async function load(): Promise<void> {
   }
 }
 
+async function loadHistory(): Promise<void> {
+  if (!detail.value || historyLoading.value) return
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    const response = await getAssessmentRevisionHistory(detail.value.assessment_id)
+    revisions.value = response.items
+    historyLoaded.value = true
+  } catch (reason) {
+    historyError.value = reason instanceof AssessmentApiError ? reason.message : '修订历史暂时不可用。'
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function openRevision(assessmentId: number): Promise<void> {
+  if (assessmentId === detail.value?.assessment_id) return
+  try {
+    applyDetail(await getAssessmentDetail(assessmentId))
+    comparison.value = null
+  } catch (reason) {
+    historyError.value = reason instanceof AssessmentApiError ? reason.message : '修订详情暂时不可用。'
+  }
+}
+
+async function loadComparison(): Promise<void> {
+  const pair = comparisonPair.value
+  if (!detail.value || !pair || comparisonLoading.value) return
+  comparisonLoading.value = true
+  historyError.value = ''
+  try {
+    comparison.value = await compareAssessmentRevisions(
+      detail.value.assessment_id, pair.base, pair.target,
+    )
+  } catch (reason) {
+    historyError.value = reason instanceof AssessmentApiError ? reason.message : '版本比较暂时不可用。'
+  } finally {
+    comparisonLoading.value = false
+  }
+}
+
+function displayDiffValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—'
+  return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
+
 function applyDetail(response: AssessmentDetail): void {
   detail.value = response
   for (const field of [...firstFields, ...middleFields, ...lastFields]) form[field.key] = response.draft[field.key] ?? ''
@@ -290,11 +400,15 @@ function formatTime(value: string): string {
   return new Date(value).toLocaleString('zh-CN')
 }
 
-async function executeAction(action: 'submit' | 'approve' | 'return'): Promise<void> {
+async function executeAction(action: 'submit' | 'approve' | 'return' | 'revision'): Promise<void> {
   if (!detail.value || acting.value) return
   clearFieldErrors()
   if (action === 'return' && !reviewComment.value.trim()) {
     fieldErrors.review_comment = '退回意见必须填写'
+    return
+  }
+  if (action === 'revision' && !revisionReason.value.trim()) {
+    fieldErrors.revision_reason = '修订原因必须填写'
     return
   }
   acting.value = true
@@ -302,15 +416,21 @@ async function executeAction(action: 'submit' | 'approve' | 'return'): Promise<v
   actionSuccess.value = ''
   try {
     const payload = { row_version: detail.value.row_version }
+    const assessmentId = detail.value.assessment_id
     const response = action === 'submit'
-      ? await submitAssessment(props.assessmentId, payload)
+      ? await submitAssessment(assessmentId, payload)
       : action === 'approve'
-        ? await approveAssessment(props.assessmentId, payload)
-        : await returnAssessment(props.assessmentId, { ...payload, review_comment: reviewComment.value })
+        ? await approveAssessment(assessmentId, payload)
+        : action === 'return'
+          ? (await returnAssessment(assessmentId, { ...payload, review_comment: reviewComment.value })).current_revision
+          : await createAssessmentRevision(assessmentId, { ...payload, revision_reason: revisionReason.value })
     applyDetail(response)
-    actionSuccess.value = action === 'submit' ? '评估已提交审核' : action === 'approve' ? '评估已审核通过' : '评估已退回'
+    actionSuccess.value = action === 'submit' ? '评估已提交审核' : action === 'approve' ? '评估已审核通过' : action === 'return' ? '评估已退回并创建新修订' : '新修订已创建'
     dialog.value = ''
     if (action === 'return') reviewComment.value = ''
+    if (action === 'revision') revisionReason.value = ''
+    historyLoaded.value = false
+    revisions.value = []
   } catch (reason) {
     if (reason instanceof AssessmentApiError && reason.status === 422 && reason.fields.length) {
       for (const item of reason.fields) fieldErrors[item.path] = item.message
@@ -330,7 +450,7 @@ async function save(): Promise<void> {
   conflict.value = false
   clearFieldErrors()
   try {
-    const response = await saveAssessmentDraft(props.assessmentId, {
+    const response = await saveAssessmentDraft(detail.value.assessment_id, {
       row_version: detail.value.row_version,
       analysis_summary: form.analysis_summary,
       trigger_conditions: form.trigger_conditions,
@@ -376,4 +496,5 @@ function clearFieldErrors(): void {
 .assessment-page{max-width:1220px;margin:0 auto;padding:48px 32px 96px}.page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}.page-header p{margin:0;color:var(--brand-red);font-size:11px;font-weight:900;letter-spacing:.18em}.page-header h1{margin:10px 0 0;color:var(--ink);font:750 clamp(40px,6vw,72px)/1 var(--font-display)}.page-header a{border-bottom:2px solid var(--brand-red);padding:8px 0;text-decoration:none;font-size:12px;font-weight:900}.state{margin-top:24px;padding:22px;border:1px solid var(--line-strong);background:#fff}.state.error,.feedback.error{border-left:5px solid var(--brand-red)}.reason-banner{display:grid;gap:9px;margin-top:30px;padding:20px 24px;border-left:7px solid var(--brand-red);color:#fff;background:var(--ink)}.reason-banner small{color:#ff8d92;font-size:10px;font-weight:900;letter-spacing:.16em}.reason-banner strong{font-size:15px;line-height:1.6}.identity-strip{display:grid;grid-template-columns:1.25fr 1fr .8fr;margin-top:12px;border:1px solid var(--line-strong);background:#fff}.identity-strip div{padding:18px 22px;border-right:1px solid var(--line)}.identity-strip div:last-child{border-right:0}.identity-strip small,.evidence-card>small,.editor-section header small{display:block;color:var(--brand-red);font-size:9px;font-weight:900;letter-spacing:.14em}.identity-strip strong{display:block;margin-top:7px;color:var(--ink);font-size:14px}.evidence-layout{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;margin-top:12px}.evidence-card{padding:26px;border:1px solid var(--line);border-top:6px solid var(--ink);background:#fff}.evidence-card.candidate{border-top-color:var(--brand-red)}.evidence-card h2{margin:9px 0;color:var(--ink);font:750 26px var(--font-display)}.evidence-card p{color:var(--text-muted);font-size:13px;line-height:1.7}.evidence-card dl{display:flex;gap:28px;margin:22px 0 0}.evidence-card dt{color:var(--text-muted);font-size:9px;font-weight:900}.evidence-card dd{margin:5px 0 0;color:var(--ink);font-weight:800}.evidence-card pre{max-height:150px;overflow:auto;padding:12px;background:var(--paper-warm);font:11px/1.5 Consolas,monospace;white-space:pre-wrap}.candidate-warning{display:block;margin-top:18px;color:var(--brand-red-deep);font-size:11px}.editor-section{margin-top:20px;border:1px solid var(--line-strong);background:#fff;box-shadow:var(--shadow-card)}.editor-section>header{display:flex;align-items:center;justify-content:space-between;padding:26px 30px;color:#fff;background:var(--ink)}.editor-section h2{margin:7px 0 0;font:750 30px var(--font-display)}.mode-badge{padding:7px 10px;border:1px solid #ff9296;font-size:10px;font-weight:900}.mode-badge.readonly{border-color:#858d94;color:#cdd2d6}.notice,.feedback{margin:18px 30px 0;padding:14px 16px;background:var(--paper-warm);font-size:13px}.feedback.success{border-left:5px solid var(--success)}.refresh{margin:12px 30px 0;border:1px solid var(--brand-red);padding:9px 13px;color:var(--brand-red-deep);background:#fff;cursor:pointer;font-weight:800}.editor-section form{display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:30px}.field{display:grid;align-content:start;gap:8px}.field.wide,.editor-section form footer{grid-column:1/-1}.field label{color:var(--ink);font-size:12px;font-weight:900}.field label em{margin-left:7px;color:var(--brand-red);font-size:10px;font-style:normal}.field textarea,.field select{width:100%;border:1px solid var(--line-strong);border-radius:0;padding:12px 13px;color:var(--ink);background:#fff;font:13px/1.55 var(--font-body);resize:vertical}.field textarea:disabled,.field select:disabled{color:#626b73;background:#f1f3f5}.field.decision select{min-height:46px;border-left:5px solid var(--brand-red);font-weight:800}.field-error{margin:0;color:var(--danger);font-size:11px;font-weight:800}.editor-section form footer{display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding-top:22px;border-top:1px solid var(--line)}.editor-section form footer p{margin:0;color:var(--text-muted);font-size:12px}.editor-section form footer button{min-width:150px;border:0;padding:13px 20px;color:#fff;background:var(--brand-red);font-weight:900;cursor:pointer}.editor-section form footer button:disabled{cursor:wait;opacity:.65}@media(max-width:780px){.assessment-page{padding:30px 14px}.page-header{align-items:flex-start;flex-direction:column}.identity-strip,.evidence-layout,.editor-section form{grid-template-columns:1fr}.identity-strip div{border-right:0;border-bottom:1px solid var(--line)}.field.wide,.editor-section form footer{grid-column:auto}.evidence-card dl{flex-wrap:wrap}.editor-section>header,.editor-section form footer{align-items:flex-start;flex-direction:column;gap:16px}.editor-section form footer button{width:100%}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 .source-vector{display:grid;gap:5px;overflow-wrap:anywhere}.source-vector strong{color:var(--ink);font-size:10px}.cvss-panel{grid-column:1/-1;border:1px solid var(--line-strong);border-left:7px solid var(--brand-red);padding:22px;background:var(--paper-warm)}.cvss-panel>header{display:flex;align-items:center;justify-content:space-between}.cvss-panel h3{margin:5px 0 0;color:var(--ink);font:750 24px var(--font-display)}.score-chip{display:grid;place-items:center;min-width:68px;min-height:54px;color:#fff;background:var(--ink);font:800 25px var(--font-display)}.cvss-state{margin:12px 0;color:var(--brand-red-deep);font-size:11px;font-weight:900}.cvss-unavailable{margin:16px 0 0;padding:14px;border-left:4px solid var(--brand-red);background:#fff}.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric-grid label{display:grid;gap:6px}.metric-grid span{font-size:11px;font-weight:800}.metric-grid b{float:right;color:var(--brand-red)}.metric-grid select{min-height:40px;border:1px solid var(--line-strong);padding:8px;background:#fff}.metric-grid em{color:var(--danger);font-size:10px;font-style:normal}.metric-readonly{display:flex;flex-wrap:wrap;gap:8px}.metric-readonly span{display:flex;gap:8px;border:1px solid var(--line);padding:7px 9px;background:#fff;font-size:11px}.score-result{display:grid;grid-template-columns:140px 1fr;gap:12px;margin:18px 0 0}.score-result div{padding:12px;background:#fff}.score-result .vector{grid-column:1/-1}.score-result dt{font-size:9px;font-weight:900}.score-result dd{margin:5px 0 0;overflow-wrap:anywhere;font:12px/1.5 Consolas,monospace}@media(max-width:780px){.metric-grid{grid-template-columns:1fr}.cvss-panel{grid-column:auto}.score-result{grid-template-columns:1fr}.score-result .vector{grid-column:auto}}
 .action-panel{display:flex;justify-content:space-between;gap:20px;margin:0 30px 30px;padding:22px;border-left:7px solid var(--brand-red);background:var(--paper-warm)}.action-panel h3{margin:5px 0;font:750 24px var(--font-display)}.action-panel p{margin:7px 0;font-size:12px}.action-buttons{display:flex;align-items:center;gap:8px}.action-buttons button,.action-dialog button{border:0;padding:12px 16px;color:#fff;background:var(--brand-red);font-weight:900;cursor:pointer}.action-buttons button:disabled,.action-dialog button:disabled{opacity:.6}.dialog-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgb(20 25 29 / .68)}.action-dialog{width:min(520px,100%);padding:28px;border-top:7px solid var(--brand-red);background:#fff;box-shadow:var(--shadow-card)}.action-dialog h3{margin:0;font:750 28px var(--font-display)}.action-dialog label{display:block;margin:18px 0 7px;font-weight:900}.action-dialog textarea{width:100%;box-sizing:border-box;padding:12px}.action-dialog footer{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}.action-dialog footer button:first-child{color:var(--ink);background:#dfe3e6}
+.revision-panel{margin-top:12px;padding:22px;border:1px solid var(--line-strong);background:#fff}.revision-panel>header{display:flex;align-items:center;justify-content:space-between;gap:16px}.revision-panel h2{margin:5px 0 0;font:750 24px var(--font-display)}.revision-panel small{color:var(--brand-red);font-size:9px;font-weight:900;letter-spacing:.14em}.revision-panel button{border:1px solid var(--line-strong);padding:9px 12px;background:#fff;cursor:pointer}.revision-list{display:flex;gap:8px;margin:18px 0;padding:0;list-style:none;overflow-x:auto}.revision-list button{display:grid;gap:4px;min-width:120px;text-align:left}.revision-list button.selected{border-color:var(--brand-red);box-shadow:inset 0 -4px 0 var(--brand-red)}.revision-list span,.history-notice{color:var(--text-muted);font-size:11px}.revision-diff{display:grid;gap:8px;margin:18px 0 0}.revision-diff div{display:grid;grid-template-columns:180px 1fr;gap:12px;padding:10px;background:var(--paper-warm)}.revision-diff dd{display:grid;gap:5px;margin:0;overflow-wrap:anywhere}.revision-diff del{color:var(--danger)}.revision-diff ins{color:var(--success);text-decoration:none}
 </style>
