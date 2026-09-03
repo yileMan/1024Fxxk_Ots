@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AssessmentApiError,
   approveAssessment,
+  compareAssessmentRevisions,
+  createAssessmentRevision,
   getAssessmentDetail,
+  getAssessmentRevisionHistory,
   returnAssessment,
   saveAssessmentDraft,
   submitAssessment,
@@ -87,5 +90,32 @@ describe('assessment editor API client', () => {
       row_version: 2,
       review_comment: '补充依据',
     })
+  })
+
+  it('creates, lists and compares revisions with generated contracts', async () => {
+    const current = { assessment_id: 10, revision_no: 2, status: 'reassess' }
+    const history = { items: [{ assessment_id: 10, revision_no: 2, is_current: true }] }
+    const comparison = {
+      base_revision_id: 9,
+      target_revision_id: 10,
+      changes: [{ field: 'analysis_summary', category: 'business', before: '旧', after: '新' }],
+    }
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(current), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(history), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(comparison), { status: 200 }))
+
+    await expect(createAssessmentRevision(9, {
+      row_version: 3,
+      revision_reason: '产品配置变化',
+    })).resolves.toEqual(current)
+    await expect(getAssessmentRevisionHistory(10)).resolves.toEqual(history)
+    await expect(compareAssessmentRevisions(10, 9, 10)).resolves.toEqual(comparison)
+
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/v1/assessments/9/revisions',
+      '/api/v1/assessments/10/revisions',
+      '/api/v1/assessments/10/revision-comparison?base_revision_id=9&target_revision_id=10',
+    ])
   })
 })

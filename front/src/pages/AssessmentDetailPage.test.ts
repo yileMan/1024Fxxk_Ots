@@ -10,6 +10,8 @@ function detail(overrides: Record<string, unknown> = {}) {
   return {
     assessment_id: 9,
     revision_no: 2,
+    parent_revision_id: null,
+    current_revision_id: 9,
     is_current: true,
     status: 'pending',
     owner_id: 2,
@@ -21,9 +23,10 @@ function detail(overrides: Record<string, unknown> = {}) {
     review_comment: null,
     reviewer_id: null,
     reviewed_at: null,
-    actions: { can_submit: true, can_approve: false, can_return: false, unavailable_reason: null },
+    actions: { can_submit: true, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: null },
     return_reason: '<b>补充影响依据</b>',
     reassess_reason: null,
+    reason_type: 'review_return',
     product: { id: 1, name: '监护仪' },
     product_version: { id: 2, version_no: '3.0' },
     ots: { id: 3, name: 'OpenSSL', version: '3.0.0' },
@@ -298,5 +301,91 @@ describe('AssessmentDetailPage', () => {
     expect(wrapper.text()).toContain('请先重新分配审核人')
     expect(wrapper.find('[data-action="confirm-submit"]').exists()).toBe(true)
     expect(wrapper.find('[data-action="refresh-server"]').exists()).toBe(true)
+  })
+
+  it('loads revision timeline, opens read-only history and compares versions', async () => {
+    const completed = detail({
+      status: 'completed', editable: false, row_version: 3,
+      actions: {
+        can_submit: false, can_approve: false, can_return: false,
+        can_create_revision: true, unavailable_reason: null,
+      },
+      return_reason: null,
+      reason_type: null,
+    })
+    const historical = detail({
+      assessment_id: 8, revision_no: 1, is_current: false, current_revision_id: 9,
+      status: 'returned', editable: false, parent_revision_id: null,
+      actions: {
+        can_submit: false, can_approve: false, can_return: false,
+        can_create_revision: false, unavailable_reason: null,
+      },
+      return_reason: '<b>历史退回意见</b>',
+      reason_type: null,
+    })
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [
+          { assessment_id: 9, revision_no: 2, is_current: true, status: 'completed' },
+          { assessment_id: 8, revision_no: 1, is_current: false, status: 'returned' },
+        ],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(historical), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        base_revision_id: 8,
+        target_revision_id: 9,
+        changes: [{ field: 'analysis_summary', category: 'business', before: '<旧>', after: '<新>' }],
+      }), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    await wrapper.get('[data-action="load-revisions"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('REV 2')
+    expect(wrapper.text()).toContain('REV 1')
+    await wrapper.get('[data-revision-id="8"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('历史修订只读')
+    expect(wrapper.get<HTMLTextAreaElement>('[name="analysis_summary"]').element.disabled).toBe(true)
+    await wrapper.get('[data-action="compare-parent"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('analysis_summary')
+    expect(wrapper.text()).toContain('<旧>')
+    expect(wrapper.text()).toContain('<新>')
+  })
+
+  it('creates a revision from completed state and adopts the returned current id', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail({
+        status: 'completed', editable: false, row_version: 3,
+        actions: {
+          can_submit: false, can_approve: false, can_return: false,
+          can_create_revision: true, unavailable_reason: null,
+        },
+        return_reason: null,
+        reason_type: null,
+      })), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail({
+        assessment_id: 10, revision_no: 3, parent_revision_id: 9,
+        current_revision_id: 10, status: 'reassess', editable: true, row_version: 1,
+        reassess_reason: '产品配置变化', reason_type: 'manual_revision',
+        actions: {
+          can_submit: true, can_approve: false, can_return: false,
+          can_create_revision: false, unavailable_reason: null,
+        },
+      })), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    await wrapper.get('[data-action="create-revision"]').trigger('click')
+    await wrapper.get('[name="revision_reason"]').setValue('产品配置变化')
+    await wrapper.get('[data-action="confirm-create-revision"]').trigger('click')
+    await flushPromises()
+
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/assessments/9/revisions')
+    expect(wrapper.text()).toContain('REV 3')
+    expect(wrapper.text()).toContain('产品配置变化')
+    expect(wrapper.find('button[type="submit"]').exists()).toBe(true)
   })
 })
