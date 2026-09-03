@@ -38,4 +38,4 @@
 - [x] 5.3 连续生成两次 OpenAPI 并比较结果，确认契约与生成类型稳定且无漂移。
 - [x] 5.4 运行 `openspec validate ots-14-assessment-submit-and-review --strict` 及项目全量 OpenSpec 严格校验。
 - [x] 5.5 按 FR-REVIEW-002/003/005/006、FR-USER-005、FR-ASSESS-009/010 和 FR-REVIEW-001 分阶段边界完成需求追溯，明确跨产品参考仍属 OTS-17、退回新修订与重新提交仍属 OTS-15。
-- [ ] 5.6 更新相关开发文档和 `doc/Task.md` 完成证据，记录实现提交、测试/构建结果、覆盖率、迁移结论及剩余风险；仅在全部验收通过后归档 change。
+- [x] 5.6 更新相关开发文档和 `doc/Task.md` 完成证据，记录实现提交、测试/构建结果、覆盖率、迁移结论及剩余风险；仅在全部验收通过后归档 change。

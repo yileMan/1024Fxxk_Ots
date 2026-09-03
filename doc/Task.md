@@ -335,7 +335,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：实现提交 `fc245e6`、`6d1c542`，测试提交 `4efc393`、`2a1d133`，交付验证提交 `96905b7`；后端 pytest 177 项通过，整体覆盖率 92%，CVSS 模块覆盖率 97%；前端 Vitest 113 项通过，整体覆盖率 97.10%，CVSS 工具覆盖率 96.42%；类型检查、生产构建、OpenAPI 漂移检查、系统 Chrome Playwright 23 项及 OpenSpec 严格校验通过。未新增表、字段、索引或迁移。
 
-#### [ ] OTS-14 `ots-14-assessment-submit-and-review`（复杂度：L，依赖：OTS-05/12/13）
+#### [x] OTS-14 `ots-14-assessment-submit-and-review`（复杂度：L，依赖：OTS-05/12/13，已于 2026-09-03 完成）
 
 **目标**：实现评估提交、审核通过和审核退回的第一版完整闭环。
 
@@ -346,6 +346,10 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：pending → submitted → completed；退回操作不能直接改提交人结论；提交人与审核人相同则提交失败并提示重新分配。
 
 **需求映射**：FR-REVIEW-001、FR-REVIEW-002、FR-REVIEW-003、FR-REVIEW-005、FR-REVIEW-006、FR-USER-005。
+
+**需求追溯**：FR-REVIEW-002/003/005/006 由独立通过/退回接口、退回意见校验、`completed` 直达状态、实际审核留痕和按产品版本当前审核人实时分配覆盖；FR-USER-005 由提交前审核人冲突检查与审核时禁止自审双重覆盖；FR-ASSESS-009/010 由提交冻结、实际提交人/时间和同事务审计覆盖。FR-REVIEW-001 中来源事实、候选依据、环境评分和本产品结论由同页只读审核区覆盖，其他产品已审核参考仍由 OTS-17 完成；退回后的新修订与重新提交仍由 OTS-15 完成。
+
+**完成证据**：RED 测试提交 `beee31c`、`120c5e5`，核心实现提交 `0dc43d8`，集成与端到端验收提交 `46b14c8`。新增 `/submit`、`/approve`、`/return` 动作接口和服务端动作能力，完成最终完整性门、环境结果一致性校验、当前负责人/审核人和产品范围校验、禁止自审、乐观锁、实际提交/审核留痕及同事务审计；前端完成提交确认、审核通过/退回对话框、退回意见必填、只读与错误反馈。后端 pytest 185 项通过、整体覆盖率 92%，评估服务覆盖率 94%、repository 100%、schema 100%、路由 98%；前端 Vitest 118 项通过、整体语句覆盖率 96.85%，评估 API 100%、评估详情页 95.23%；类型检查、生产构建、OpenAPI 连续两次生成哈希一致、系统 Chrome Playwright 27 项及 OpenSpec 全量 17 项严格校验通过。MySQL 双会话验证通过/退回并发仅一个成功；未新增表、字段、索引或迁移。OTS-14 的 `returned` 修订保持只读，等待 OTS-15 创建下一修订。
 
 #### [ ] OTS-15 `ots-15-return-revision-resubmit`（复杂度：L，依赖：OTS-14）
 
