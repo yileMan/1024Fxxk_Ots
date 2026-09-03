@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -54,6 +55,16 @@ class AssessmentDraftUpdateRequest(AssessmentDraftFields):
     row_version: int = Field(ge=1)
 
 
+class AssessmentActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row_version: int = Field(ge=1)
+
+
+class AssessmentReturnRequest(AssessmentActionRequest):
+    review_comment: str = Field(min_length=1, max_length=10_000)
+
+
 class AssessmentProductResponse(BaseModel):
     id: int
     name: str
@@ -91,6 +102,13 @@ class EnvironmentalScoringResponse(BaseModel):
     calculator_version: str | None
 
 
+class AssessmentActionsResponse(BaseModel):
+    can_submit: bool
+    can_approve: bool
+    can_return: bool
+    unavailable_reason: str | None
+
+
 class AssessmentDetailResponse(BaseModel):
     assessment_id: int
     revision_no: int
@@ -99,6 +117,13 @@ class AssessmentDetailResponse(BaseModel):
     owner_id: int
     row_version: int
     editable: bool
+    submitted_by: int | None
+    submitted_at: datetime | None
+    review_decision: Literal["approved", "returned"] | None
+    review_comment: str | None
+    reviewer_id: int | None
+    reviewed_at: datetime | None
+    actions: AssessmentActionsResponse
     return_reason: str | None
     reassess_reason: str | None
     product: AssessmentProductResponse

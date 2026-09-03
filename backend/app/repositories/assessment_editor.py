@@ -12,7 +12,7 @@ from app.models.products import Product, ProductVersion
 from app.repositories.scopes import ScopeRepository
 
 
-EDITABLE_STATUSES = {"pending", "returned", "reassess"}
+EDITABLE_STATUSES = {"pending", "reassess"}
 
 
 class AssessmentEditorRepository:
@@ -31,6 +31,8 @@ class AssessmentEditorRepository:
                 Product.product_name,
                 ProductVersion.id.label("product_version_id"),
                 ProductVersion.version_no,
+                ProductVersion.owner_id.label("version_owner_id"),
+                ProductVersion.reviewer_id.label("version_reviewer_id"),
                 OtsComponent.id.label("ots_component_id"),
                 OtsComponent.ots_name,
                 OtsComponent.ots_version,
@@ -72,6 +74,32 @@ class AssessmentEditorRepository:
                 ProductAssessment.is_current.is_(True),
                 ProductAssessment.status.in_(EDITABLE_STATUSES),
                 ProductAssessment.owner_id == owner_id,
+                ProductAssessment.row_version == row_version,
+            )
+            .values(
+                **values,
+                row_version=ProductAssessment.row_version + 1,
+                updated_at=updated_at,
+            )
+        )
+        return result.rowcount == 1
+
+    @staticmethod
+    def transition_if_version(
+        session: Session,
+        *,
+        assessment_id: int,
+        expected_status: str,
+        row_version: int,
+        values: dict[str, object],
+        updated_at: datetime,
+    ) -> bool:
+        result = session.execute(
+            update(ProductAssessment)
+            .where(
+                ProductAssessment.id == assessment_id,
+                ProductAssessment.is_current.is_(True),
+                ProductAssessment.status == expected_status,
                 ProductAssessment.row_version == row_version,
             )
             .values(

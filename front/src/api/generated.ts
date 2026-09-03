@@ -745,10 +745,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assessments/{assessment_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Assessment */
+        post: operations["submit_assessment_api_v1_assessments__assessment_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/{assessment_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Assessment */
+        post: operations["approve_assessment_api_v1_assessments__assessment_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/{assessment_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return Assessment */
+        post: operations["return_assessment_api_v1_assessments__assessment_id__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AssessmentActionRequest */
+        AssessmentActionRequest: {
+            /** Row Version */
+            row_version: number;
+        };
+        /** AssessmentActionsResponse */
+        AssessmentActionsResponse: {
+            /** Can Submit */
+            can_submit: boolean;
+            /** Can Approve */
+            can_approve: boolean;
+            /** Can Return */
+            can_return: boolean;
+            /** Unavailable Reason */
+            unavailable_reason: string | null;
+        };
         /** AssessmentDetailResponse */
         AssessmentDetailResponse: {
             /** Assessment Id */
@@ -768,6 +835,19 @@ export interface components {
             row_version: number;
             /** Editable */
             editable: boolean;
+            /** Submitted By */
+            submitted_by: number | null;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Review Decision */
+            review_decision: ("approved" | "returned") | null;
+            /** Review Comment */
+            review_comment: string | null;
+            /** Reviewer Id */
+            reviewer_id: number | null;
+            /** Reviewed At */
+            reviewed_at: string | null;
+            actions: components["schemas"]["AssessmentActionsResponse"];
             /** Return Reason */
             return_reason: string | null;
             /** Reassess Reason */
@@ -860,6 +940,13 @@ export interface components {
             id: number;
             /** Version No */
             version_no: string;
+        };
+        /** AssessmentReturnRequest */
+        AssessmentReturnRequest: {
+            /** Row Version */
+            row_version: number;
+            /** Review Comment */
+            review_comment: string;
         };
         /** AssessmentTaskPageResponse */
         AssessmentTaskPageResponse: {
@@ -3574,6 +3661,168 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AssessmentDraftUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentDetailResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    submit_assessment_api_v1_assessments__assessment_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentDetailResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approve_assessment_api_v1_assessments__assessment_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentDetailResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    return_assessment_api_v1_assessments__assessment_id__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentReturnRequest"];
             };
         };
         responses: {

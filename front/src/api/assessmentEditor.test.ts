@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   AssessmentApiError,
+  approveAssessment,
   getAssessmentDetail,
+  returnAssessment,
   saveAssessmentDraft,
+  submitAssessment,
   type AssessmentDraftUpdate,
 } from './assessmentEditor'
 
@@ -63,5 +66,26 @@ describe('assessment editor API client', () => {
         fields: [{ path: 'applicability_basis', message: '此字段为必填项' }],
       }),
     )
+  })
+
+  it('sends narrow generated-contract action payloads', async () => {
+    const detail = { assessment_id: 9, row_version: 2 }
+    fetchMock.mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify(detail), { status: 200 }),
+    ))
+
+    await submitAssessment(9, { row_version: 1 })
+    await approveAssessment(9, { row_version: 2 })
+    await returnAssessment(9, { row_version: 2, review_comment: '补充依据' })
+
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/v1/assessments/9/submit',
+      '/api/v1/assessments/9/approve',
+      '/api/v1/assessments/9/return',
+    ])
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({
+      row_version: 2,
+      review_comment: '补充依据',
+    })
   })
 })

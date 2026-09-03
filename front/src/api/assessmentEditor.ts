@@ -2,6 +2,8 @@ import type { components } from './generated'
 
 export type AssessmentDetail = components['schemas']['AssessmentDetailResponse']
 export type AssessmentDraftUpdate = components['schemas']['AssessmentDraftUpdateRequest']
+export type AssessmentActionRequest = components['schemas']['AssessmentActionRequest']
+export type AssessmentReturnRequest = components['schemas']['AssessmentReturnRequest']
 export type AssessmentFieldError = { path: string; message: string }
 
 export class AssessmentApiError extends Error {
@@ -45,5 +47,23 @@ export function saveAssessmentDraft(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(draft),
+  })
+}
+
+export function submitAssessment(assessmentId: number, payload: AssessmentActionRequest): Promise<AssessmentDetail> {
+  return request(`/api/v1/assessments/${assessmentId}/submit`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  })
+}
+
+export function approveAssessment(assessmentId: number, payload: AssessmentActionRequest): Promise<AssessmentDetail> {
+  return request(`/api/v1/assessments/${assessmentId}/approve`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  })
+}
+
+export function returnAssessment(assessmentId: number, payload: AssessmentReturnRequest): Promise<AssessmentDetail> {
+  return request(`/api/v1/assessments/${assessmentId}/return`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   })
 }

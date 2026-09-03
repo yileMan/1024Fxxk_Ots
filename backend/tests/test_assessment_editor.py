@@ -19,7 +19,7 @@ from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
 from app.repositories.assessment_editor import AssessmentEditorRepository
 from app.services.authentication import AuthenticationService
-from tests.test_vulnerability_workbench import login, seed_catalog
+from tests.test_vulnerability_workbench import grant_version_scope, login, seed_catalog
 
 
 @pytest.fixture
@@ -180,6 +180,32 @@ def test_submit_rejects_self_review_assignment_stale_and_non_pending(
     assert repeated.json()["code"] == "ASSESSMENT_ACTION_CONFLICT"
 
 
+def test_submit_rejects_inconsistent_saved_environmental_result(
+    client: TestClient,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    enable_source_cvss31(client, target_id)
+    with client.app.state.database.session_factory.begin() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment is not None
+        assessment.cvss_version = "3.1"
+        assessment.cvss_metrics_json = {"CR": "H"}
+        assessment.environmental_score = 0.1
+        assessment.environmental_vector = "forged"
+        assessment.calculator_version = "ots-cvss31-1"
+
+    response = submit_assessment(client, target_id)
+    assert response.status_code == 409
+    assert response.json()["code"] == "ASSESSMENT_ACTION_CONFLICT"
+    with client.app.state.database.session_factory() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment is not None
+        assert assessment.status == "pending"
+        assert assessment.submitted_by is None
+
+
 def test_current_reviewer_can_approve_but_cannot_self_review_or_repeat(
     client: TestClient,
 ) -> None:
@@ -255,6 +281,71 @@ def test_return_requires_comment_rejects_extra_fields_and_preserves_conclusion(
     assert refused.status_code == 409
 
 
+def test_review_uses_current_assignment_scope_role_and_blocks_submitter(
+    client: TestClient,
+) -> None:
+    scope = seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    assert submit_assessment(client, target_id).status_code == 200
+
+    with client.app.state.database.session_factory.begin() as session:
+        from app.models.products import ProductVersion
+        version = session.get(ProductVersion, int(scope["version_a"]["id"]))
+        assessment = session.get(ProductAssessment, target_id)
+        assert version is not None and assessment is not None
+        version.reviewer_id = int(scope["replacement"]["id"])
+        assessment.submitted_by = int(scope["replacement"]["id"])
+
+    client.cookies.clear()
+    login(client, "reviewer", "user-password")
+    old_reviewer = client.post(
+        f"/api/v1/assessments/{target_id}/approve", json={"row_version": 2}
+    )
+    assert old_reviewer.status_code == 403
+
+    client.cookies.clear()
+    login(client)
+    grant_version_scope(
+        client, int(scope["replacement"]["id"]), int(scope["product_a"]["id"]),
+        int(scope["version_a"]["id"]),
+    )
+    client.cookies.clear()
+    login(client, "replacement", "user-password")
+    self_review = client.post(
+        f"/api/v1/assessments/{target_id}/approve", json={"row_version": 2}
+    )
+    assert self_review.status_code == 403
+    assert self_review.json()["code"] == "ASSESSMENT_SELF_REVIEW_FORBIDDEN"
+
+
+def test_action_and_audit_roll_back_together_on_failure(
+    client: TestClient, monkeypatch,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    service = client.app.state.assessment_editor_service
+    original = service._transition
+
+    def fail_after_writes(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("forced rollback")
+
+    monkeypatch.setattr(service, "_transition", fail_after_writes)
+    response = submit_assessment(client, target_id)
+    assert response.status_code == 500
+    with client.app.state.database.session_factory() as session:
+        assessment = session.get(ProductAssessment, target_id)
+        assert assessment is not None
+        assert assessment.status == "pending"
+        assert assessment.submitted_by is None
+        assert assessment.row_version == 1
+        assert session.scalar(
+            select(func.count(AuditLog.id)).where(AuditLog.object_id == str(target_id))
+        ) == 0
+
+
 def test_assessment_actions_openapi_contract(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
     for action in ("submit", "approve", "return"):
@@ -285,6 +376,18 @@ def test_owner_reads_current_and_historical_details_with_server_editability(
         "owner_id": 2,
         "row_version": 1,
         "editable": True,
+        "submitted_by": None,
+        "submitted_at": None,
+        "review_decision": None,
+        "review_comment": None,
+        "reviewer_id": None,
+        "reviewed_at": None,
+        "actions": {
+            "can_submit": True,
+            "can_approve": False,
+            "can_return": False,
+            "unavailable_reason": None,
+        },
         "return_reason": None,
         "reassess_reason": None,
         "product": {"id": 1, "name": "产品 P-A"},

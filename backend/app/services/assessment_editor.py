@@ -10,7 +10,11 @@ from app.models.assessments import ProductAssessment
 from app.models.user import AuditLog
 from app.repositories.assessment_editor import EDITABLE_STATUSES, AssessmentEditorRepository
 from app.repositories.vulnerability_catalog import VulnerabilityCatalogRepository
-from app.schemas.assessment_editor import AssessmentDraftUpdateRequest
+from app.schemas.assessment_editor import (
+    AssessmentActionRequest,
+    AssessmentDraftUpdateRequest,
+    AssessmentReturnRequest,
+)
 from app.services.authentication import PublicUser
 from app.services.cvss31 import Cvss31Error, calculate_environmental, parse_base_vector
 from app.services.vulnerability_matching import CANDIDATE_DISCLAIMER
@@ -65,8 +69,27 @@ class AssessmentValidationError(AssessmentEditorError):
         self.fields = [{"path": field, "message": message}]
 
 
+class AssessmentSubmitIncompleteError(AssessmentValidationError):
+    code = "ASSESSMENT_SUBMIT_INCOMPLETE"
+
+    def __init__(self, fields: list[str]) -> None:
+        self.fields = [{"path": field, "message": "提交前必须填写完整"} for field in fields]
+
+
 class CvssSourceUnavailableError(AssessmentValidationError):
     code = "CVSS31_SOURCE_UNAVAILABLE"
+
+
+class AssessmentActionConflictError(AssessmentEditorError):
+    code = "ASSESSMENT_ACTION_CONFLICT"
+
+
+class ReviewerReassignmentRequiredError(AssessmentEditorError):
+    code = "REVIEWER_REASSIGNMENT_REQUIRED"
+
+
+class AssessmentSelfReviewError(AssessmentForbiddenError):
+    code = "ASSESSMENT_SELF_REVIEW_FORBIDDEN"
 
 
 class AssessmentEditorService:
@@ -166,6 +189,147 @@ class AssessmentEditorService:
             assert refreshed is not None
             return self._serialize(session, user, refreshed)
 
+    def submit(
+        self, user: PublicUser, assessment_id: int, request: AssessmentActionRequest
+    ) -> dict[str, object]:
+        with self._session_factory.begin() as session:
+            context = self._visible_context(session, user, assessment_id)
+            assessment = self._assessment(context)
+            if "product_owner" not in user.roles or assessment.owner_id != user.id or int(context["version_owner_id"]) != user.id:
+                raise AssessmentForbiddenError()
+            self._require_action_state(assessment, "pending", request.row_version)
+            if int(context["version_reviewer_id"]) == user.id:
+                raise ReviewerReassignmentRequiredError()
+            missing = [
+                field for field in DRAFT_FIELDS
+                if field == "applicability" and assessment.applicability == "pending"
+                or field != "applicability" and self._blank(getattr(assessment, field))
+            ]
+            if missing:
+                raise AssessmentSubmitIncompleteError(missing)
+            self._validate_persisted_scoring(assessment, context)
+            now = datetime.now(timezone.utc)
+            self._transition(
+                session, assessment, request.row_version, "pending",
+                {"status": "submitted", "submitted_by": user.id, "submitted_at": now},
+                now, "submit", user.id,
+            )
+            return self._refreshed_detail(session, user, assessment_id)
+
+    def approve(
+        self, user: PublicUser, assessment_id: int, request: AssessmentActionRequest
+    ) -> dict[str, object]:
+        return self._review(user, assessment_id, request.row_version, "approved", None)
+
+    def return_assessment(
+        self, user: PublicUser, assessment_id: int, request: AssessmentReturnRequest
+    ) -> dict[str, object]:
+        comment = request.review_comment.strip()
+        if not comment:
+            raise AssessmentValidationError("review_comment")
+        return self._review(user, assessment_id, request.row_version, "returned", comment)
+
+    def _review(
+        self, user: PublicUser, assessment_id: int, row_version: int,
+        decision: str, comment: str | None,
+    ) -> dict[str, object]:
+        with self._session_factory.begin() as session:
+            context = self._visible_context(session, user, assessment_id)
+            assessment = self._assessment(context)
+            if "reviewer" not in user.roles or int(context["version_reviewer_id"]) != user.id:
+                raise AssessmentForbiddenError()
+            if assessment.submitted_by == user.id:
+                raise AssessmentSelfReviewError()
+            self._require_action_state(assessment, "submitted", row_version)
+            now = datetime.now(timezone.utc)
+            target_status = "completed" if decision == "approved" else "returned"
+            self._transition(
+                session, assessment, row_version, "submitted",
+                {
+                    "status": target_status,
+                    "review_decision": decision,
+                    "review_comment": comment,
+                    "reviewer_id": user.id,
+                    "reviewed_at": now,
+                },
+                now, "approve" if decision == "approved" else "return", user.id,
+            )
+            return self._refreshed_detail(session, user, assessment_id)
+
+    @staticmethod
+    def _assessment(context: dict[str, object]) -> ProductAssessment:
+        assessment = context["ProductAssessment"]
+        assert isinstance(assessment, ProductAssessment)
+        return assessment
+
+    @staticmethod
+    def _blank(value: object) -> bool:
+        return value is None or isinstance(value, str) and not value.strip()
+
+    @staticmethod
+    def _require_action_state(
+        assessment: ProductAssessment, expected_status: str, row_version: int
+    ) -> None:
+        if not assessment.is_current or assessment.status != expected_status:
+            raise AssessmentActionConflictError()
+        if assessment.row_version != row_version:
+            raise AssessmentVersionConflictError()
+
+    @staticmethod
+    def _validate_persisted_scoring(
+        assessment: ProductAssessment, context: dict[str, object]
+    ) -> None:
+        source_vector = context["cvss31_vector"]
+        if not source_vector:
+            return
+        try:
+            parse_base_vector(str(source_vector))
+            if assessment.cvss_metrics_json is None:
+                return
+            result = calculate_environmental(str(source_vector), assessment.cvss_metrics_json)
+        except Cvss31Error as error:
+            raise AssessmentActionConflictError() from error
+        if (
+            assessment.cvss_version != "3.1"
+            or assessment.environmental_score is None
+            or Decimal(str(assessment.environmental_score)) != Decimal(str(result.score))
+            or assessment.environmental_vector != result.vector
+            or assessment.calculator_version != result.calculator_version
+        ):
+            raise AssessmentActionConflictError()
+
+    def _transition(
+        self, session: Session, assessment: ProductAssessment, row_version: int,
+        expected_status: str, values: dict[str, object], now: datetime,
+        action: str, actor_id: int,
+    ) -> None:
+        if not self._repository.transition_if_version(
+            session, assessment_id=assessment.id, expected_status=expected_status,
+            row_version=row_version, values=values, updated_at=now,
+        ):
+            raise AssessmentActionConflictError()
+        session.add(AuditLog(
+            user_id=actor_id,
+            action="update",
+            object_type="product_assessment",
+            object_id=str(assessment.id),
+            detail_json={
+                "action": action,
+                "revision_no": assessment.revision_no,
+                "status": {"from": expected_status, "to": values["status"]},
+                "row_version": {"from": row_version, "to": row_version + 1},
+            },
+        ))
+        session.flush()
+
+    def _refreshed_detail(
+        self, session: Session, user: PublicUser, assessment_id: int
+    ) -> dict[str, object]:
+        session.expire_all()
+        context = self._repository.get_context(session, assessment_id)
+        assert context is not None
+        return self._serialize(session, user, context)
+
     def _visible_context(
         self, session: Session, user: PublicUser, assessment_id: int
     ) -> dict[str, object]:
@@ -206,6 +370,23 @@ class AssessmentEditorService:
             and assessment.status in EDITABLE_STATUSES
             and assessment.owner_id == user.id
         )
+        can_submit = (
+            editable
+            and assessment.status == "pending"
+            and "product_owner" in user.roles
+            and int(context["version_owner_id"]) == user.id
+            and int(context["version_reviewer_id"]) != user.id
+        )
+        can_review = (
+            assessment.is_current
+            and assessment.status == "submitted"
+            and "reviewer" in user.roles
+            and int(context["version_reviewer_id"]) == user.id
+            and assessment.submitted_by != user.id
+        )
+        unavailable_reason = self._action_unavailable_reason(
+            user, context, assessment, can_submit, can_review
+        )
         return {
             "assessment_id": assessment.id,
             "revision_no": assessment.revision_no,
@@ -214,6 +395,18 @@ class AssessmentEditorService:
             "owner_id": assessment.owner_id,
             "row_version": assessment.row_version,
             "editable": editable,
+            "submitted_by": assessment.submitted_by,
+            "submitted_at": assessment.submitted_at,
+            "review_decision": assessment.review_decision,
+            "review_comment": assessment.review_comment,
+            "reviewer_id": assessment.reviewer_id,
+            "reviewed_at": assessment.reviewed_at,
+            "actions": {
+                "can_submit": can_submit,
+                "can_approve": can_review,
+                "can_return": can_review,
+                "unavailable_reason": unavailable_reason,
+            },
             "return_reason": assessment.review_comment if assessment.status == "returned" else None,
             "reassess_reason": assessment.reassess_reason if assessment.status == "reassess" else None,
             "product": {"id": context["product_id"], "name": context["product_name"]},
@@ -247,6 +440,25 @@ class AssessmentEditorService:
             },
             "environmental_scoring": self._serialize_scoring(assessment, context),
         }
+
+    @staticmethod
+    def _action_unavailable_reason(
+        user: PublicUser, context: dict[str, object], assessment: ProductAssessment,
+        can_submit: bool, can_review: bool,
+    ) -> str | None:
+        if can_submit or can_review:
+            return None
+        if assessment.status == "submitted":
+            return "ASSESSMENT_ALREADY_SUBMITTED"
+        if assessment.status == "returned":
+            return "RETURNED_REVISION_READ_ONLY"
+        if assessment.status == "completed":
+            return "ASSESSMENT_COMPLETED"
+        if assessment.status == "reassess":
+            return "REASSESS_RESUBMIT_NOT_AVAILABLE"
+        if int(context["version_reviewer_id"]) == user.id and assessment.owner_id == user.id:
+            return "REVIEWER_REASSIGNMENT_REQUIRED"
+        return "ACTION_NOT_ALLOWED"
 
     @staticmethod
     def _serialize_scoring(

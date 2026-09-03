@@ -2583,10 +2583,222 @@
           }
         }
       }
+    },
+    "/api/v1/assessments/{assessment_id}/submit": {
+      "post": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Submit Assessment",
+        "operationId": "submit_assessment_api_v1_assessments__assessment_id__submit_post",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentDetailResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
+    },
+    "/api/v1/assessments/{assessment_id}/approve": {
+      "post": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Approve Assessment",
+        "operationId": "approve_assessment_api_v1_assessments__assessment_id__approve_post",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentDetailResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
+    },
+    "/api/v1/assessments/{assessment_id}/return": {
+      "post": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Return Assessment",
+        "operationId": "return_assessment_api_v1_assessments__assessment_id__return_post",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentReturnRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentDetailResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AssessmentActionRequest": {
+        "properties": {
+          "row_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Row Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "row_version"
+        ],
+        "title": "AssessmentActionRequest"
+      },
+      "AssessmentActionsResponse": {
+        "properties": {
+          "can_submit": {
+            "type": "boolean",
+            "title": "Can Submit"
+          },
+          "can_approve": {
+            "type": "boolean",
+            "title": "Can Approve"
+          },
+          "can_return": {
+            "type": "boolean",
+            "title": "Can Return"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_submit",
+          "can_approve",
+          "can_return",
+          "unavailable_reason"
+        ],
+        "title": "AssessmentActionsResponse"
+      },
       "AssessmentDetailResponse": {
         "properties": {
           "assessment_id": {
@@ -2623,6 +2835,81 @@
           "editable": {
             "type": "boolean",
             "title": "Editable"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "review_decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approved",
+                  "returned"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Decision"
+          },
+          "review_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Comment"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "actions": {
+            "$ref": "#/components/schemas/AssessmentActionsResponse"
           },
           "return_reason": {
             "anyOf": [
@@ -2688,6 +2975,13 @@
           "owner_id",
           "row_version",
           "editable",
+          "submitted_by",
+          "submitted_at",
+          "review_decision",
+          "review_comment",
+          "reviewer_id",
+          "reviewed_at",
+          "actions",
           "return_reason",
           "reassess_reason",
           "product",
@@ -3055,6 +3349,28 @@
           "version_no"
         ],
         "title": "AssessmentProductVersionResponse"
+      },
+      "AssessmentReturnRequest": {
+        "properties": {
+          "row_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Row Version"
+          },
+          "review_comment": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Review Comment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "row_version",
+          "review_comment"
+        ],
+        "title": "AssessmentReturnRequest"
       },
       "AssessmentTaskPageResponse": {
         "properties": {

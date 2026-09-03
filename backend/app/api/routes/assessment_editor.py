@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.authorization import require_current_user
-from app.schemas.assessment_editor import AssessmentDetailResponse, AssessmentDraftUpdateRequest
+from app.schemas.assessment_editor import (
+    AssessmentActionRequest,
+    AssessmentDetailResponse,
+    AssessmentDraftUpdateRequest,
+    AssessmentReturnRequest,
+)
 from app.services.assessment_editor import (
     AssessmentEditorError,
     AssessmentForbiddenError,
@@ -10,6 +15,9 @@ from app.services.assessment_editor import (
     AssessmentValidationError,
     CvssSourceUnavailableError,
     AssessmentVersionConflictError,
+    AssessmentActionConflictError,
+    ReviewerReassignmentRequiredError,
+    AssessmentSelfReviewError,
 )
 from app.services.authentication import PublicUser
 
@@ -27,8 +35,9 @@ def _raise_error(error: AssessmentEditorError) -> None:
             404, detail={"code": error.code, "message": "产品评估不存在"}
         ) from error
     if isinstance(error, AssessmentForbiddenError):
+        message = "禁止审核自己提交的评估" if isinstance(error, AssessmentSelfReviewError) else "无权访问或编辑该产品评估"
         raise HTTPException(
-            403, detail={"code": error.code, "message": "无权访问或编辑该产品评估"}
+            403, detail={"code": error.code, "message": message}
         ) from error
     if isinstance(error, AssessmentValidationError):
         raise HTTPException(
@@ -41,8 +50,13 @@ def _raise_error(error: AssessmentEditorError) -> None:
                 "fields": error.fields,
             },
         ) from error
-    if isinstance(error, (AssessmentNotEditableError, AssessmentVersionConflictError)):
-        message = "评估当前不可编辑" if isinstance(error, AssessmentNotEditableError) else "评估已被其他操作更新，请刷新"
+    if isinstance(error, (AssessmentNotEditableError, AssessmentVersionConflictError, AssessmentActionConflictError, ReviewerReassignmentRequiredError)):
+        if isinstance(error, ReviewerReassignmentRequiredError):
+            message = "提交人与当前审核人相同，请先重新分配审核人"
+        elif isinstance(error, AssessmentNotEditableError):
+            message = "评估当前不可编辑"
+        else:
+            message = "评估已被其他操作更新，请刷新"
         raise HTTPException(409, detail={"code": error.code, "message": message}) from error
     raise error
 
@@ -87,6 +101,57 @@ def save_assessment_draft(
     try:
         return AssessmentDetailResponse.model_validate(
             _service(request).save_draft(user, assessment_id, payload)
+        )
+    except AssessmentEditorError as error:
+        _raise_error(error)
+
+
+@router.post(
+    "/assessments/{assessment_id}/submit",
+    response_model=AssessmentDetailResponse,
+    responses=ERROR_RESPONSES,
+)
+def submit_assessment(
+    assessment_id: int, payload: AssessmentActionRequest, request: Request,
+    user: PublicUser = Depends(require_current_user),
+) -> AssessmentDetailResponse:
+    try:
+        return AssessmentDetailResponse.model_validate(
+            _service(request).submit(user, assessment_id, payload)
+        )
+    except AssessmentEditorError as error:
+        _raise_error(error)
+
+
+@router.post(
+    "/assessments/{assessment_id}/approve",
+    response_model=AssessmentDetailResponse,
+    responses=ERROR_RESPONSES,
+)
+def approve_assessment(
+    assessment_id: int, payload: AssessmentActionRequest, request: Request,
+    user: PublicUser = Depends(require_current_user),
+) -> AssessmentDetailResponse:
+    try:
+        return AssessmentDetailResponse.model_validate(
+            _service(request).approve(user, assessment_id, payload)
+        )
+    except AssessmentEditorError as error:
+        _raise_error(error)
+
+
+@router.post(
+    "/assessments/{assessment_id}/return",
+    response_model=AssessmentDetailResponse,
+    responses=ERROR_RESPONSES,
+)
+def return_assessment(
+    assessment_id: int, payload: AssessmentReturnRequest, request: Request,
+    user: PublicUser = Depends(require_current_user),
+) -> AssessmentDetailResponse:
+    try:
+        return AssessmentDetailResponse.model_validate(
+            _service(request).return_assessment(user, assessment_id, payload)
         )
     except AssessmentEditorError as error:
         _raise_error(error)
