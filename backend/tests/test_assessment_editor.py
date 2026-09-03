@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -19,11 +21,13 @@ from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
 from app.repositories.assessment_editor import AssessmentEditorRepository
 from app.services.assessment_editor import (
+    AssessmentActionConflictError,
     REVISION_COPY_FIELDS,
     REVISION_EVENT_FIELDS,
     REVISION_SYSTEM_FIELDS,
 )
-from app.services.authentication import AuthenticationService
+from app.schemas.assessment_editor import AssessmentRevisionCreateRequest, AssessmentReturnRequest
+from app.services.authentication import AuthenticationService, PublicUser
 from tests.test_vulnerability_workbench import grant_version_scope, login, seed_catalog
 
 
@@ -423,6 +427,12 @@ def test_revision_history_detail_and_comparison_are_scoped_and_read_only(
 
     client.cookies.clear()
     login(client, "owner", "user-password")
+    with client.app.state.database.session_factory() as session:
+        audit_count_before_reads = session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.object_type == "product_assessment"
+            )
+        )
     history = client.get(f"/api/v1/assessments/{current_id}/revisions")
     assert history.status_code == 200
     assert [item["revision_no"] for item in history.json()["items"]] == [2, 1]
@@ -434,6 +444,13 @@ def test_revision_history_detail_and_comparison_are_scoped_and_read_only(
     assert historical.json()["editable"] is False
     assert historical.json()["current_revision_id"] == current_id
     assert not any(historical.json()["actions"].values())
+    historical_save = client.put(
+        f"/api/v1/assessments/{target_id}/draft",
+        json=draft_payload(row_version=historical.json()["row_version"]),
+    )
+    assert historical_save.status_code == 409
+    assert historical_save.json()["code"] == "ASSESSMENT_NOT_EDITABLE"
+    assert historical_save.json()["current_revision_id"] == current_id
 
     comparison = client.get(
         f"/api/v1/assessments/{current_id}/revision-comparison"
@@ -454,6 +471,13 @@ def test_revision_history_detail_and_comparison_are_scoped_and_read_only(
         f"?base_revision_id={target_id}&target_revision_id={out_of_scope}"
     )
     assert cross_chain.status_code in {403, 422}
+    with client.app.state.database.session_factory() as session:
+        audit_count_after_reads = session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.object_type == "product_assessment"
+            )
+        )
+    assert audit_count_after_reads == audit_count_before_reads
 
 
 def test_return_revision_and_audit_roll_back_together(
@@ -1151,6 +1175,64 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
                 assert reviewed.review_decision == "approved"
                 assert reviewed.submitted_by == 2
                 assert reviewed.row_version == 4
+
+            owner = PublicUser(2, "owner", "产品负责人", ["product_owner"])
+            create_barrier = Barrier(2)
+
+            def create_revision_concurrently() -> str:
+                create_barrier.wait()
+                try:
+                    application.state.assessment_editor_service.create_revision(
+                        owner,
+                        target_id,
+                        AssessmentRevisionCreateRequest(
+                            row_version=4, revision_reason="并发人工修订"
+                        ),
+                    )
+                    return "created"
+                except AssessmentActionConflictError:
+                    return "conflict"
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                create_results = list(executor.map(lambda _: create_revision_concurrently(), range(2)))
+            assert sorted(create_results) == ["conflict", "created"]
+
+            submitted_target_id = assessment_id(mysql_client, "submitted")
+            reviewer = PublicUser(3, "reviewer", "审核人", ["reviewer"])
+            return_barrier = Barrier(2)
+
+            def return_concurrently() -> str:
+                return_barrier.wait()
+                try:
+                    application.state.assessment_editor_service.return_assessment(
+                        reviewer,
+                        submitted_target_id,
+                        AssessmentReturnRequest(
+                            row_version=1, review_comment="并发退回"
+                        ),
+                    )
+                    return "returned"
+                except AssessmentActionConflictError:
+                    return "conflict"
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                return_results = list(executor.map(lambda _: return_concurrently(), range(2)))
+            assert sorted(return_results) == ["conflict", "returned"]
+
+            with application.state.database.session_factory() as session:
+                for business_id in (target_id, submitted_target_id):
+                    root = session.get(ProductAssessment, business_id)
+                    assert root is not None
+                    revisions = session.scalars(
+                        select(ProductAssessment).where(
+                            ProductAssessment.product_ots_id == root.product_ots_id,
+                            ProductAssessment.vulnerability_id == root.vulnerability_id,
+                        )
+                    ).all()
+                    assert sum(item.is_current for item in revisions) == 1
+                    assert [item.revision_no for item in sorted(revisions, key=lambda item: item.revision_no)] == list(
+                        range(1, max(item.revision_no for item in revisions) + 1)
+                    )
     finally:
         if application is not None:
             application.state.database.engine.dispose()

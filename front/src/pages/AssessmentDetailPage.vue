@@ -151,7 +151,7 @@
           </footer>
         </form>
 
-        <section v-if="detail.actions.can_submit || detail.actions.can_approve || detail.actions.can_return || detail.actions.can_create_revision || detail.submitted_at || detail.reviewed_at" class="action-panel" aria-label="评估提交与审核">
+        <section v-if="detail.actions.can_submit || detail.actions.can_approve || detail.actions.can_return || detail.actions.can_create_revision || detail.submitted_at || detail.reviewed_at || actionSuccess || actionError" class="action-panel" aria-label="评估提交与审核">
           <div>
             <small>WORKFLOW ACTIONS</small><h3>提交与审核</h3>
             <p v-if="detail.submitted_at">提交人 #{{ detail.submitted_by }} · {{ formatTime(detail.submitted_at) }}</p>
@@ -201,6 +201,7 @@ type TextKey = 'analysis_summary' | 'trigger_conditions' | 'affected_functions' 
 type FieldDefinition = { key: TextKey; label: string; wide?: boolean }
 
 const props = defineProps<{ assessmentId: number }>()
+const activeAssessmentId = ref(props.assessmentId)
 const detail = ref<AssessmentDetail | null>(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -323,7 +324,7 @@ async function load(): Promise<void> {
   conflict.value = false
   clearFieldErrors()
   try {
-    applyDetail(await getAssessmentDetail(props.assessmentId))
+    applyDetail(await getAssessmentDetail(activeAssessmentId.value))
   } catch (reason) {
     detail.value = null
     loadError.value = reason instanceof AssessmentApiError && reason.status === 403
@@ -383,6 +384,7 @@ function displayDiffValue(value: unknown): string {
 }
 
 function applyDetail(response: AssessmentDetail): void {
+  activeAssessmentId.value = response.assessment_id
   detail.value = response
   for (const field of [...firstFields, ...middleFields, ...lastFields]) form[field.key] = response.draft[field.key] ?? ''
   form.applicability = response.draft.applicability
@@ -478,6 +480,7 @@ async function save(): Promise<void> {
     } else if (reason instanceof AssessmentApiError && reason.status === 409) {
       saveError.value = reason.message
       conflict.value = true
+      if (reason.currentRevisionId !== null) activeAssessmentId.value = reason.currentRevisionId
       if (reason.code === 'ASSESSMENT_NOT_EDITABLE' && detail.value) detail.value.editable = false
     } else {
       saveError.value = reason instanceof AssessmentApiError ? reason.message : '保存失败，请稍后重试。'

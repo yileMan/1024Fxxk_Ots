@@ -221,6 +221,27 @@ describe('AssessmentDetailPage', () => {
     expect(wrapper.get<HTMLTextAreaElement>('[name="analysis_summary"]').element.value).toBe('服务器新值')
   })
 
+  it('refreshes a superseded revision through the current id returned by the server', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 'ASSESSMENT_NOT_EDITABLE', message: '评估当前不可编辑', current_revision_id: 10,
+      }), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail({
+        assessment_id: 10, revision_no: 2, parent_revision_id: 9,
+        current_revision_id: 10, status: 'returned', row_version: 1,
+      })), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    await wrapper.get('[data-action="refresh-server"]').trigger('click')
+    await flushPromises()
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/assessments/10')
+    expect(wrapper.text()).toContain('REV 2')
+  })
+
   it('renders server-declared read-only state without a save action', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail({
       status: 'submitted', editable: false, return_reason: null,
@@ -270,6 +291,51 @@ describe('AssessmentDetailPage', () => {
     await wrapper.get('[data-action="confirm-return"]').trigger('click')
     expect(wrapper.get('[data-error-for="review_comment"]').text()).toContain('必须填写')
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('adopts the new current revision returned by the review action', async () => {
+    const submitted = detail({
+      status: 'submitted', editable: false, submitted_by: 2, row_version: 2,
+      actions: {
+        can_submit: false, can_approve: true, can_return: true,
+        can_create_revision: false, unavailable_reason: null,
+      },
+      return_reason: null,
+      reason_type: null,
+    })
+    const current = detail({
+      assessment_id: 10, revision_no: 3, parent_revision_id: 9,
+      current_revision_id: 10, status: 'returned', row_version: 1,
+      editable: false, return_reason: '补充影响依据', reason_type: 'review_return',
+      actions: {
+        can_submit: false, can_approve: false, can_return: false,
+        can_create_revision: false, unavailable_reason: 'ACTION_NOT_ALLOWED',
+      },
+    })
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(submitted), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        current_revision: current,
+        reviewed_revision: {
+          assessment_id: 9, revision_no: 2, status: 'returned',
+          review_decision: 'returned', review_comment: '补充影响依据',
+          reviewer_id: 3, reviewed_at: '2026-09-04T00:00:00Z',
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    await wrapper.get('[data-action="return-assessment"]').trigger('click')
+    await wrapper.get('[name="review_comment"]').setValue('补充影响依据')
+    await wrapper.get('[data-action="confirm-return"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('REV 3')
+    expect(wrapper.text()).toContain('补充影响依据')
+
+    await wrapper.get('[data-action="load-revisions"]').trigger('click')
+    await flushPromises()
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/assessments/10/revisions')
   })
 
   it('explains that an OTS-14 returned revision stays read-only', async () => {

@@ -61,7 +61,10 @@ def _raise_error(error: AssessmentEditorError) -> None:
             message = "评估当前不可编辑"
         else:
             message = "评估已被其他操作更新，请刷新"
-        raise HTTPException(409, detail={"code": error.code, "message": message}) from error
+        detail = {"code": error.code, "message": message}
+        if isinstance(error, AssessmentNotEditableError) and error.current_revision_id is not None:
+            detail["current_revision_id"] = error.current_revision_id
+        raise HTTPException(409, detail=detail) from error
     raise error
 
 

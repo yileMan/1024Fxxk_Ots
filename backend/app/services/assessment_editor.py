@@ -74,6 +74,9 @@ class AssessmentForbiddenError(AssessmentEditorError):
 class AssessmentNotEditableError(AssessmentEditorError):
     code = "ASSESSMENT_NOT_EDITABLE"
 
+    def __init__(self, current_revision_id: int | None = None) -> None:
+        self.current_revision_id = current_revision_id
+
 
 class AssessmentVersionConflictError(AssessmentEditorError):
     code = "ASSESSMENT_VERSION_CONFLICT"
@@ -141,7 +144,13 @@ class AssessmentEditorService:
             ):
                 raise AssessmentForbiddenError()
             if not assessment.is_current or assessment.status not in EDITABLE_STATUSES:
-                raise AssessmentNotEditableError()
+                raise AssessmentNotEditableError(
+                    self._repository.current_revision_id(
+                        session,
+                        product_ots_id=assessment.product_ots_id,
+                        vulnerability_id=assessment.vulnerability_id,
+                    )
+                )
             if assessment.row_version != request.row_version:
                 raise AssessmentVersionConflictError()
 

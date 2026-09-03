@@ -16,6 +16,7 @@ export class AssessmentApiError extends Error {
     readonly code: string,
     readonly status: number,
     readonly fields: AssessmentFieldError[] = [],
+    readonly currentRevisionId: number | null = null,
   ) {
     super(message)
   }
@@ -28,12 +29,14 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       code?: string
       message?: string
       fields?: AssessmentFieldError[]
+      current_revision_id?: number
     }
     throw new AssessmentApiError(
       payload.message ?? '评估服务暂时不可用',
       payload.code ?? 'NETWORK_ERROR',
       response.status,
       payload.fields ?? [],
+      payload.current_revision_id ?? null,
     )
   }
   return response.json() as Promise<T>

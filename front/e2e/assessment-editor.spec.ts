@@ -22,6 +22,9 @@ function assessmentDetail(editable = true) {
   return {
     assessment_id: 9,
     revision_no: 1,
+    parent_revision_id: null as number | null,
+    current_revision_id: 9,
+    reason_type: null as string | null,
     is_current: true,
     status: 'pending',
     owner_id: 2,
@@ -33,7 +36,7 @@ function assessmentDetail(editable = true) {
     review_comment: null as string | null,
     reviewer_id: null as number | null,
     reviewed_at: null as string | null,
-    actions: { can_submit: editable, can_approve: false, can_return: false, unavailable_reason: null as string | null },
+    actions: { can_submit: editable, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: null as string | null },
     return_reason: null as string | null,
     reassess_reason: null as string | null,
     product: { id: 10, name: '监护仪' },
@@ -224,7 +227,7 @@ test('负责人确认提交后采用服务端待审核只读状态', async ({ pa
       server.row_version = 2
       server.submitted_by = 2
       server.submitted_at = '2026-09-03T10:00:00Z'
-      server.actions = { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'ASSESSMENT_ALREADY_SUBMITTED' }
+      server.actions = { can_submit: false, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: 'ASSESSMENT_ALREADY_SUBMITTED' }
       return route.fulfill({ status: 200, json: server })
     }
     return route.fulfill({ status: 500 })
@@ -245,22 +248,40 @@ test('审核人可退回且空意见不能发送请求', async ({ page }) => {
   server.status = 'submitted'
   server.submitted_by = 2
   server.submitted_at = '2026-09-03T10:00:00Z'
-  server.actions = { can_submit: false, can_approve: true, can_return: true, unavailable_reason: null }
+  server.actions = { can_submit: false, can_approve: true, can_return: true, can_create_revision: false, unavailable_reason: null }
   let returnRequests = 0
   await page.route('**/api/v1/assessments/9**', async route => {
     if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/return')) {
       returnRequests += 1
       const payload = route.request().postDataJSON() as { review_comment: string }
-      server.status = 'returned'
-      server.row_version = 2
-      server.review_decision = 'returned'
-      server.review_comment = payload.review_comment.trim()
-      server.return_reason = server.review_comment
-      server.reviewer_id = 3
-      server.reviewed_at = '2026-09-03T10:10:00Z'
-      server.actions = { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'RETURNED_REVISION_READ_ONLY' }
-      return route.fulfill({ status: 200, json: server })
+      const reviewedRevision = {
+        assessment_id: 9,
+        revision_no: 1,
+        status: 'returned',
+        review_comment: payload.review_comment.trim(),
+        reviewer_id: 3,
+        reviewed_at: '2026-09-03T10:10:00Z',
+      }
+      const currentRevision = {
+        ...server,
+        assessment_id: 10,
+        revision_no: 2,
+        parent_revision_id: 9,
+        current_revision_id: 10,
+        status: 'returned',
+        row_version: 1,
+        submitted_by: null,
+        submitted_at: null,
+        review_decision: null,
+        review_comment: null,
+        reviewer_id: null,
+        reviewed_at: null,
+        return_reason: payload.review_comment.trim(),
+        reason_type: 'review_return',
+        actions: { can_submit: false, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: 'ASSESSMENT_OWNER_REQUIRED' },
+      }
+      return route.fulfill({ status: 200, json: { current_revision: currentRevision, reviewed_revision: reviewedRevision } })
     }
     return route.fulfill({ status: 500 })
   })
@@ -272,8 +293,9 @@ test('审核人可退回且空意见不能发送请求', async ({ page }) => {
   expect(returnRequests).toBe(0)
   await page.getByLabel('退回意见').fill('  请补充影响依据  ')
   await page.getByRole('button', { name: '确认退回' }).click()
-  await expect(page.getByText('评估已退回')).toBeVisible()
-  await expect(page.getByText(/等待创建新修订/)).toBeVisible()
+  await expect(page.getByText('评估已退回并创建新修订')).toBeVisible()
+  await expect(page.getByText('REV 2 · 已退回')).toBeVisible()
+  await expect(page.getByText('请补充影响依据')).toBeVisible()
   expect(returnRequests).toBe(1)
 })
 
@@ -283,7 +305,7 @@ test('审核人确认通过后直接完成评估', async ({ page }) => {
   server.status = 'submitted'
   server.submitted_by = 2
   server.submitted_at = '2026-09-03T10:00:00Z'
-  server.actions = { can_submit: false, can_approve: true, can_return: true, unavailable_reason: null }
+  server.actions = { can_submit: false, can_approve: true, can_return: true, can_create_revision: false, unavailable_reason: null }
   await page.route('**/api/v1/assessments/9**', async route => {
     if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/approve')) {
@@ -292,7 +314,7 @@ test('审核人确认通过后直接完成评估', async ({ page }) => {
       server.review_decision = 'approved'
       server.reviewer_id = 3
       server.reviewed_at = '2026-09-03T10:10:00Z'
-      server.actions = { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'ASSESSMENT_COMPLETED' }
+      server.actions = { can_submit: false, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: 'ASSESSMENT_COMPLETED' }
       return route.fulfill({ status: 200, json: server })
     }
     return route.fulfill({ status: 500 })
@@ -304,6 +326,76 @@ test('审核人确认通过后直接完成评估', async ({ page }) => {
   await page.getByRole('button', { name: '确认通过' }).click()
   await expect(page.getByText('评估已审核通过')).toBeVisible()
   await expect(page.getByText('REV 1 · 已完成')).toBeVisible()
+})
+
+test('负责人从已完成评估创建新修订并查看历史与差异', async ({ page }) => {
+  await authenticate(page)
+  const completed = assessmentDetail(false)
+  completed.status = 'completed'
+  completed.review_decision = 'approved'
+  completed.reviewer_id = 3
+  completed.reviewed_at = '2026-09-03T10:10:00Z'
+  completed.actions = { can_submit: false, can_approve: false, can_return: false, can_create_revision: true, unavailable_reason: null }
+  completed.draft.analysis_summary = '原结论'
+
+  const revised = {
+    ...completed,
+    assessment_id: 10,
+    revision_no: 2,
+    parent_revision_id: 9,
+    current_revision_id: 10,
+    status: 'reassess',
+    row_version: 1,
+    editable: true,
+    review_decision: null,
+    reviewer_id: null,
+    reviewed_at: null,
+    reassess_reason: '上游组件版本变化',
+    reason_type: 'manual_revision',
+    actions: { can_submit: true, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: null },
+    draft: { ...completed.draft, analysis_summary: '更新后结论' },
+  }
+
+  await page.route('**/api/v1/assessments/**', async route => {
+    const url = new URL(route.request().url())
+    const method = route.request().method()
+    if (method === 'GET' && url.pathname.endsWith('/revision-comparison')) {
+      return route.fulfill({ status: 200, json: {
+        base_revision_id: 9,
+        target_revision_id: 10,
+        changes: [{ field: 'analysis_summary', before: '原结论', after: '更新后结论' }],
+      } })
+    }
+    if (method === 'GET' && url.pathname.endsWith('/revisions')) {
+      return route.fulfill({ status: 200, json: { items: [
+        { assessment_id: 10, revision_no: 2, parent_revision_id: 9, status: 'reassess', is_current: true, reason: '上游组件版本变化', reason_type: 'manual_revision', created_at: '2026-09-04T08:00:00Z' },
+        { assessment_id: 9, revision_no: 1, parent_revision_id: null, status: 'completed', is_current: false, reason: null, reason_type: null, created_at: '2026-09-03T08:00:00Z' },
+      ] } })
+    }
+    if (method === 'POST' && url.pathname.endsWith('/9/revisions')) {
+      return route.fulfill({ status: 201, json: revised })
+    }
+    if (method === 'GET' && url.pathname.endsWith('/9')) return route.fulfill({ status: 200, json: completed })
+    if (method === 'GET' && url.pathname.endsWith('/10')) return route.fulfill({ status: 200, json: revised })
+    return route.fulfill({ status: 500 })
+  })
+
+  await page.goto('/system/assessments/9?from=completed')
+  await page.getByRole('button', { name: '创建新修订' }).click()
+  await page.getByRole('button', { name: '确认创建' }).click()
+  await expect(page.locator('[data-error-for="revision_reason"]')).toContainText('必须填写')
+  await page.getByLabel('修订原因').fill('  上游组件版本变化  ')
+  await page.getByRole('button', { name: '确认创建' }).click()
+  await expect(page.getByText('新修订已创建')).toBeVisible()
+  await expect(page.getByText('REV 2 · 待复评')).toBeVisible()
+  await expect(page.getByLabel('分析摘要')).toBeEnabled()
+
+  await page.getByRole('button', { name: '查看修订历史' }).click()
+  await expect(page.locator('[data-revision-id="9"]')).toContainText('REV 1')
+  await expect(page.locator('[data-revision-id="10"]')).toContainText('当前')
+  await page.getByRole('button', { name: '比较版本' }).click()
+  await expect(page.locator('.revision-diff')).toContainText('原结论')
+  await expect(page.locator('.revision-diff')).toContainText('更新后结论')
 })
 
 test('自审分配提示重新指定且直接越权审核被服务端拒绝', async ({ page }) => {
