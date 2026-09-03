@@ -280,4 +280,23 @@ describe('AssessmentDetailPage', () => {
     expect(wrapper.text()).toContain('已退回，等待创建新修订')
     expect(wrapper.find('button[type="submit"]').exists()).toBe(false)
   })
+
+  it('keeps the action dialog and reports reassignment or field errors', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 'REVIEWER_REASSIGNMENT_REQUIRED',
+        message: '提交人与当前审核人相同，请先重新分配审核人',
+      }), { status: 409 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    await wrapper.get('[data-action="submit-assessment"]').trigger('click')
+    await wrapper.get('[data-action="confirm-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('请先重新分配审核人')
+    expect(wrapper.find('[data-action="confirm-submit"]').exists()).toBe(true)
+    expect(wrapper.find('[data-action="refresh-server"]').exists()).toBe(true)
+  })
 })

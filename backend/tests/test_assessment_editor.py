@@ -873,6 +873,45 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
                 assert saved is not None
                 assert saved.analysis_summary == "第一个会话"
                 assert saved.row_version == 2
+                saved.status = "submitted"
+                saved.submitted_by = 2
+                saved.submitted_at = datetime.now(timezone.utc)
+                saved.row_version = 3
+                session.commit()
+
+            approve_session = application.state.database.session_factory()
+            return_session = application.state.database.session_factory()
+            try:
+                now = datetime.now(timezone.utc)
+                assert repository.transition_if_version(
+                    approve_session,
+                    assessment_id=target_id,
+                    expected_status="submitted",
+                    row_version=3,
+                    values={"status": "completed", "review_decision": "approved", "reviewer_id": 3, "reviewed_at": now},
+                    updated_at=now,
+                )
+                approve_session.commit()
+                assert not repository.transition_if_version(
+                    return_session,
+                    assessment_id=target_id,
+                    expected_status="submitted",
+                    row_version=3,
+                    values={"status": "returned", "review_decision": "returned", "review_comment": "并发退回", "reviewer_id": 3, "reviewed_at": now},
+                    updated_at=now,
+                )
+                return_session.rollback()
+            finally:
+                approve_session.close()
+                return_session.close()
+
+            with application.state.database.session_factory() as session:
+                reviewed = session.get(ProductAssessment, target_id)
+                assert reviewed is not None
+                assert reviewed.status == "completed"
+                assert reviewed.review_decision == "approved"
+                assert reviewed.submitted_by == 2
+                assert reviewed.row_version == 4
     finally:
         if application is not None:
             application.state.database.engine.dispose()

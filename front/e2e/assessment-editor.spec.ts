@@ -27,8 +27,15 @@ function assessmentDetail(editable = true) {
     owner_id: 2,
     row_version: 1,
     editable,
-    return_reason: null,
-    reassess_reason: null,
+    submitted_by: null as number | null,
+    submitted_at: null as string | null,
+    review_decision: null as string | null,
+    review_comment: null as string | null,
+    reviewer_id: null as number | null,
+    reviewed_at: null as string | null,
+    actions: { can_submit: editable, can_approve: false, can_return: false, unavailable_reason: null as string | null },
+    return_reason: null as string | null,
+    reassess_reason: null as string | null,
     product: { id: 10, name: '监护仪' },
     product_version: { id: 11, version_no: '3.0' },
     ots: { id: 13, name: 'OpenSSL', version: '3.0.0' },
@@ -204,4 +211,122 @@ test('两个客户端使用旧版本保存时不覆盖先成功的草稿', async
 
   await firstContext.close()
   await secondContext.close()
+})
+
+test('负责人确认提交后采用服务端待审核只读状态', async ({ page }) => {
+  await authenticate(page)
+  const server = assessmentDetail()
+  await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
+    if (route.request().url().endsWith('/submit')) {
+      server.status = 'submitted'
+      server.editable = false
+      server.row_version = 2
+      server.submitted_by = 2
+      server.submitted_at = '2026-09-03T10:00:00Z'
+      server.actions = { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'ASSESSMENT_ALREADY_SUBMITTED' }
+      return route.fulfill({ status: 200, json: server })
+    }
+    return route.fulfill({ status: 500 })
+  })
+
+  await page.goto('/system/assessments/9?from=pending')
+  await page.getByRole('button', { name: '提交审核' }).click()
+  await expect(page.getByRole('dialog')).toContainText('提交后当前修订将冻结')
+  await page.getByRole('button', { name: '确认提交' }).click()
+  await expect(page.getByText('评估已提交审核')).toBeVisible()
+  await expect(page.getByText('REV 1 · 待审核')).toBeVisible()
+  await expect(page.getByLabel('分析摘要')).toBeDisabled()
+})
+
+test('审核人可退回且空意见不能发送请求', async ({ page }) => {
+  await authenticate(page, reviewer)
+  const server = assessmentDetail(false)
+  server.status = 'submitted'
+  server.submitted_by = 2
+  server.submitted_at = '2026-09-03T10:00:00Z'
+  server.actions = { can_submit: false, can_approve: true, can_return: true, unavailable_reason: null }
+  let returnRequests = 0
+  await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
+    if (route.request().url().endsWith('/return')) {
+      returnRequests += 1
+      const payload = route.request().postDataJSON() as { review_comment: string }
+      server.status = 'returned'
+      server.row_version = 2
+      server.review_decision = 'returned'
+      server.review_comment = payload.review_comment.trim()
+      server.return_reason = server.review_comment
+      server.reviewer_id = 3
+      server.reviewed_at = '2026-09-03T10:10:00Z'
+      server.actions = { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'RETURNED_REVISION_READ_ONLY' }
+      return route.fulfill({ status: 200, json: server })
+    }
+    return route.fulfill({ status: 500 })
+  })
+
+  await page.goto('/system/assessments/9?from=submitted')
+  await page.getByRole('button', { name: '退回修改' }).click()
+  await page.getByRole('button', { name: '确认退回' }).click()
+  await expect(page.locator('[data-error-for="review_comment"]')).toContainText('必须填写')
+  expect(returnRequests).toBe(0)
+  await page.getByLabel('退回意见').fill('  请补充影响依据  ')
+  await page.getByRole('button', { name: '确认退回' }).click()
+  await expect(page.getByText('评估已退回')).toBeVisible()
+  await expect(page.getByText(/等待创建新修订/)).toBeVisible()
+  expect(returnRequests).toBe(1)
+})
+
+test('审核人确认通过后直接完成评估', async ({ page }) => {
+  await authenticate(page, reviewer)
+  const server = assessmentDetail(false)
+  server.status = 'submitted'
+  server.submitted_by = 2
+  server.submitted_at = '2026-09-03T10:00:00Z'
+  server.actions = { can_submit: false, can_approve: true, can_return: true, unavailable_reason: null }
+  await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
+    if (route.request().url().endsWith('/approve')) {
+      server.status = 'completed'
+      server.row_version = 2
+      server.review_decision = 'approved'
+      server.reviewer_id = 3
+      server.reviewed_at = '2026-09-03T10:10:00Z'
+      server.actions = { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'ASSESSMENT_COMPLETED' }
+      return route.fulfill({ status: 200, json: server })
+    }
+    return route.fulfill({ status: 500 })
+  })
+
+  await page.goto('/system/assessments/9?from=submitted')
+  await page.getByRole('button', { name: '审核通过' }).click()
+  await expect(page.getByRole('dialog')).toContainText('直接进入已完成')
+  await page.getByRole('button', { name: '确认通过' }).click()
+  await expect(page.getByText('评估已审核通过')).toBeVisible()
+  await expect(page.getByText('REV 1 · 已完成')).toBeVisible()
+})
+
+test('自审分配提示重新指定且直接越权审核被服务端拒绝', async ({ page }) => {
+  await authenticate(page)
+  const server = assessmentDetail()
+  await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
+    if (route.request().url().endsWith('/submit')) {
+      return route.fulfill({ status: 409, json: { code: 'REVIEWER_REASSIGNMENT_REQUIRED', message: '提交人与当前审核人相同，请先重新分配审核人' } })
+    }
+    if (route.request().url().endsWith('/approve')) {
+      return route.fulfill({ status: 403, json: { code: 'ASSESSMENT_FORBIDDEN', message: '无权审核该产品评估' } })
+    }
+    return route.fulfill({ status: 500 })
+  })
+
+  await page.goto('/system/assessments/9?from=pending')
+  await page.getByRole('button', { name: '提交审核' }).click()
+  await page.getByRole('button', { name: '确认提交' }).click()
+  await expect(page.getByRole('alert')).toContainText('请先重新分配审核人')
+
+  const status = await page.evaluate(async () => (await fetch('/api/v1/assessments/9/approve', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ row_version: 1 }),
+  })).status)
+  expect(status).toBe(403)
 })
