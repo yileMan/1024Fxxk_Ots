@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.assessments import ProductAssessment
@@ -12,7 +12,7 @@ from app.models.products import Product, ProductVersion
 from app.repositories.scopes import ScopeRepository
 
 
-EDITABLE_STATUSES = {"pending", "reassess"}
+EDITABLE_STATUSES = {"pending", "returned", "reassess"}
 
 
 class AssessmentEditorRepository:
@@ -56,6 +56,58 @@ class AssessmentEditorRepository:
         )
         row = session.execute(statement).mappings().first()
         return dict(row) if row is not None else None
+
+    @staticmethod
+    def get_context_for_update(
+        session: Session, assessment_id: int
+    ) -> dict[str, object] | None:
+        statement = (
+            select(ProductAssessment.id)
+            .where(ProductAssessment.id == assessment_id)
+            .with_for_update()
+        )
+        if session.scalar(statement) is None:
+            return None
+        return AssessmentEditorRepository.get_context(session, assessment_id)
+
+    @staticmethod
+    def current_revision_id(
+        session: Session, *, product_ots_id: int, vulnerability_id: int
+    ) -> int | None:
+        return session.scalar(
+            select(ProductAssessment.id).where(
+                ProductAssessment.product_ots_id == product_ots_id,
+                ProductAssessment.vulnerability_id == vulnerability_id,
+                ProductAssessment.is_current.is_(True),
+            )
+        )
+
+    @staticmethod
+    def next_revision_no(
+        session: Session, *, product_ots_id: int, vulnerability_id: int
+    ) -> int:
+        current = session.scalar(
+            select(func.max(ProductAssessment.revision_no)).where(
+                ProductAssessment.product_ots_id == product_ots_id,
+                ProductAssessment.vulnerability_id == vulnerability_id,
+            )
+        )
+        return int(current or 0) + 1
+
+    @staticmethod
+    def list_revisions(
+        session: Session, *, product_ots_id: int, vulnerability_id: int
+    ) -> list[ProductAssessment]:
+        return list(
+            session.scalars(
+                select(ProductAssessment)
+                .where(
+                    ProductAssessment.product_ots_id == product_ots_id,
+                    ProductAssessment.vulnerability_id == vulnerability_id,
+                )
+                .order_by(ProductAssessment.revision_no.desc(), ProductAssessment.id.desc())
+            ).all()
+        )
 
     @staticmethod
     def update_draft_if_version(

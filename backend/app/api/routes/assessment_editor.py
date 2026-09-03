@@ -5,7 +5,11 @@ from app.schemas.assessment_editor import (
     AssessmentActionRequest,
     AssessmentDetailResponse,
     AssessmentDraftUpdateRequest,
+    AssessmentRevisionComparisonResponse,
+    AssessmentRevisionCreateRequest,
+    AssessmentRevisionHistoryResponse,
     AssessmentReturnRequest,
+    AssessmentReturnResponse,
 )
 from app.services.assessment_editor import (
     AssessmentEditorError,
@@ -142,16 +146,75 @@ def approve_assessment(
 
 @router.post(
     "/assessments/{assessment_id}/return",
-    response_model=AssessmentDetailResponse,
+    response_model=AssessmentReturnResponse,
     responses=ERROR_RESPONSES,
 )
 def return_assessment(
     assessment_id: int, payload: AssessmentReturnRequest, request: Request,
     user: PublicUser = Depends(require_current_user),
+) -> AssessmentReturnResponse:
+    try:
+        return AssessmentReturnResponse.model_validate(
+            _service(request).return_assessment(user, assessment_id, payload)
+        )
+    except AssessmentEditorError as error:
+        _raise_error(error)
+
+
+@router.post(
+    "/assessments/{assessment_id}/revisions",
+    response_model=AssessmentDetailResponse,
+    responses=ERROR_RESPONSES,
+)
+def create_assessment_revision(
+    assessment_id: int,
+    payload: AssessmentRevisionCreateRequest,
+    request: Request,
+    user: PublicUser = Depends(require_current_user),
 ) -> AssessmentDetailResponse:
     try:
         return AssessmentDetailResponse.model_validate(
-            _service(request).return_assessment(user, assessment_id, payload)
+            _service(request).create_revision(user, assessment_id, payload)
+        )
+    except AssessmentEditorError as error:
+        _raise_error(error)
+
+
+@router.get(
+    "/assessments/{assessment_id}/revisions",
+    response_model=AssessmentRevisionHistoryResponse,
+    responses=ERROR_RESPONSES,
+)
+def assessment_revision_history(
+    assessment_id: int,
+    request: Request,
+    user: PublicUser = Depends(require_current_user),
+) -> AssessmentRevisionHistoryResponse:
+    try:
+        return AssessmentRevisionHistoryResponse.model_validate(
+            _service(request).revision_history(user, assessment_id)
+        )
+    except AssessmentEditorError as error:
+        _raise_error(error)
+
+
+@router.get(
+    "/assessments/{assessment_id}/revision-comparison",
+    response_model=AssessmentRevisionComparisonResponse,
+    responses=ERROR_RESPONSES,
+)
+def compare_assessment_revisions(
+    assessment_id: int,
+    base_revision_id: int,
+    target_revision_id: int,
+    request: Request,
+    user: PublicUser = Depends(require_current_user),
+) -> AssessmentRevisionComparisonResponse:
+    try:
+        return AssessmentRevisionComparisonResponse.model_validate(
+            _service(request).compare_revisions(
+                user, assessment_id, base_revision_id, target_revision_id
+            )
         )
     except AssessmentEditorError as error:
         _raise_error(error)

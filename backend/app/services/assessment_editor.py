@@ -4,6 +4,7 @@ import hashlib
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.assessments import ProductAssessment
@@ -13,6 +14,7 @@ from app.repositories.vulnerability_catalog import VulnerabilityCatalogRepositor
 from app.schemas.assessment_editor import (
     AssessmentActionRequest,
     AssessmentDraftUpdateRequest,
+    AssessmentRevisionCreateRequest,
     AssessmentReturnRequest,
 )
 from app.services.authentication import PublicUser
@@ -40,6 +42,21 @@ SCORING_FIELDS = (
     "calculator_version",
 )
 TEXT_FIELDS = set(DRAFT_FIELDS) - {"applicability", "treatment"}
+REVISION_COPY_FIELDS = (*DRAFT_FIELDS, *SCORING_FIELDS, "based_on_source_modified_at")
+REVISION_EVENT_FIELDS = (
+    "submitted_by", "submitted_at", "review_decision", "review_comment",
+    "reviewer_id", "reviewed_at",
+)
+REVISION_SYSTEM_FIELDS = (
+    "id", "product_ots_id", "vulnerability_id", "revision_no",
+    "parent_revision_id", "is_current", "status", "owner_id",
+    "reassess_reason", "row_version", "created_at", "updated_at",
+)
+COMPARISON_BUSINESS_FIELDS = (*DRAFT_FIELDS, *SCORING_FIELDS)
+COMPARISON_EVENT_FIELDS = (
+    "status", "owner_id", "submitted_by", "submitted_at", "review_decision",
+    "review_comment", "reviewer_id", "reviewed_at", "reassess_reason",
+)
 
 
 class AssessmentEditorError(Exception):
@@ -118,7 +135,10 @@ class AssessmentEditorService:
             context = self._visible_context(session, user, assessment_id)
             assessment = context["ProductAssessment"]
             assert isinstance(assessment, ProductAssessment)
-            if assessment.owner_id != user.id:
+            if (
+                assessment.owner_id != user.id
+                or int(context["version_owner_id"]) != user.id
+            ):
                 raise AssessmentForbiddenError()
             if not assessment.is_current or assessment.status not in EDITABLE_STATUSES:
                 raise AssessmentNotEditableError()
@@ -194,10 +214,14 @@ class AssessmentEditorService:
     ) -> dict[str, object]:
         with self._session_factory.begin() as session:
             context = self._visible_context(session, user, assessment_id)
+            context = self._repository.get_context_for_update(session, assessment_id)
+            assert context is not None
             assessment = self._assessment(context)
             if "product_owner" not in user.roles or assessment.owner_id != user.id or int(context["version_owner_id"]) != user.id:
                 raise AssessmentForbiddenError()
-            self._require_action_state(assessment, "pending", request.row_version)
+            self._require_action_state(
+                assessment, {"pending", "returned", "reassess"}, request.row_version
+            )
             if int(context["version_reviewer_id"]) == user.id:
                 raise ReviewerReassignmentRequiredError()
             missing = [
@@ -209,10 +233,11 @@ class AssessmentEditorService:
                 raise AssessmentSubmitIncompleteError(missing)
             self._validate_persisted_scoring(assessment, context)
             now = datetime.now(timezone.utc)
+            expected_status = assessment.status
             self._transition(
-                session, assessment, request.row_version, "pending",
+                session, assessment, request.row_version, expected_status,
                 {"status": "submitted", "submitted_by": user.id, "submitted_at": now},
-                now, "submit", user.id,
+                now, "submit" if expected_status == "pending" else "resubmit", user.id,
             )
             return self._refreshed_detail(session, user, assessment_id)
 
@@ -227,7 +252,143 @@ class AssessmentEditorService:
         comment = request.review_comment.strip()
         if not comment:
             raise AssessmentValidationError("review_comment")
-        return self._review(user, assessment_id, request.row_version, "returned", comment)
+        with self._session_factory.begin() as session:
+            context = self._visible_context(session, user, assessment_id)
+            context = self._repository.get_context_for_update(session, assessment_id)
+            assert context is not None
+            assessment = self._assessment(context)
+            if "reviewer" not in user.roles or int(context["version_reviewer_id"]) != user.id:
+                raise AssessmentForbiddenError()
+            if assessment.submitted_by == user.id:
+                raise AssessmentSelfReviewError()
+            self._require_action_state(assessment, "submitted", request.row_version)
+            now = datetime.now(timezone.utc)
+            child = self._create_child_revision(
+                session,
+                assessment=assessment,
+                expected_status="submitted",
+                row_version=request.row_version,
+                parent_values={
+                    "status": "returned",
+                    "is_current": False,
+                    "review_decision": "returned",
+                    "review_comment": comment,
+                    "reviewer_id": user.id,
+                    "reviewed_at": now,
+                },
+                child_status="returned",
+                reassess_reason=None,
+                actor_id=user.id,
+                action="return_create_revision",
+                now=now,
+            )
+            current = self._refreshed_detail(session, user, child.id)
+            session.expire_all()
+            reviewed = session.get(ProductAssessment, assessment_id)
+            assert reviewed is not None
+            return {
+                "current_revision": current,
+                "reviewed_revision": {
+                    "assessment_id": reviewed.id,
+                    "revision_no": reviewed.revision_no,
+                    "status": reviewed.status,
+                    "review_decision": reviewed.review_decision,
+                    "review_comment": reviewed.review_comment,
+                    "reviewer_id": reviewed.reviewer_id,
+                    "reviewed_at": reviewed.reviewed_at,
+                },
+            }
+
+    def create_revision(
+        self,
+        user: PublicUser,
+        assessment_id: int,
+        request: AssessmentRevisionCreateRequest,
+    ) -> dict[str, object]:
+        reason = request.revision_reason.strip()
+        if not reason:
+            raise AssessmentValidationError("revision_reason")
+        with self._session_factory.begin() as session:
+            context = self._visible_context(session, user, assessment_id)
+            context = self._repository.get_context_for_update(session, assessment_id)
+            assert context is not None
+            assessment = self._assessment(context)
+            if (
+                "product_owner" not in user.roles
+                or assessment.owner_id != user.id
+                or int(context["version_owner_id"]) != user.id
+            ):
+                raise AssessmentForbiddenError()
+            self._require_action_state(assessment, "completed", request.row_version)
+            now = datetime.now(timezone.utc)
+            child = self._create_child_revision(
+                session,
+                assessment=assessment,
+                expected_status="completed",
+                row_version=request.row_version,
+                parent_values={"is_current": False},
+                child_status="reassess",
+                reassess_reason=reason,
+                actor_id=user.id,
+                action="manual_create_revision",
+                now=now,
+            )
+            return self._refreshed_detail(session, user, child.id)
+
+    def revision_history(
+        self, user: PublicUser, assessment_id: int
+    ) -> dict[str, object]:
+        with self._session_factory() as session:
+            context = self._visible_context(session, user, assessment_id)
+            assessment = self._assessment(context)
+            revisions = self._repository.list_revisions(
+                session,
+                product_ots_id=assessment.product_ots_id,
+                vulnerability_id=assessment.vulnerability_id,
+            )
+            return {
+                "items": [self._serialize_revision_summary(session, item) for item in revisions]
+            }
+
+    def compare_revisions(
+        self,
+        user: PublicUser,
+        assessment_id: int,
+        base_revision_id: int,
+        target_revision_id: int,
+    ) -> dict[str, object]:
+        with self._session_factory() as session:
+            anchor = self._assessment(self._visible_context(session, user, assessment_id))
+            base = self._assessment(self._visible_context(session, user, base_revision_id))
+            target = self._assessment(self._visible_context(session, user, target_revision_id))
+            chain = (anchor.product_ots_id, anchor.vulnerability_id)
+            if (
+                (base.product_ots_id, base.vulnerability_id) != chain
+                or (target.product_ots_id, target.vulnerability_id) != chain
+            ):
+                raise AssessmentValidationError(
+                    "target_revision_id", "修订不属于同一评估链"
+                )
+            changes = []
+            for category, fields in (
+                ("business", COMPARISON_BUSINESS_FIELDS),
+                ("event", COMPARISON_EVENT_FIELDS),
+            ):
+                for field in fields:
+                    before = getattr(base, field)
+                    after = getattr(target, field)
+                    if not self._values_equal(field, before, after):
+                        changes.append({
+                            "field": field,
+                            "category": category,
+                            "before": before,
+                            "after": after,
+                        })
+            return {
+                "base_revision_id": base.id,
+                "target_revision_id": target.id,
+                "changes": changes,
+            }
 
     def _review(
         self, user: PublicUser, assessment_id: int, row_version: int,
@@ -268,9 +429,12 @@ class AssessmentEditorService:
 
     @staticmethod
     def _require_action_state(
-        assessment: ProductAssessment, expected_status: str, row_version: int
+        assessment: ProductAssessment,
+        expected_status: str | set[str],
+        row_version: int,
     ) -> None:
-        if not assessment.is_current or assessment.status != expected_status:
+        statuses = {expected_status} if isinstance(expected_status, str) else expected_status
+        if not assessment.is_current or assessment.status not in statuses:
             raise AssessmentActionConflictError()
         if assessment.row_version != row_version:
             raise AssessmentVersionConflictError()
@@ -322,6 +486,69 @@ class AssessmentEditorService:
         ))
         session.flush()
 
+    def _create_child_revision(
+        self,
+        session: Session,
+        *,
+        assessment: ProductAssessment,
+        expected_status: str,
+        row_version: int,
+        parent_values: dict[str, object],
+        child_status: str,
+        reassess_reason: str | None,
+        actor_id: int,
+        action: str,
+        now: datetime,
+    ) -> ProductAssessment:
+        copied = {field: getattr(assessment, field) for field in REVISION_COPY_FIELDS}
+        if not self._repository.transition_if_version(
+            session,
+            assessment_id=assessment.id,
+            expected_status=expected_status,
+            row_version=row_version,
+            values=parent_values,
+            updated_at=now,
+        ):
+            raise AssessmentActionConflictError()
+        child = ProductAssessment(
+            product_ots_id=assessment.product_ots_id,
+            vulnerability_id=assessment.vulnerability_id,
+            revision_no=self._repository.next_revision_no(
+                session,
+                product_ots_id=assessment.product_ots_id,
+                vulnerability_id=assessment.vulnerability_id,
+            ),
+            parent_revision_id=assessment.id,
+            is_current=True,
+            status=child_status,
+            owner_id=assessment.owner_id,
+            **copied,
+            **{field: None for field in REVISION_EVENT_FIELDS},
+            reassess_reason=reassess_reason,
+            row_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(child)
+        session.flush()
+        session.add(AuditLog(
+            user_id=actor_id,
+            action="update",
+            object_type="product_assessment",
+            object_id=str(assessment.id),
+            detail_json={
+                "action": action,
+                "parent_assessment_id": assessment.id,
+                "parent_revision_no": assessment.revision_no,
+                "child_assessment_id": child.id,
+                "child_revision_no": child.revision_no,
+                "status": {"from": expected_status, "to": child_status},
+                "current": {"parent": False, "child": True},
+            },
+        ))
+        session.flush()
+        return child
+
     def _refreshed_detail(
         self, session: Session, user: PublicUser, assessment_id: int
     ) -> dict[str, object]:
@@ -352,6 +579,12 @@ class AssessmentEditorService:
     ) -> dict[str, object]:
         assessment = context["ProductAssessment"]
         assert isinstance(assessment, ProductAssessment)
+        current_revision_id = self._repository.current_revision_id(
+            session,
+            product_ots_id=assessment.product_ots_id,
+            vulnerability_id=assessment.vulnerability_id,
+        )
+        assert current_revision_id is not None
         candidates = self._catalog.list_candidates(
             session,
             vulnerability_id=int(context["vulnerability_id"]),
@@ -369,10 +602,11 @@ class AssessmentEditorService:
             assessment.is_current
             and assessment.status in EDITABLE_STATUSES
             and assessment.owner_id == user.id
+            and int(context["version_owner_id"]) == user.id
         )
         can_submit = (
             editable
-            and assessment.status == "pending"
+            and assessment.status in {"pending", "returned", "reassess"}
             and "product_owner" in user.roles
             and int(context["version_owner_id"]) == user.id
             and int(context["version_reviewer_id"]) != user.id
@@ -384,12 +618,28 @@ class AssessmentEditorService:
             and int(context["version_reviewer_id"]) == user.id
             and assessment.submitted_by != user.id
         )
+        can_create_revision = (
+            assessment.is_current
+            and assessment.status == "completed"
+            and "product_owner" in user.roles
+            and assessment.owner_id == user.id
+            and int(context["version_owner_id"]) == user.id
+        )
         unavailable_reason = self._action_unavailable_reason(
-            user, context, assessment, can_submit, can_review
+            user, context, assessment, can_submit, can_review, can_create_revision
+        )
+        parent = session.get(ProductAssessment, assessment.parent_revision_id) \
+            if assessment.parent_revision_id is not None else None
+        return_reason = (
+            parent.review_comment
+            if assessment.status == "returned" and parent is not None
+            else assessment.review_comment if assessment.status == "returned" else None
         )
         return {
             "assessment_id": assessment.id,
             "revision_no": assessment.revision_no,
+            "parent_revision_id": assessment.parent_revision_id,
+            "current_revision_id": current_revision_id,
             "is_current": assessment.is_current,
             "status": assessment.status,
             "owner_id": assessment.owner_id,
@@ -405,10 +655,12 @@ class AssessmentEditorService:
                 "can_submit": can_submit,
                 "can_approve": can_review,
                 "can_return": can_review,
+                "can_create_revision": can_create_revision,
                 "unavailable_reason": unavailable_reason,
             },
-            "return_reason": assessment.review_comment if assessment.status == "returned" else None,
+            "return_reason": return_reason,
             "reassess_reason": assessment.reassess_reason if assessment.status == "reassess" else None,
+            "reason_type": self._reason_type(session, assessment),
             "product": {"id": context["product_id"], "name": context["product_name"]},
             "product_version": {
                 "id": context["product_version_id"],
@@ -444,21 +696,70 @@ class AssessmentEditorService:
     @staticmethod
     def _action_unavailable_reason(
         user: PublicUser, context: dict[str, object], assessment: ProductAssessment,
-        can_submit: bool, can_review: bool,
+        can_submit: bool, can_review: bool, can_create_revision: bool,
     ) -> str | None:
-        if can_submit or can_review:
+        if can_submit or can_review or can_create_revision:
+            return None
+        if not assessment.is_current:
             return None
         if assessment.status == "submitted":
             return "ASSESSMENT_ALREADY_SUBMITTED"
         if assessment.status == "returned":
-            return "RETURNED_REVISION_READ_ONLY"
+            return "ACTION_NOT_ALLOWED"
         if assessment.status == "completed":
             return "ASSESSMENT_COMPLETED"
         if assessment.status == "reassess":
-            return "REASSESS_RESUBMIT_NOT_AVAILABLE"
+            return "ACTION_NOT_ALLOWED"
         if int(context["version_reviewer_id"]) == user.id and assessment.owner_id == user.id:
             return "REVIEWER_REASSIGNMENT_REQUIRED"
         return "ACTION_NOT_ALLOWED"
+
+    @staticmethod
+    def _reason_type(session: Session, assessment: ProductAssessment) -> str | None:
+        if assessment.status == "returned" and assessment.parent_revision_id is not None:
+            return "review_return"
+        if assessment.status != "reassess" or not assessment.reassess_reason:
+            return None
+        audits = session.scalars(
+            select(AuditLog).where(
+                AuditLog.object_type == "product_assessment",
+                AuditLog.object_id == str(assessment.parent_revision_id),
+            )
+        ).all()
+        if any(
+            item.detail_json.get("child_assessment_id") == assessment.id
+            and item.detail_json.get("action") == "manual_create_revision"
+            for item in audits
+        ):
+            return "manual_revision"
+        return "automatic_reassessment"
+
+    def _serialize_revision_summary(
+        self, session: Session, assessment: ProductAssessment
+    ) -> dict[str, object]:
+        parent = session.get(ProductAssessment, assessment.parent_revision_id) \
+            if assessment.parent_revision_id is not None else None
+        return {
+            "assessment_id": assessment.id,
+            "revision_no": assessment.revision_no,
+            "parent_revision_id": assessment.parent_revision_id,
+            "is_current": assessment.is_current,
+            "status": assessment.status,
+            "owner_id": assessment.owner_id,
+            "submitted_by": assessment.submitted_by,
+            "submitted_at": assessment.submitted_at,
+            "review_decision": assessment.review_decision,
+            "review_comment": assessment.review_comment,
+            "reviewer_id": assessment.reviewer_id,
+            "reviewed_at": assessment.reviewed_at,
+            "return_reason": parent.review_comment
+            if assessment.status == "returned" and parent is not None
+            else assessment.review_comment if assessment.status == "returned" else None,
+            "reassess_reason": assessment.reassess_reason,
+            "reason_type": self._reason_type(session, assessment),
+            "created_at": assessment.created_at,
+            "updated_at": assessment.updated_at,
+        }
 
     @staticmethod
     def _serialize_scoring(

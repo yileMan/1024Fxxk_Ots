@@ -18,6 +18,11 @@ from app.models.imports import Vulnerability
 from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
 from app.repositories.assessment_editor import AssessmentEditorRepository
+from app.services.assessment_editor import (
+    REVISION_COPY_FIELDS,
+    REVISION_EVENT_FIELDS,
+    REVISION_SYSTEM_FIELDS,
+)
 from app.services.authentication import AuthenticationService
 from tests.test_vulnerability_workbench import grant_version_scope, login, seed_catalog
 
@@ -136,6 +141,7 @@ def test_submit_requires_complete_persisted_snapshot_and_freezes_revision(
     assert body["submitted_at"] is not None
     assert body["actions"] == {
         "can_submit": False, "can_approve": False, "can_return": False,
+        "can_create_revision": False,
         "unavailable_reason": "ASSESSMENT_ALREADY_SUBMITTED",
     }
     with client.app.state.database.session_factory() as session:
@@ -437,7 +443,7 @@ def test_revision_history_detail_and_comparison_are_scoped_and_read_only(
     assert comparison.json()["base_revision_id"] == target_id
     assert comparison.json()["target_revision_id"] == current_id
     assert {change["field"] for change in comparison.json()["changes"]} >= {
-        "status", "submitted_by", "review_decision"
+        "submitted_by", "review_decision"
     }
 
     out_of_scope = assessment_id(client, "submitted", last=True)
@@ -448,6 +454,55 @@ def test_revision_history_detail_and_comparison_are_scoped_and_read_only(
         f"?base_revision_id={target_id}&target_revision_id={out_of_scope}"
     )
     assert cross_chain.status_code in {403, 422}
+
+
+def test_return_revision_and_audit_roll_back_together(
+    client: TestClient, monkeypatch,
+) -> None:
+    seed_catalog(client)
+    target_id = assessment_id(client, "pending")
+    complete_assessment(client, target_id)
+    assert submit_assessment(client, target_id).status_code == 200
+    service = client.app.state.assessment_editor_service
+    original = service._create_child_revision
+
+    def fail_after_revision_writes(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("forced revision rollback")
+
+    monkeypatch.setattr(service, "_create_child_revision", fail_after_revision_writes)
+    client.cookies.clear()
+    login(client, "reviewer", "user-password")
+    failed = client.post(
+        f"/api/v1/assessments/{target_id}/return",
+        json={"row_version": 2, "review_comment": "不得进入审计的完整退回意见"},
+    )
+    assert failed.status_code == 500
+
+    with client.app.state.database.session_factory() as session:
+        parent = session.get(ProductAssessment, target_id)
+        assert parent is not None
+        assert parent.status == "submitted"
+        assert parent.is_current is True
+        assert parent.review_decision is None
+        assert session.scalar(
+            select(func.count(ProductAssessment.id)).where(
+                ProductAssessment.product_ots_id == parent.product_ots_id,
+                ProductAssessment.vulnerability_id == parent.vulnerability_id,
+            )
+        ) == 1
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.object_id == str(target_id))
+        ).all()
+        assert [item.detail_json["action"] for item in audits] == ["submit"]
+
+
+def test_revision_clone_field_policy_covers_complete_model() -> None:
+    assert set(ProductAssessment.__table__.columns.keys()) == (
+        set(REVISION_COPY_FIELDS)
+        | set(REVISION_EVENT_FIELDS)
+        | set(REVISION_SYSTEM_FIELDS)
+    )
 
 
 def test_review_uses_current_assignment_scope_role_and_blocks_submitter(
@@ -551,6 +606,8 @@ def test_owner_reads_current_and_historical_details_with_server_editability(
     assert current.json() == {
         "assessment_id": current_id,
         "revision_no": 1,
+        "parent_revision_id": None,
+        "current_revision_id": current_id,
         "is_current": True,
         "status": "pending",
         "owner_id": 2,
@@ -566,10 +623,12 @@ def test_owner_reads_current_and_historical_details_with_server_editability(
             "can_submit": True,
             "can_approve": False,
             "can_return": False,
+            "can_create_revision": False,
             "unavailable_reason": None,
         },
         "return_reason": None,
         "reassess_reason": None,
+        "reason_type": None,
         "product": {"id": 1, "name": "产品 P-A"},
         "product_version": {"id": 1, "version_no": "1.0"},
         "ots": {"id": 1, "name": "OpenSSL", "version": "1.0"},

@@ -65,6 +65,10 @@ class AssessmentReturnRequest(AssessmentActionRequest):
     review_comment: str = Field(min_length=1, max_length=10_000)
 
 
+class AssessmentRevisionCreateRequest(AssessmentActionRequest):
+    revision_reason: str = Field(min_length=1, max_length=500)
+
+
 class AssessmentProductResponse(BaseModel):
     id: int
     name: str
@@ -106,12 +110,15 @@ class AssessmentActionsResponse(BaseModel):
     can_submit: bool
     can_approve: bool
     can_return: bool
+    can_create_revision: bool
     unavailable_reason: str | None
 
 
 class AssessmentDetailResponse(BaseModel):
     assessment_id: int
     revision_no: int
+    parent_revision_id: int | None
+    current_revision_id: int
     is_current: bool
     status: Literal["pending", "submitted", "returned", "completed", "reassess"]
     owner_id: int
@@ -126,6 +133,7 @@ class AssessmentDetailResponse(BaseModel):
     actions: AssessmentActionsResponse
     return_reason: str | None
     reassess_reason: str | None
+    reason_type: Literal["review_return", "manual_revision", "automatic_reassessment"] | None
     product: AssessmentProductResponse
     product_version: AssessmentProductVersionResponse
     ots: AssessmentOtsResponse
@@ -134,3 +142,55 @@ class AssessmentDetailResponse(BaseModel):
     candidate_disclaimer: str
     draft: AssessmentDraftFields
     environmental_scoring: EnvironmentalScoringResponse
+
+
+class AssessmentReviewedRevisionResponse(BaseModel):
+    assessment_id: int
+    revision_no: int
+    status: Literal["returned"]
+    review_decision: Literal["returned"]
+    review_comment: str
+    reviewer_id: int
+    reviewed_at: datetime
+
+
+class AssessmentReturnResponse(BaseModel):
+    current_revision: AssessmentDetailResponse
+    reviewed_revision: AssessmentReviewedRevisionResponse
+
+
+class AssessmentRevisionSummaryResponse(BaseModel):
+    assessment_id: int
+    revision_no: int
+    parent_revision_id: int | None
+    is_current: bool
+    status: Literal["pending", "submitted", "returned", "completed", "reassess"]
+    owner_id: int
+    submitted_by: int | None
+    submitted_at: datetime | None
+    review_decision: Literal["approved", "returned"] | None
+    review_comment: str | None
+    reviewer_id: int | None
+    reviewed_at: datetime | None
+    return_reason: str | None
+    reassess_reason: str | None
+    reason_type: Literal["review_return", "manual_revision", "automatic_reassessment"] | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssessmentRevisionHistoryResponse(BaseModel):
+    items: list[AssessmentRevisionSummaryResponse]
+
+
+class AssessmentRevisionChangeResponse(BaseModel):
+    field: str
+    category: Literal["business", "event"]
+    before: object | None
+    after: object | None
+
+
+class AssessmentRevisionComparisonResponse(BaseModel):
+    base_revision_id: int
+    target_revision_id: int
+    changes: list[AssessmentRevisionChangeResponse]
