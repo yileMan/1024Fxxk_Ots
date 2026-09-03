@@ -11,10 +11,17 @@ function detail(overrides: Record<string, unknown> = {}) {
     assessment_id: 9,
     revision_no: 2,
     is_current: true,
-    status: 'returned',
+    status: 'pending',
     owner_id: 2,
     row_version: 1,
     editable: true,
+    submitted_by: null,
+    submitted_at: null,
+    review_decision: null,
+    review_comment: null,
+    reviewer_id: null,
+    reviewed_at: null,
+    actions: { can_submit: true, can_approve: false, can_return: false, unavailable_reason: null },
     return_reason: '<b>补充影响依据</b>',
     reassess_reason: null,
     product: { id: 1, name: '监护仪' },
@@ -97,7 +104,7 @@ describe('AssessmentDetailPage', () => {
     expect(wrapper.text()).toContain('nvd@nist.gov')
     expect(wrapper.findAll('[data-cvss-metric]').length).toBe(11)
     expect(wrapper.text()).toContain('未覆盖来源指标')
-    expect(wrapper.findAll('button').some(button => button.text() === '提交审核')).toBe(false)
+    expect(wrapper.findAll('button').some(button => button.text() === '提交审核')).toBe(true)
   })
 
   it('previews environmental metrics and submits metrics rather than derived values', async () => {
@@ -221,5 +228,56 @@ describe('AssessmentDetailPage', () => {
     expect(wrapper.text()).toContain('当前评估为只读状态')
     expect(wrapper.find('button[type="submit"]').exists()).toBe(false)
     expect(wrapper.get<HTMLTextAreaElement>('[name="analysis_summary"]').element.disabled).toBe(true)
+  })
+
+  it('confirms submission once and adopts the server submitted state', async () => {
+    const submitted = detail({
+      status: 'submitted', editable: false, row_version: 2, submitted_by: 2,
+      submitted_at: '2026-09-03T10:00:00Z',
+      actions: { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'ASSESSMENT_ALREADY_SUBMITTED' },
+    })
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(submitted), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    await wrapper.get('[data-action="submit-assessment"]').trigger('click')
+    expect(wrapper.text()).toContain('提交后当前修订将冻结')
+    await wrapper.get('[data-action="confirm-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/assessments/9/submit')
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toEqual({ row_version: 1 })
+    expect(wrapper.text()).toContain('评估已提交审核')
+    expect(wrapper.text()).toContain('待审核')
+    expect(wrapper.find('[data-action="submit-assessment"]').exists()).toBe(false)
+  })
+
+  it('lets the reviewer approve or enter a required return comment', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail({
+      status: 'submitted', editable: false, submitted_by: 2, submitted_at: '2026-09-03T10:00:00Z',
+      actions: { can_submit: false, can_approve: true, can_return: true, unavailable_reason: null },
+    })), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-action="approve-assessment"]').exists()).toBe(true)
+    await wrapper.get('[data-action="return-assessment"]').trigger('click')
+    await wrapper.get('[data-action="confirm-return"]').trigger('click')
+    expect(wrapper.get('[data-error-for="review_comment"]').text()).toContain('必须填写')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains that an OTS-14 returned revision stays read-only', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail({
+      status: 'returned', editable: false,
+      actions: { can_submit: false, can_approve: false, can_return: false, unavailable_reason: 'RETURNED_REVISION_READ_ONLY' },
+    })), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已退回，等待创建新修订')
+    expect(wrapper.find('button[type="submit"]').exists()).toBe(false)
   })
 })
