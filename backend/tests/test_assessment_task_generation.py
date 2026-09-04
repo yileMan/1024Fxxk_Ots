@@ -227,6 +227,27 @@ def test_execute_creates_independent_pending_tasks_and_is_idempotent(
     assert all(row["assessment_basis_json"]["schema_version"] == "1.0" for row in rows)
 
 
+def test_candidate_execution_backfills_missing_current_basis_without_revision(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text(
+            "UPDATE product_assessment SET assessment_basis_sha256=NULL, assessment_basis_json=NULL"
+        ))
+
+    tasks = client.post(
+        f"/api/v1/import-packages/{scope['batch_id']}/ots-matches"
+    ).json()["task_generation"]
+
+    assert tasks["task_updated_count"] == 1
+    assert tasks["task_reassess_count"] == 0
+    rows = assessment_rows(client)
+    assert len(rows) == 1
+    assert rows[0]["assessment_basis_sha256"]
+
+
 def test_disabled_product_version_and_unavailable_owner_are_reported(
     client: TestClient,
 ) -> None:
