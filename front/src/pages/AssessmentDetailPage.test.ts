@@ -27,6 +27,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     return_reason: '<b>补充影响依据</b>',
     reassess_reason: null,
     reason_type: 'review_return',
+    reassessment: null,
     product: { id: 1, name: '监护仪' },
     product_version: { id: 2, version_no: '3.0' },
     ots: { id: 3, name: 'OpenSSL', version: '3.0.0' },
@@ -90,6 +91,32 @@ beforeEach(() => {
 })
 
 describe('AssessmentDetailPage', () => {
+  it('shows bounded automatic reassessment changes and submitted warning as text', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail({
+      status: 'submitted',
+      editable: false,
+      actions: { can_submit: false, can_approve: true, can_return: true, can_create_revision: false, unavailable_reason: null },
+      reassess_reason: '自动复评依据已变化',
+      reason_type: 'automatic_reassessment',
+      reassessment: {
+        trigger_type: 'automatic_reassessment',
+        triggered_at: '2026-09-04T01:02:03Z',
+        basis_sha256: 'a'.repeat(64),
+        change_types: ['source', 'candidate'],
+        changes: [{ field: 'source.status', before: '<b>Analyzed</b>', after: 'Rejected' }],
+        truncated_count: 2,
+      },
+    })), { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-reassessment]').text()).toContain('来源变化')
+    expect(wrapper.get('[data-reassessment]').text()).toContain('<b>Analyzed</b>')
+    expect(wrapper.get('[data-reassessment]').text()).toContain('另有 2 项变化未展示')
+    expect(wrapper.get('[data-submitted-change-warning]').text()).toContain('提交后')
+    expect(wrapper.find('[data-reassessment] b').exists()).toBe(false)
+  })
+
   it('shows reason, source, candidate and editable product conclusion as text', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
     const wrapper = mount(AssessmentDetailPage, {

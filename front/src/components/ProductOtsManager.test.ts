@@ -4,11 +4,33 @@ import ProductOtsManager from './ProductOtsManager.vue'
 
 const fetchMock = vi.fn()
 const ots = { id: 1, ots_name: 'OpenSSL', ots_version: '3.0', official_website: 'https://openssl.org', is_eol: false, row_version: 1, created_at: '', updated_at: '' }
-const relation = { id: 7, product_version_id: 2, ots_component_id: 1, created_by: 1, created_at: '', updated_at: '', ots_name: 'OpenSSL', ots_version: '3.0', official_website: 'https://openssl.org', is_eol: false }
+const relation = { id: 7, product_version_id: 2, ots_component_id: 1, created_by: 1, status: 'active', row_version: 1, created_at: '', updated_at: '', ots_name: 'OpenSSL', ots_version: '3.0', official_website: 'https://openssl.org', is_eol: false }
 
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); vi.stubGlobal('confirm', vi.fn(() => true)) })
 
 describe('ProductOtsManager', () => {
+  it('loads history and disables or restores a relation with its row version', async () => {
+    const disabled = { ...relation, status: 'disabled', row_version: 2 }
+    const page = { items: [ots], total: 1, page: 1, page_size: 100 }
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(page), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([relation]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([relation]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(disabled), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([disabled]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...relation, row_version: 3 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ ...relation, row_version: 3 }]), { status: 200 }))
+    const wrapper = mount(ProductOtsManager, { props: { versionId: 2 } })
+    await flushPromises()
+    await wrapper.get('[data-action="show-ots-history"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-action="disable-product-ots"]').trigger('click')
+    await flushPromises()
+    expect(fetchMock.mock.calls[3][1]).toEqual(expect.objectContaining({ body: JSON.stringify({ row_version: 1 }) }))
+    await wrapper.get('[data-action="restore-product-ots"]').trigger('click')
+    await flushPromises()
+    expect(fetchMock.mock.calls[5][1]).toEqual(expect.objectContaining({ body: JSON.stringify({ row_version: 2 }) }))
+  })
+
   it('hides OTS versions from the product OTS list', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [ots], total: 1, page: 1, page_size: 100 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify([relation]), { status: 200 }))

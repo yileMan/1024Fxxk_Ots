@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createOts, createProductOts, exportProductOts, importProductOts, listOts, listProductOts, OtsApiError, removeProductOts, updateOts } from './ots'
+import { createOts, createProductOts, disableProductOts, exportProductOts, importProductOts, listOts, listProductOts, OtsApiError, removeProductOts, restoreProductOts, updateOts } from './ots'
 
 const fetchMock = vi.fn()
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL: vi.fn() }); vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined) })
@@ -12,10 +12,15 @@ describe('OTS API client', () => {
     await createOts({ ots_name: 'OpenSSL', ots_version: '3.0', official_website: 'https://openssl.org', is_eol: false })
     await updateOts(1, { ots_name: 'OpenSSL', ots_version: '3.0', official_website: 'https://openssl.org', is_eol: false, row_version: 1 })
     await listProductOts(2)
+    await listProductOts(2, true)
     await createProductOts(2, 1)
+    await disableProductOts(2, 3, 4)
+    await restoreProductOts(2, 3, 5)
     await removeProductOts(2, 3)
     expect(fetchMock.mock.calls[0][0]).toContain('is_eol=false')
-    expect(fetchMock.mock.calls[5][1]).toEqual(expect.objectContaining({ method: 'DELETE', credentials: 'include' }))
+    expect(fetchMock.mock.calls[4][0]).toContain('include_disabled=true')
+    expect(fetchMock.mock.calls[6][1]).toEqual(expect.objectContaining({ method: 'POST', body: JSON.stringify({ row_version: 4 }) }))
+    expect(fetchMock.mock.calls[8][1]).toEqual(expect.objectContaining({ method: 'DELETE', credentials: 'include' }))
   })
 
   it('keeps structured CSV errors and supports file transfer', async () => {
