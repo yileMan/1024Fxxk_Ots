@@ -207,6 +207,8 @@ def test_execute_creates_independent_pending_tasks_and_is_idempotent(
         owner["id"] for owner in scope["owners"]
     }
     assert all(row["analysis_summary"] is None for row in rows)
+    assert all(row["assessment_basis_sha256"] for row in rows)
+    assert all(row["assessment_basis_json"]["schema_version"] == "1.0" for row in rows)
 
 
 def test_disabled_product_version_and_unavailable_owner_are_reported(
@@ -330,6 +332,9 @@ def test_completed_assessment_gets_one_reassess_revision_for_material_evidence_c
     assert current["submitted_by"] is None
     assert current["review_decision"] is None
     assert current["reviewer_id"] is None
+    assert current["assessment_basis_sha256"]
+    assert current["reassess_changes_json"]["trigger_type"] == "automatic_reassessment"
+    assert "candidate" in current["reassess_changes_json"]["change_types"]
 
 
 def test_candidate_removal_preserves_completed_history_and_creates_reassess(
@@ -374,7 +379,7 @@ def test_non_material_source_change_does_not_create_reassess(client: TestClient)
     assert len(assessment_rows(client)) == 1
 
 
-def test_submitted_assessment_is_not_overwritten_by_candidate_change(
+def test_submitted_assessment_merges_candidate_change_without_overwrite(
     client: TestClient,
 ) -> None:
     scope = setup_scope(client)
@@ -395,12 +400,14 @@ def test_submitted_assessment_is_not_overwritten_by_candidate_change(
         f"/api/v1/import-packages/{batch_id}/ots-matches"
     ).json()["task_generation"]
 
-    assert tasks["task_skipped_count"] == 1
-    assert tasks["skip_reason_counts"] == {"ASSESSMENT_IN_PROGRESS": 1}
+    assert tasks["task_updated_count"] == 1
+    assert tasks["task_skipped_count"] == 0
     rows = assessment_rows(client)
     assert len(rows) == 1
     assert rows[0]["status"] == "submitted"
     assert rows[0]["analysis_summary"] == "待审核内容"
+    assert rows[0]["row_version"] == 2
+    assert "candidate" in rows[0]["reassess_changes_json"]["change_types"]
 
 
 def test_old_matching_result_is_exposed_as_pending_task_generation(

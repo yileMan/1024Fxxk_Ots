@@ -123,7 +123,7 @@ def test_csv_import_is_atomic_idempotent_and_reports_fields(client: TestClient) 
         assert audit.detail_json["file_name"] == "bom.csv"
 
 
-def test_relation_with_downstream_history_cannot_be_removed(client: TestClient) -> None:
+def test_relation_with_downstream_history_can_be_disabled_and_restored(client: TestClient) -> None:
     login(client)
     _, version = create_version(client)
     ots = client.post("/api/v1/ots-components", json={"ots_name": "busybox", "ots_version": "1.36", "official_website": "https://busybox.net", "is_eol": False}).json()
@@ -141,8 +141,50 @@ def test_relation_with_downstream_history_cannot_be_removed(client: TestClient) 
         """), {"relation_id": relation["id"]})
 
     protected = client.delete(f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}")
+    disabled = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/disable",
+        json={"row_version": relation["row_version"]},
+    )
+    stale = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/restore",
+        json={"row_version": relation["row_version"]},
+    )
+    restored = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/restore",
+        json={"row_version": disabled.json()["row_version"]},
+    )
+
     assert protected.status_code == 409
     assert protected.json()["code"] == "PRODUCT_OTS_HISTORY_CONFLICT"
+    assert disabled.status_code == 200
+    assert disabled.json()["status"] == "disabled"
+    assert disabled.json()["row_version"] == 2
+    assert client.get(f"/api/v1/product-versions/{version['id']}/ots").json() == []
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "PRODUCT_OTS_VERSION_CONFLICT"
+    assert restored.status_code == 200
+    assert restored.json()["status"] == "active"
+    assert restored.json()["row_version"] == 3
+
+
+def test_product_ots_response_and_history_listing_include_state(client: TestClient) -> None:
+    login(client)
+    _, version = create_version(client)
+    ots = client.post("/api/v1/ots-components", json={"ots_name": "curl", "ots_version": "8.0", "official_website": "https://curl.se", "is_eol": False}).json()
+    relation = client.post(f"/api/v1/product-versions/{version['id']}/ots", json={"ots_component_id": ots["id"]}).json()
+
+    assert relation["status"] == "active"
+    assert relation["row_version"] == 1
+    disabled = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/disable",
+        json={"row_version": 1},
+    )
+    assert disabled.status_code == 200
+    history = client.get(
+        f"/api/v1/product-versions/{version['id']}/ots", params={"include_disabled": True}
+    )
+    assert history.status_code == 200
+    assert history.json()[0]["status"] == "disabled"
 
 
 def test_csv_rejects_bad_headers_duplicate_keys_and_extra_columns_without_writes(client: TestClient) -> None:
