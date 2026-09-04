@@ -456,6 +456,74 @@ def test_source_import_creates_reassessment_before_candidate_recalculation(
     assert "source" in assessments[1]["reassess_changes_json"]["change_types"]
 
 
+def test_new_product_relation_creates_missing_task_from_existing_candidate(
+    client: TestClient,
+) -> None:
+    login(client)
+    owner = create_user(client, "late-relation-owner", ["product_owner"])
+    reviewer = create_user(client, "late-relation-reviewer", ["reviewer"])
+    ots = client.post(
+        "/api/v1/ots-components",
+        json={
+            "ots_name": "OpenSSL",
+            "ots_version": "3.0.0",
+            "official_website": "https://openssl.org",
+            "is_eol": False,
+        },
+    ).json()
+    batch_id = import_batch(client)
+    matched = client.post(f"/api/v1/import-packages/{batch_id}/ots-matches").json()
+    assert matched["task_generation"]["task_inserted_count"] == 0
+    product = client.post(
+        "/api/v1/products", json={"product_code": "P-LINK", "product_name": "后关联产品"}
+    ).json()
+    version = client.post(
+        f"/api/v1/products/{product['id']}/versions",
+        json={"version_no": "1.0", "owner_id": owner["id"], "reviewer_id": reviewer["id"]},
+    ).json()
+
+    relation = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots",
+        json={"ots_component_id": ots["id"]},
+    )
+
+    assert relation.status_code == 201
+    assessments = assessment_rows(client)
+    assert len(assessments) == 1
+    assert assessments[0]["product_ots_id"] == relation.json()["id"]
+    assert assessments[0]["status"] == "pending"
+    assert assessments[0]["assessment_basis_sha256"]
+
+
+def test_product_relation_disable_and_restore_merge_context_change(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+    relation = scope["scopes"][0][2]
+    version = scope["scopes"][0][1]
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text("UPDATE product_assessment SET status='completed'"))
+
+    disabled = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/disable",
+        json={"row_version": relation["row_version"]},
+    ).json()
+    after_disable = assessment_rows(client)
+    assert len(after_disable) == 2
+    assert after_disable[-1]["status"] == "reassess"
+    assert "product_context" in after_disable[-1]["reassess_changes_json"]["change_types"]
+
+    client.post(
+        f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/restore",
+        json={"row_version": disabled["row_version"]},
+    )
+    after_restore = assessment_rows(client)
+    assert len(after_restore) == 2
+    assert after_restore[-1]["status"] == "reassess"
+    assert after_restore[-1]["reassess_changes_json"] is None
+
+
 def test_old_matching_result_is_exposed_as_pending_task_generation(
     client: TestClient,
 ) -> None:
