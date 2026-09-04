@@ -149,6 +149,7 @@ def test_relation_with_downstream_history_can_be_disabled_and_restored(client: T
         f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/restore",
         json={"row_version": relation["row_version"]},
     )
+    assert client.get(f"/api/v1/product-versions/{version['id']}/ots").json() == []
     restored = client.post(
         f"/api/v1/product-versions/{version['id']}/ots/{relation['id']}/restore",
         json={"row_version": disabled.json()["row_version"]},
@@ -159,7 +160,6 @@ def test_relation_with_downstream_history_can_be_disabled_and_restored(client: T
     assert disabled.status_code == 200
     assert disabled.json()["status"] == "disabled"
     assert disabled.json()["row_version"] == 2
-    assert client.get(f"/api/v1/product-versions/{version['id']}/ots").json() == []
     assert stale.status_code == 409
     assert stale.json()["code"] == "PRODUCT_OTS_VERSION_CONFLICT"
     assert restored.status_code == 200

@@ -44,6 +44,10 @@ class ProductOtsHistoryConflictError(OtsManagementError):
     code = "PRODUCT_OTS_HISTORY_CONFLICT"
 
 
+class ProductOtsVersionConflictError(OtsManagementError):
+    code = "PRODUCT_OTS_VERSION_CONFLICT"
+
+
 class OtsCsvInvalidError(OtsManagementError):
     code = "OTS_CSV_INVALID"
 
@@ -66,6 +70,8 @@ class ProductOtsView:
     product_version_id: int
     ots_component_id: int
     created_by: int
+    status: str
+    row_version: int
     created_at: datetime
     updated_at: datetime
     ots_name: str
@@ -83,6 +89,7 @@ class AssociatedVersionView:
     product_version_id: int
     version_no: str
     status: str
+    relation_status: str
 
 
 @dataclass(frozen=True)
@@ -142,22 +149,24 @@ class OtsManagementService:
         except IntegrityError as error:
             raise OtsConflictError() from error
 
-    def list_product_ots(self, version_id: int) -> list[ProductOtsView]:
+    def list_product_ots(
+        self, version_id: int, *, include_disabled: bool = False
+    ) -> list[ProductOtsView]:
         with self._session_factory() as session:
             self._version(session, version_id)
-            return [self._view(relation, ots) for relation, ots in self._repository.list_product_ots(session, version_id)]
+            return [self._view(relation, ots) for relation, ots in self._repository.list_product_ots(session, version_id, include_disabled=include_disabled)]
 
     def list_associated_versions(self, ots_id: int) -> list[AssociatedVersionView]:
         with self._session_factory() as session:
             self._ots(session, ots_id)
-            return [AssociatedVersionView(relation.id, product.id, product.product_code, product.product_name, version.id, version.version_no, version.status) for relation, version, product in self._repository.list_associated_versions(session, ots_id)]
+            return [AssociatedVersionView(relation.id, product.id, product.product_code, product.product_name, version.id, version.version_no, version.status, relation.status) for relation, version, product in self._repository.list_associated_versions(session, ots_id)]
 
     def create_relation(self, *, actor_id: int, version_id: int, ots_component_id: int) -> ProductOtsView:
         try:
             with self._session_factory.begin() as session:
                 self._version(session, version_id)
                 ots = self._ots(session, ots_component_id)
-                relation = ProductOts(product_version_id=version_id, ots_component_id=ots_component_id, created_by=actor_id)
+                relation = ProductOts(product_version_id=version_id, ots_component_id=ots_component_id, created_by=actor_id, status="active", row_version=1)
                 session.add(relation)
                 session.flush()
                 self._audit(session, actor_id, "insert", "product_ots", relation.id, {"product_version_id": version_id, "ots_component_id": ots_component_id})
@@ -176,6 +185,36 @@ class OtsManagementService:
             detail = {"product_version_id": version_id, "ots_component_id": relation.ots_component_id}
             session.delete(relation)
             self._audit(session, actor_id, "delete", "product_ots", relation_id, detail)
+
+    def change_relation_status(
+        self,
+        *,
+        actor_id: int,
+        version_id: int,
+        relation_id: int,
+        row_version: int,
+        target_status: str,
+    ) -> ProductOtsView:
+        with self._session_factory.begin() as session:
+            self._version(session, version_id)
+            relation = self._repository.get_relation(session, relation_id)
+            if relation is None or relation.product_version_id != version_id:
+                raise OtsNotFoundError()
+            if relation.status == target_status:
+                if relation.row_version != row_version:
+                    raise ProductOtsVersionConflictError()
+                return self._view(relation, self._ots(session, relation.ots_component_id))
+            previous_status = relation.status
+            if not self._repository.update_relation_status_if_version(session, relation_id, row_version, target_status):
+                raise ProductOtsVersionConflictError()
+            self._audit(session, actor_id, target_status, "product_ots", relation_id, {
+                "status": {"from": previous_status, "to": target_status},
+                "row_version": {"from": row_version, "to": row_version + 1},
+            })
+            relation = self._repository.get_relation(session, relation_id)
+            if relation is None:
+                raise OtsNotFoundError()
+            return self._view(relation, self._ots(session, relation.ots_component_id))
 
     @staticmethod
     def template_csv() -> str:
@@ -291,4 +330,4 @@ class OtsManagementService:
 
     @staticmethod
     def _view(relation: ProductOts, ots: OtsComponent) -> ProductOtsView:
-        return ProductOtsView(relation.id, relation.product_version_id, relation.ots_component_id, relation.created_by, relation.created_at, relation.updated_at, ots.ots_name, ots.ots_version, ots.official_website, ots.is_eol)
+        return ProductOtsView(relation.id, relation.product_version_id, relation.ots_component_id, relation.created_by, relation.status, relation.row_version, relation.created_at, relation.updated_at, ots.ots_name, ots.ots_version, ots.official_website, ots.is_eol)

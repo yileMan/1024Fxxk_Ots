@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import inspect, or_, select, text, tuple_, update
 from sqlalchemy.orm import Session
 
@@ -31,8 +33,12 @@ class OtsRepository:
             statement = statement.where(OtsComponent.is_eol == is_eol)
         return list(session.scalars(statement).all())
 
-    def list_product_ots(self, session: Session, version_id: int) -> list[tuple[ProductOts, OtsComponent]]:
+    def list_product_ots(
+        self, session: Session, version_id: int, *, include_disabled: bool = False
+    ) -> list[tuple[ProductOts, OtsComponent]]:
         statement = (select(ProductOts, OtsComponent).join(OtsComponent, OtsComponent.id == ProductOts.ots_component_id).where(ProductOts.product_version_id == version_id).order_by(OtsComponent.ots_name, OtsComponent.ots_version, ProductOts.id))
+        if not include_disabled:
+            statement = statement.where(ProductOts.status == "active")
         return list(session.execute(statement).tuples().all())
 
     def list_associated_versions(self, session: Session, ots_id: int) -> list[tuple[ProductOts, ProductVersion, Product]]:
@@ -41,6 +47,24 @@ class OtsRepository:
 
     def update_ots_if_version(self, session: Session, ots_id: int, row_version: int, **values: object) -> bool:
         result = session.execute(update(OtsComponent).where(OtsComponent.id == ots_id, OtsComponent.row_version == row_version).values(**values, row_version=OtsComponent.row_version + 1))
+        return result.rowcount == 1
+
+    def update_relation_status_if_version(
+        self,
+        session: Session,
+        relation_id: int,
+        row_version: int,
+        status: str,
+    ) -> bool:
+        result = session.execute(
+            update(ProductOts)
+            .where(ProductOts.id == relation_id, ProductOts.row_version == row_version)
+            .values(
+                status=status,
+                row_version=ProductOts.row_version + 1,
+                updated_at=datetime.now(),
+            )
+        )
         return result.rowcount == 1
 
     def has_downstream_history(self, session: Session, relation_id: int) -> bool:

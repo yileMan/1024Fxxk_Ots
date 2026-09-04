@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-import json
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy.orm import Session
@@ -10,6 +9,12 @@ from sqlalchemy.orm import Session
 from app.models.assessments import ProductAssessment
 from app.models.imports import Vulnerability, VulnerabilityOtsMatch
 from app.repositories.assessment_tasks import AssessmentTaskRepository, ProductOtsContext
+from app.services.automatic_reassessment import (
+    AssessmentBasis,
+    build_assessment_basis,
+    diff_assessment_basis,
+    merge_reassessment_changes,
+)
 
 if TYPE_CHECKING:
     from app.services.vulnerability_matching import CalculatedCandidate
@@ -31,6 +36,8 @@ class TaskOperation:
     source_modified_at: datetime | None
     current: ProductAssessment | None = None
     reason: str | None = None
+    basis: AssessmentBasis | None = None
+    changes: dict[str, object] | None = None
 
     def sample(self) -> dict[str, object]:
         context = self.context
@@ -100,8 +107,6 @@ class AssessmentTaskService:
                     target.source_modified_at, reason=NO_ACTIVE_PRODUCT_OTS,
                 ))
                 continue
-            old_candidate = existing_by_key.get(key)
-            material_change = old_candidate is not None and self._evidence_changed(old_candidate, target)
             for context in contexts:
                 reason = self._context_skip_reason(context)
                 if reason:
@@ -111,38 +116,43 @@ class AssessmentTaskService:
                     ))
                     continue
                 current = current_by_key.get((context.product_ots_id, target.vulnerability_id))
+                basis = self._basis(
+                    vulnerability_by_id[target.vulnerability_id], target, context
+                )
+                changes = self._changes(current, basis)
                 if current is None:
                     operations.append(TaskOperation(
                         "inserted", target.vulnerability_id, target.cve_id, context,
-                        target.source_modified_at,
+                        target.source_modified_at, basis=basis,
                     ))
-                elif current.status == "completed" and material_change:
+                elif current.status == "completed" and changes is not None:
                     operations.append(TaskOperation(
                         "reassess", target.vulnerability_id, target.cve_id, context,
                         target.source_modified_at, current=current,
-                        reason="候选受影响范围或匹配依据已变化",
+                        reason="自动复评依据已变化", basis=basis, changes=changes,
                     ))
                 elif current.status == "pending" and self._empty_pending(current):
-                    if current.owner_id != context.owner_id or current.based_on_source_modified_at != target.source_modified_at:
+                    if changes is not None or current.owner_id != context.owner_id or current.based_on_source_modified_at != target.source_modified_at:
                         operations.append(TaskOperation(
                             "updated", target.vulnerability_id, target.cve_id, context,
                             target.source_modified_at, current=current,
+                            basis=basis, changes=changes,
                         ))
                     else:
                         operations.append(TaskOperation(
                             "unchanged", target.vulnerability_id, target.cve_id, context,
-                            target.source_modified_at, current=current,
+                            target.source_modified_at, current=current, basis=basis,
                         ))
-                elif material_change and current.status in {"pending", "submitted", "returned", "reassess"}:
+                elif changes is not None and current.status in {"pending", "submitted", "returned", "reassess"}:
                     operations.append(TaskOperation(
-                        "skipped", target.vulnerability_id, target.cve_id, context,
+                        "updated", target.vulnerability_id, target.cve_id, context,
                         target.source_modified_at, current=current,
-                        reason=ASSESSMENT_IN_PROGRESS,
+                        basis=basis, changes=changes,
                     ))
                 else:
                     operations.append(TaskOperation(
                         "unchanged", target.vulnerability_id, target.cve_id, context,
-                        target.source_modified_at, current=current,
+                        target.source_modified_at, current=current, basis=basis,
                     ))
 
         removed_keys = sorted(set(existing_by_key) - set(target_by_key))
@@ -154,17 +164,21 @@ class AssessmentTaskService:
                 current = current_by_key.get((context.product_ots_id, vulnerability_id))
                 if current is None:
                     continue
+                basis = self._basis(vulnerability, None, context)
+                changes = self._changes(current, basis)
+                if changes is None:
+                    continue
                 if current.status == "completed":
                     operations.append(TaskOperation(
                         "reassess", vulnerability_id, cve_by_id[vulnerability_id], context,
                         vulnerability.source_modified_at, current=current,
-                        reason="OTS/CVE 候选已移除",
+                        reason="OTS/CVE 候选已移除", basis=basis, changes=changes,
                     ))
                 else:
                     operations.append(TaskOperation(
-                        "skipped", vulnerability_id, cve_by_id[vulnerability_id], context,
+                        "updated", vulnerability_id, cve_by_id[vulnerability_id], context,
                         vulnerability.source_modified_at, current=current,
-                        reason=ASSESSMENT_IN_PROGRESS,
+                        basis=basis, changes=changes,
                     ))
 
         operations.sort(key=lambda item: (
@@ -188,6 +202,12 @@ class AssessmentTaskService:
                     raise RuntimeError("invalid assessment update plan")
                 current.owner_id = context.owner_id
                 current.based_on_source_modified_at = operation.source_modified_at
+                if operation.basis is not None:
+                    current.assessment_basis_sha256 = operation.basis.sha256
+                    current.assessment_basis_json = operation.basis.data
+                current.reassess_changes_json = merge_reassessment_changes(
+                    current.reassess_changes_json, operation.changes
+                )
                 current.row_version += 1
             elif operation.action == "reassess":
                 current = operation.current
@@ -207,20 +227,36 @@ class AssessmentTaskService:
         return None
 
     @staticmethod
-    def _evidence_changed(
-        current: VulnerabilityOtsMatch, target: CalculatedCandidate
-    ) -> bool:
-        if current.match_content_sha256 == target.content_sha256:
-            return False
-        if current.match_method != target.match_method:
-            return True
-        current_evidence = json.dumps(
-            current.match_evidence_json or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    def _basis(
+        vulnerability: Vulnerability,
+        candidate: CalculatedCandidate | None,
+        context: ProductOtsContext,
+    ) -> AssessmentBasis:
+        candidate_data = None if candidate is None else {
+            "match_method": candidate.match_method,
+            "match_evidence_json": candidate.evidence,
+        }
+        return build_assessment_basis(
+            source=vulnerability,
+            candidate=candidate_data,
+            product_ots_id=context.product_ots_id,
+            product_ots_status="active",
+            kev_available=False,
         )
-        target_evidence = json.dumps(
-            target.evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+
+    @staticmethod
+    def _changes(
+        current: ProductAssessment | None, basis: AssessmentBasis
+    ) -> dict[str, object] | None:
+        if current is None or current.assessment_basis_json is None:
+            return None
+        if current.assessment_basis_sha256 == basis.sha256:
+            return None
+        return diff_assessment_basis(
+            current.assessment_basis_json,
+            basis.data,
+            now=datetime.now(timezone.utc),
         )
-        return current_evidence != target_evidence
 
     @staticmethod
     def _empty_pending(current: ProductAssessment) -> bool:
@@ -258,6 +294,8 @@ class AssessmentTaskService:
             owner_id=context.owner_id,
             applicability="pending",
             based_on_source_modified_at=operation.source_modified_at,
+            assessment_basis_sha256=operation.basis.sha256 if operation.basis else None,
+            assessment_basis_json=operation.basis.data if operation.basis else None,
             row_version=1,
         )
 
@@ -293,6 +331,9 @@ class AssessmentTaskService:
             calculator_version=current.calculator_version,
             based_on_source_modified_at=operation.source_modified_at,
             reassess_reason=operation.reason,
+            assessment_basis_sha256=operation.basis.sha256 if operation.basis else None,
+            assessment_basis_json=operation.basis.data if operation.basis else None,
+            reassess_changes_json=operation.changes,
             row_version=1,
         )
 

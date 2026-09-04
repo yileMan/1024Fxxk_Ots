@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -126,12 +127,17 @@ def setup_scope(client: TestClient, *, product_count: int = 1) -> dict[str, obje
 
 def assessment_rows(client: TestClient) -> list[dict[str, object]]:
     with client.app.state.database.engine.connect() as connection:
-        return [
+        rows = [
             dict(row)
             for row in connection.execute(
                 text("SELECT * FROM product_assessment ORDER BY product_ots_id, revision_no")
             ).mappings()
         ]
+    for row in rows:
+        for field in ("assessment_basis_json", "reassess_changes_json"):
+            if isinstance(row.get(field), str):
+                row[field] = json.loads(row[field])
+    return rows
 
 
 def test_preview_expands_one_candidate_to_each_active_product_without_writes(

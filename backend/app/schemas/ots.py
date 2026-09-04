@@ -36,11 +36,17 @@ class ProductOtsCreateRequest(BaseModel):
     ots_component_id: int = Field(ge=1)
 
 
+class ProductOtsStateRequest(BaseModel):
+    row_version: int = Field(ge=1)
+
+
 class ProductOtsResponse(BaseModel):
     id: int
     product_version_id: int
     ots_component_id: int
     created_by: int
+    status: str
+    row_version: int
     created_at: datetime
     updated_at: datetime
     ots_name: str
@@ -57,6 +63,7 @@ class OtsProductVersionResponse(BaseModel):
     product_version_id: int
     version_no: str
     status: str
+    relation_status: str
 
 
 class CsvImportErrorResponse(BaseModel):

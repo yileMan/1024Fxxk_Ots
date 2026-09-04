@@ -36,7 +36,10 @@ class AssessmentTaskRepository:
             .join(ProductVersion, ProductVersion.id == ProductOts.product_version_id)
             .join(Product, Product.id == ProductVersion.product_id)
             .join(AppUser, AppUser.id == ProductVersion.owner_id)
-            .where(ProductOts.ots_component_id.in_(ots_component_ids))
+            .where(
+                ProductOts.ots_component_id.in_(ots_component_ids),
+                ProductOts.status == "active",
+            )
             .order_by(Product.id, ProductVersion.id, ProductOts.id)
         ).all()
         return [

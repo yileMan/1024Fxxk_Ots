@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response, status
 
 from app.api.authorization import require_admin, require_current_user
-from app.schemas.ots import CsvImportResultResponse, OtsCreateRequest, OtsPageResponse, OtsProductVersionResponse, OtsResponse, OtsUpdateRequest, ProductOtsCreateRequest, ProductOtsResponse
+from app.schemas.ots import CsvImportResultResponse, OtsCreateRequest, OtsPageResponse, OtsProductVersionResponse, OtsResponse, OtsUpdateRequest, ProductOtsCreateRequest, ProductOtsResponse, ProductOtsStateRequest
 from app.services.authentication import PublicUser
-from app.services.ots import OtsConflictError, OtsCsvInvalidError, OtsManagementError, OtsNotFoundError, OtsVersionConflictError, ProductOtsConflictError, ProductOtsHistoryConflictError
+from app.services.ots import OtsConflictError, OtsCsvInvalidError, OtsManagementError, OtsNotFoundError, OtsVersionConflictError, ProductOtsConflictError, ProductOtsHistoryConflictError, ProductOtsVersionConflictError
 from app.services.scopes import ProductScopeForbiddenError, ScopeTargetNotFoundError
 
 router = APIRouter(tags=["ots-bom-management"])
@@ -22,6 +22,8 @@ def _error(error: OtsManagementError) -> None:
         raise HTTPException(409, detail={"code": error.code, "message": "OTS 数据已被其他管理员更新"}) from error
     if isinstance(error, ProductOtsHistoryConflictError):
         raise HTTPException(409, detail={"code": error.code, "message": "关联已有下游历史，不能移除"}) from error
+    if isinstance(error, ProductOtsVersionConflictError):
+        raise HTTPException(409, detail={"code": error.code, "message": "产品 OTS 关联已被其他管理员更新"}) from error
     if isinstance(error, (OtsConflictError, ProductOtsConflictError)):
         raise HTTPException(409, detail={"code": error.code, "message": "OTS 或产品清单关联已存在"}) from error
     raise error
@@ -66,10 +68,12 @@ def associated_versions(ots_id: int, request: Request, _admin: PublicUser = Depe
 
 
 @router.get("/product-versions/{version_id}/ots", response_model=list[ProductOtsResponse])
-def list_product_ots(version_id: int, request: Request, user: PublicUser = Depends(require_current_user)) -> list[ProductOtsResponse]:
+def list_product_ots(version_id: int, request: Request, include_disabled: bool = False, user: PublicUser = Depends(require_current_user)) -> list[ProductOtsResponse]:
     try:
         request.app.state.scope_authorization_service.require_version_access(user, version_id)
-        return [ProductOtsResponse.model_validate(item, from_attributes=True) for item in _service(request).list_product_ots(version_id)]
+        if include_disabled and "admin" not in user.roles:
+            raise HTTPException(403, detail={"code": "ADMIN_REQUIRED", "message": "仅管理员可查看停用关联"})
+        return [ProductOtsResponse.model_validate(item, from_attributes=True) for item in _service(request).list_product_ots(version_id, include_disabled=include_disabled)]
     except ProductScopeForbiddenError as error:
         raise HTTPException(403, detail={"code": error.code, "message": "无权访问该产品版本"}) from error
     except ScopeTargetNotFoundError as error:
@@ -91,6 +95,22 @@ def remove_product_ots(version_id: int, relation_id: int, request: Request, admi
     try:
         _service(request).remove_relation(actor_id=admin.id, version_id=version_id, relation_id=relation_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except OtsManagementError as error:
+        _error(error)
+
+
+@router.post("/product-versions/{version_id}/ots/{relation_id}/disable", response_model=ProductOtsResponse)
+def disable_product_ots(version_id: int, relation_id: int, payload: ProductOtsStateRequest, request: Request, admin: PublicUser = Depends(require_admin)) -> ProductOtsResponse:
+    try:
+        return ProductOtsResponse.model_validate(_service(request).change_relation_status(actor_id=admin.id, version_id=version_id, relation_id=relation_id, row_version=payload.row_version, target_status="disabled"), from_attributes=True)
+    except OtsManagementError as error:
+        _error(error)
+
+
+@router.post("/product-versions/{version_id}/ots/{relation_id}/restore", response_model=ProductOtsResponse)
+def restore_product_ots(version_id: int, relation_id: int, payload: ProductOtsStateRequest, request: Request, admin: PublicUser = Depends(require_admin)) -> ProductOtsResponse:
+    try:
+        return ProductOtsResponse.model_validate(_service(request).change_relation_status(actor_id=admin.id, version_id=version_id, relation_id=relation_id, row_version=payload.row_version, target_status="active"), from_attributes=True)
     except OtsManagementError as error:
         _error(error)
 
