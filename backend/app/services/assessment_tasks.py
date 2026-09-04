@@ -65,6 +65,45 @@ class AssessmentTaskService:
     def __init__(self) -> None:
         self._repository = AssessmentTaskRepository()
 
+    def plan_source_changes(
+        self,
+        session: Session,
+        *,
+        vulnerabilities: list[Vulnerability],
+        status: str,
+        lock: bool = False,
+    ) -> TaskPlan:
+        from app.services.vulnerability_matching import CalculatedCandidate
+
+        candidates = self._repository.list_candidates(
+            session, {item.id for item in vulnerabilities}
+        )
+        source_by_id = {item.id: item for item in vulnerabilities}
+        targets = [
+            CalculatedCandidate(
+                vulnerability_id=item.vulnerability_id,
+                cve_id=source_by_id[item.vulnerability_id].cve_id,
+                ots_component_id=item.ots_component_id,
+                ots_name="",
+                ots_version="",
+                match_method=item.match_method,
+                match_basis=item.match_basis,
+                evidence=item.match_evidence_json or {},
+                content_sha256=item.match_content_sha256,
+                source_modified_at=source_by_id[item.vulnerability_id].source_modified_at,
+            )
+            for item in candidates
+            if item.vulnerability_id in source_by_id
+        ]
+        return self.plan(
+            session,
+            vulnerabilities=vulnerabilities,
+            targets=targets,
+            existing_candidates=candidates,
+            status=status,
+            lock=lock,
+        )
+
     def plan(
         self,
         session: Session,

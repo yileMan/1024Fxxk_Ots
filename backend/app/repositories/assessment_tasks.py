@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.assessments import ProductAssessment
+from app.models.imports import VulnerabilityOtsMatch
 from app.models.ots import ProductOts
 from app.models.products import Product, ProductVersion
 from app.models.user import AppUser
@@ -26,6 +27,20 @@ class ProductOtsContext:
 
 
 class AssessmentTaskRepository:
+    def list_candidates(
+        self, session: Session, vulnerability_ids: set[int]
+    ) -> list[VulnerabilityOtsMatch]:
+        if not vulnerability_ids:
+            return []
+        return list(session.scalars(
+            select(VulnerabilityOtsMatch)
+            .where(VulnerabilityOtsMatch.vulnerability_id.in_(vulnerability_ids))
+            .order_by(
+                VulnerabilityOtsMatch.vulnerability_id,
+                VulnerabilityOtsMatch.ots_component_id,
+            )
+        ))
+
     def list_product_contexts(
         self, session: Session, ots_component_ids: set[int]
     ) -> list[ProductOtsContext]:

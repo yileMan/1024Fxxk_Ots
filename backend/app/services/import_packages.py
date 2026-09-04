@@ -17,6 +17,7 @@ from app.infrastructure.settings import Settings
 from app.models.imports import ImportBatch, Vulnerability
 from app.models.user import AuditLog
 from app.repositories.import_packages import ImportPackageRepository
+from app.services.assessment_tasks import AssessmentTaskService
 from app.services.package_validation import (
     DATA_FILES,
     ExistingVulnerability,
@@ -70,6 +71,7 @@ class ImportPackageService:
         self._session_factory = session_factory
         self._settings = settings
         self._repository = ImportPackageRepository()
+        self._assessment_tasks = AssessmentTaskService()
         self._limits = PackageLimits(
             max_upload_bytes=settings.import_max_upload_bytes,
             max_member_bytes=settings.import_max_member_bytes,
@@ -210,10 +212,21 @@ class ImportPackageService:
                     batch.status = "importing"
                     batch.started_at = datetime.now(timezone.utc)
                     session.flush()
-                    self._apply_records(session, result.records, batch.id)
+                    changed_vulnerabilities = self._apply_records(session, result.records, batch.id)
+                    session.flush()
+                    task_plan = self._assessment_tasks.plan_source_changes(
+                        session,
+                        vulnerabilities=changed_vulnerabilities,
+                        status="succeeded",
+                        lock=True,
+                    )
+                    self._assessment_tasks.apply(session, task_plan)
                     batch.status = "succeeded"
                     batch.finished_at = datetime.now(timezone.utc)
-                    batch.result_json = self._result_json(result, final_import_diff=True)
+                    batch.result_json = {
+                        **self._result_json(result, final_import_diff=True),
+                        "source_reassessment": task_plan.result,
+                    }
                     batch.error_json = None
                     session.add(
                         AuditLog(
@@ -232,6 +245,24 @@ class ImportPackageService:
                             },
                         )
                     )
+                    task_result = task_plan.result
+                    if (
+                        task_result["task_reassess_count"]
+                        or task_result["task_updated_count"]
+                    ):
+                        session.add(AuditLog(
+                            user_id=user_id,
+                            action="source_reassessment",
+                            object_type="product_assessment",
+                            object_id=str(batch.id),
+                            detail_json={key: task_result[key] for key in (
+                                "task_reassess_count",
+                                "task_updated_count",
+                                "task_unchanged_count",
+                                "task_skipped_count",
+                                "skip_reason_counts",
+                            )},
+                        ))
                     session.flush()
                     response = self._response(batch, duplicate=False)
         except (ImportPackageNotFoundError, ImportPackageStateError):
@@ -301,10 +332,11 @@ class ImportPackageService:
 
     def _apply_records(
         self, session: Session, records: list[VulnerabilityRecord], batch_id: int
-    ) -> None:
+    ) -> list[Vulnerability]:
         current = self._repository.list_vulnerabilities(
             session, {record.cve_id for record in records}
         )
+        changed: list[Vulnerability] = []
         for record in records:
             vulnerability = current.get(record.cve_id)
             if vulnerability is not None and vulnerability.content_sha256 == record.content_sha256:
@@ -338,6 +370,8 @@ class ImportPackageService:
             else:
                 for name, value in values.items():
                     setattr(vulnerability, name, value)
+                changed.append(vulnerability)
+        return changed
 
     def _existing_by_sha(self, package_sha256: str) -> ImportBatch | None:
         with self._session_factory() as session:

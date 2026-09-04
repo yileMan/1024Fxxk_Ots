@@ -36,7 +36,9 @@ def apply_migrations(engine: Engine, directory: Path) -> list[int]:
             continue
         checksum = hashlib.sha256(migration.sql.encode()).hexdigest()
         with engine.begin() as connection:
-            connection.execute(text(migration.sql))
+            for statement in migration.sql.split(";"):
+                if statement.strip():
+                    connection.exec_driver_sql(statement)
             connection.execute(text("INSERT INTO schema_migration (version, checksum) VALUES (:version, :checksum)"), {"version": migration.version, "checksum": checksum})
         completed.append(migration.version)
     return completed
