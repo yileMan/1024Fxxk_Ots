@@ -7,29 +7,28 @@
 ## Requirements
 
 ### Requirement: 独立评估详情
-系统 SHALL 按评估 ID 返回唯一“产品版本 + 产品 OTS + CVE”的当前评估修订，并将来源事实、候选匹配与当前产品结论明确分区；响应 SHALL 包含产品、版本、OTS、CVE、修订号、状态、责任人、`row_version`、可编辑标志、服务端判定的提交/审核动作能力、提交与审核留痕、核心草稿字段，以及适用的退回或复评原因。
+系统 SHALL 按评估 ID 返回该 ID 对应的有权修订详情，并将来源事实、候选匹配与该修订保存的产品结论明确分区；响应 SHALL 包含产品、版本、OTS、CVE、修订号、父修订、当前标记、状态、责任人、`row_version`、可编辑标志、服务端判定的提交/审核/创建修订动作能力、提交与审核留痕、核心草稿字段，以及适用的退回、复评或人工修订原因。当前入口 SHALL 解析为唯一当前修订，历史修订入口 SHALL 保持指定版本且只读。
 
 #### Scenario: 负责人打开当前草稿
-- **WHEN** 当前责任人在有效产品范围内打开状态为 `pending` 或 `reassess` 的当前评估
-- **THEN** 系统返回当前修订、产品上下文、来源事实、候选依据和全部核心草稿字段
-- **AND** 仅当该状态属于当前 change 已开放的编辑流程时，系统标记该记录可编辑
+- **WHEN** 当前责任人在有效产品范围内打开状态为 `pending`、OTS-15 创建的 `returned` 或 `reassess` 当前评估
+- **THEN** 系统返回该当前修订、产品上下文、来源事实、候选依据和全部核心草稿字段
+- **AND** 仅当用户仍满足当前负责人、有效范围和服务端可编辑条件时标记该记录可编辑
 
 #### Scenario: 退回或复评原因置顶展示
-- **WHEN** 当前修订状态为 `returned` 或 `reassess` 且存在对应原因
-- **THEN** 页面在当前产品结论之前显著展示原因
+- **WHEN** 当前修订存在来自父修订的退回意见、自动复评原因或人工修订原因
+- **THEN** 页面在当前产品结论之前显著展示原因及其来源修订
 - **AND** 原因内容按不可信纯文本渲染
 
 #### Scenario: 读取越权与不存在资源
-- **WHEN** 用户读取存在但不在其有效产品范围内的评估
-- **THEN** 系统返回 `403` 且不泄露产品、OTS、CVE 或草稿内容
+- **WHEN** 用户读取存在但不在其有效产品范围内的当前或历史评估
+- **THEN** 系统返回 `403` 且不泄露产品、OTS、CVE、修订或草稿内容
 - **WHEN** 评估 ID 不存在
 - **THEN** 系统返回 `404`
 
 #### Scenario: 历史或非草稿状态只读
-- **WHEN** 用户打开非当前修订，或当前修订状态为 `submitted`、`returned` 或 `completed`
+- **WHEN** 用户打开非当前修订，或当前修订状态为 `submitted` 或 `completed`
 - **THEN** 系统可在其有权读取时返回详情但标记为只读
-- **AND** 页面不显示可用的草稿保存操作
-- **AND** `returned` 修订在 OTS-15 创建下一可编辑修订前不得直接覆盖
+- **AND** 页面不显示可用的草稿保存操作，历史修订也不显示当前修订写动作
 
 ### Requirement: 核心草稿字段
 系统 SHALL 支持保存 `analysis_summary`、`trigger_conditions`、`affected_functions`、`applicability`、`applicability_basis`、`product_impact`、`existing_controls`、`treatment`、`treatment_detail` 和 `evidence_text`；适用性仅允许 `affected`、`not_affected`、`partly_affected`、`pending`，处置仅允许 `patch_or_upgrade`、`configuration_mitigation`、`isolation_or_compensating_control`、`accept_risk`、`no_action`、`further_investigation` 或空值。
@@ -61,26 +60,31 @@
 - **AND** 后续页面将证据说明作为纯文本展示而不执行其中内容
 
 ### Requirement: 草稿编辑授权
-系统 MUST 仅允许同时满足“当前修订、状态为当前已开放编辑流程的 `pending` 或 `reassess`、请求用户等于当前 `owner_id`、用户仍具有效产品范围”的记录更新草稿；OTS-14 已记录退回决定的 `returned` 修订保持只读，直至 OTS-15 通过新修订开放编辑。管理员、指定审核人或拥有范围的其他用户均不得代替负责人编辑。
+系统 MUST 仅允许同时满足“当前修订、状态为 `pending`、OTS-15 创建的 `returned` 或 `reassess`、请求用户等于当前 `owner_id`、用户是产品版本当前指定负责人且仍具有效产品范围”的记录更新草稿。被审核退回的父修订、已提交/已完成修订和任何其他历史修订保持只读；管理员、指定审核人或拥有范围的其他用户均不得代替负责人编辑。
 
 #### Scenario: 当前负责人成功更新
-- **WHEN** 当前修订的当前负责人在有效产品范围内提交合法草稿和匹配的 `row_version`，且状态属于当前已开放的可编辑流程
+- **WHEN** 当前修订的当前指定负责人在有效产品范围内，以匹配 `row_version` 保存合法的 `pending`、`returned` 或 `reassess` 草稿
 - **THEN** 系统原子保存草稿、保持状态与修订号不变并返回更新后的详情
 
 #### Scenario: 非负责人不能编辑
-- **WHEN** 管理员、指定审核人或其他非当前负责人尝试更新草稿
+- **WHEN** 管理员、指定审核人、历史 `owner_id` 或其他非当前指定负责人尝试更新草稿
 - **THEN** 系统返回 `403`
 - **AND** 不修改评估或审计记录
 
 #### Scenario: 产品范围已撤销
-- **WHEN** 当前 `owner_id` 对应用户的产品范围在页面加载后被撤销并尝试保存
-- **THEN** 系统在保存时重新校验范围并返回 `403`
+- **WHEN** 当前修订的 `owner_id` 用户范围被撤销，或产品版本当前负责人已重新分配后尝试保存
+- **THEN** 系统在保存时重新校验范围与分配并返回 `403` 或稳定的重新分配错误
 - **AND** 不修改评估或审计记录
 
 #### Scenario: 状态或当前修订已变化
-- **WHEN** 页面加载后目标记录已不再是当前可编辑草稿、状态已离开可编辑集合或已成为 OTS-14 的退回修订
+- **WHEN** 页面加载后目标记录已不再是当前可编辑修订、状态已离开可编辑集合或另一事务已切换修订
 - **THEN** 系统拒绝更新并返回稳定冲突错误
-- **AND** 提示用户刷新当前修订
+- **AND** 提示用户刷新到服务器当前修订
+
+#### Scenario: 退回父修订保持不可变
+- **WHEN** 用户通过历史详情或直接接口尝试编辑保存退回决定的非当前父修订
+- **THEN** 系统返回 `409` 并指向当前后续修订
+- **AND** 父修订的产品结论、提交和审核留痕不发生变化
 
 ### Requirement: 乐观锁与幂等保存
 每次草稿更新请求 MUST 携带客户端已读取的 `row_version`。系统 SHALL 只在评估 ID、当前修订、可编辑状态和 `row_version` 同时匹配时更新；实际数据变化成功后 SHALL 将 `row_version` 增加一，无数据变化的重复保存 SHALL 保持版本不变。
