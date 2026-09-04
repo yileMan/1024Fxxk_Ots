@@ -1293,6 +1293,16 @@
               "type": "integer",
               "title": "Version Id"
             }
+          },
+          {
+            "name": "include_disabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Disabled"
+            }
           }
         ],
         "responses": {
@@ -1403,6 +1413,128 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/product-versions/{version_id}/ots/{relation_id}/disable": {
+      "post": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Disable Product Ots",
+        "operationId": "disable_product_ots_api_v1_product_versions__version_id__ots__relation_id__disable_post",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "relation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Relation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductOtsStateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductOtsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/product-versions/{version_id}/ots/{relation_id}/restore": {
+      "post": {
+        "tags": [
+          "ots-bom-management"
+        ],
+        "summary": "Restore Product Ots",
+        "operationId": "restore_product_ots_api_v1_product_versions__version_id__ots__relation_id__restore_post",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "relation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Relation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductOtsStateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductOtsResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3127,6 +3259,16 @@
             ],
             "title": "Reason Type"
           },
+          "reassessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReassessmentResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "product": {
             "$ref": "#/components/schemas/AssessmentProductResponse"
           },
@@ -3886,6 +4028,16 @@
               }
             ],
             "title": "Reason Type"
+          },
+          "reassessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReassessmentResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "type": "string",
@@ -5327,6 +5479,10 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "relation_status": {
+            "type": "string",
+            "title": "Relation Status"
           }
         },
         "type": "object",
@@ -5337,7 +5493,8 @@
           "product_name",
           "product_version_id",
           "version_no",
-          "status"
+          "status",
+          "relation_status"
         ],
         "title": "OtsProductVersionResponse"
       },
@@ -5660,6 +5817,14 @@
             "type": "integer",
             "title": "Created By"
           },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "row_version": {
+            "type": "integer",
+            "title": "Row Version"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -5693,6 +5858,8 @@
           "product_version_id",
           "ots_component_id",
           "created_by",
+          "status",
+          "row_version",
           "created_at",
           "updated_at",
           "ots_name",
@@ -5701,6 +5868,21 @@
           "is_eol"
         ],
         "title": "ProductOtsResponse"
+      },
+      "ProductOtsStateRequest": {
+        "properties": {
+          "row_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Row Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "row_version"
+        ],
+        "title": "ProductOtsStateRequest"
       },
       "ProductPageResponse": {
         "properties": {
@@ -5940,6 +6122,84 @@
           "roles"
         ],
         "title": "PublicUserResponse"
+      },
+      "ReassessmentChangeResponse": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "before": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "ReassessmentChangeResponse"
+      },
+      "ReassessmentResponse": {
+        "properties": {
+          "trigger_type": {
+            "type": "string",
+            "title": "Trigger Type"
+          },
+          "triggered_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Triggered At"
+          },
+          "basis_sha256": {
+            "type": "string",
+            "title": "Basis Sha256"
+          },
+          "change_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Change Types"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ReassessmentChangeResponse"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "truncated_count": {
+            "type": "integer",
+            "title": "Truncated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trigger_type",
+          "triggered_at",
+          "basis_sha256",
+          "change_types",
+          "changes",
+          "truncated_count"
+        ],
+        "title": "ReassessmentResponse"
       },
       "ScopeGrantRequest": {
         "properties": {

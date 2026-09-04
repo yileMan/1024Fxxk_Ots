@@ -353,6 +353,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/product-versions/{version_id}/ots/{relation_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Product Ots */
+        post: operations["disable_product_ots_api_v1_product_versions__version_id__ots__relation_id__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/product-versions/{version_id}/ots/{relation_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Product Ots */
+        post: operations["restore_product_ots_api_v1_product_versions__version_id__ots__relation_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/product-ots/template": {
         parameters: {
             query?: never;
@@ -895,6 +929,7 @@ export interface components {
             reassess_reason: string | null;
             /** Reason Type */
             reason_type: ("review_return" | "manual_revision" | "automatic_reassessment") | null;
+            reassessment?: components["schemas"]["ReassessmentResponse"] | null;
             product: components["schemas"]["AssessmentProductResponse"];
             product_version: components["schemas"]["AssessmentProductVersionResponse"];
             ots: components["schemas"]["AssessmentOtsResponse"];
@@ -1092,6 +1127,7 @@ export interface components {
             reassess_reason: string | null;
             /** Reason Type */
             reason_type: ("review_return" | "manual_revision" | "automatic_reassessment") | null;
+            reassessment?: components["schemas"]["ReassessmentResponse"] | null;
             /**
              * Created At
              * Format: date-time
@@ -1581,6 +1617,8 @@ export interface components {
             version_no: string;
             /** Status */
             status: string;
+            /** Relation Status */
+            relation_status: string;
         };
         /** OtsResponse */
         OtsResponse: {
@@ -1700,6 +1738,10 @@ export interface components {
             ots_component_id: number;
             /** Created By */
             created_by: number;
+            /** Status */
+            status: string;
+            /** Row Version */
+            row_version: number;
             /**
              * Created At
              * Format: date-time
@@ -1718,6 +1760,11 @@ export interface components {
             official_website: string;
             /** Is Eol */
             is_eol: boolean;
+        };
+        /** ProductOtsStateRequest */
+        ProductOtsStateRequest: {
+            /** Row Version */
+            row_version: number;
         };
         /** ProductPageResponse */
         ProductPageResponse: {
@@ -1816,6 +1863,33 @@ export interface components {
             display_name: string;
             /** Roles */
             roles: string[];
+        };
+        /** ReassessmentChangeResponse */
+        ReassessmentChangeResponse: {
+            /** Field */
+            field: string;
+            /** Before */
+            before: unknown | null;
+            /** After */
+            after: unknown | null;
+        };
+        /** ReassessmentResponse */
+        ReassessmentResponse: {
+            /** Trigger Type */
+            trigger_type: string;
+            /**
+             * Triggered At
+             * Format: date-time
+             */
+            triggered_at: string;
+            /** Basis Sha256 */
+            basis_sha256: string;
+            /** Change Types */
+            change_types: string[];
+            /** Changes */
+            changes: components["schemas"]["ReassessmentChangeResponse"][];
+            /** Truncated Count */
+            truncated_count: number;
         };
         /** ScopeGrantRequest */
         ScopeGrantRequest: {
@@ -3017,7 +3091,9 @@ export interface operations {
     };
     list_product_ots_api_v1_product_versions__version_id__ots_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_disabled?: boolean;
+            };
             header?: never;
             path: {
                 version_id: number;
@@ -3099,6 +3175,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_product_ots_api_v1_product_versions__version_id__ots__relation_id__disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: number;
+                relation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductOtsStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOtsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_product_ots_api_v1_product_versions__version_id__ots__relation_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: number;
+                relation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductOtsStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOtsResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

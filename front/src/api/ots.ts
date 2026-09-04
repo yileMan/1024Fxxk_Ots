@@ -8,6 +8,7 @@ export type ProductOts = components['schemas']['ProductOtsResponse']
 export type OtsProductVersion = components['schemas']['OtsProductVersionResponse']
 export type CsvImportResult = components['schemas']['CsvImportResultResponse']
 export type CsvImportError = { row: number; field: string; reason: string }
+export type ProductOtsStateRequest = components['schemas']['ProductOtsStateRequest']
 
 export class OtsApiError extends Error {
   constructor(readonly code: string, readonly status: number, readonly errors: CsvImportError[] = []) { super(code) }
@@ -34,8 +35,19 @@ export function getOts(id: number): Promise<Ots> { return request(`/api/v1/ots-c
 export function createOts(payload: OtsCreate): Promise<Ots> { return request('/api/v1/ots-components', json('POST', payload)) }
 export function updateOts(id: number, payload: OtsUpdate): Promise<Ots> { return request(`/api/v1/ots-components/${id}`, json('PUT', payload)) }
 export function listOtsProductVersions(id: number): Promise<OtsProductVersion[]> { return request(`/api/v1/ots-components/${id}/product-versions`) }
-export function listProductOts(versionId: number): Promise<ProductOts[]> { return request(`/api/v1/product-versions/${versionId}/ots`) }
+export function listProductOts(versionId: number, includeDisabled = false): Promise<ProductOts[]> {
+  const suffix = includeDisabled ? '?include_disabled=true' : ''
+  return request(`/api/v1/product-versions/${versionId}/ots${suffix}`)
+}
 export function createProductOts(versionId: number, otsId: number): Promise<ProductOts> { return request(`/api/v1/product-versions/${versionId}/ots`, json('POST', { ots_component_id: otsId })) }
+export function disableProductOts(versionId: number, relationId: number, rowVersion: number): Promise<ProductOts> {
+  const payload: ProductOtsStateRequest = { row_version: rowVersion }
+  return request(`/api/v1/product-versions/${versionId}/ots/${relationId}/disable`, json('POST', payload))
+}
+export function restoreProductOts(versionId: number, relationId: number, rowVersion: number): Promise<ProductOts> {
+  const payload: ProductOtsStateRequest = { row_version: rowVersion }
+  return request(`/api/v1/product-versions/${versionId}/ots/${relationId}/restore`, json('POST', payload))
+}
 export async function removeProductOts(versionId: number, relationId: number): Promise<void> {
   const response = await fetch(`/api/v1/product-versions/${versionId}/ots/${relationId}`, { method: 'DELETE', credentials: 'include' })
   if (!response.ok) { const payload = await response.json().catch(() => ({})) as { code?: string }; throw new OtsApiError(payload.code ?? 'NETWORK_ERROR', response.status) }
