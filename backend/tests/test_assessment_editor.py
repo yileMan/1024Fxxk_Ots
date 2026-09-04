@@ -610,7 +610,7 @@ def test_assessment_actions_openapi_contract(client: TestClient) -> None:
     assert {
         "actions", "submitted_by", "submitted_at", "review_decision", "review_comment",
         "reviewer_id", "reviewed_at", "parent_revision_id", "current_revision_id",
-        "reason_type",
+        "reason_type", "reassessment",
     } <= set(detail_schema)
     action_schema = schema["components"]["schemas"]["AssessmentActionsResponse"]["properties"]
     assert "can_create_revision" in action_schema
@@ -660,6 +660,7 @@ def test_owner_reads_current_and_historical_details_with_server_editability(
         "return_reason": None,
         "reassess_reason": None,
         "reason_type": None,
+        "reassessment": None,
         "product": {"id": 1, "name": "产品 P-A"},
         "product_version": {"id": 1, "version_no": "1.0"},
         "ots": {"id": 1, "name": "OpenSSL", "version": "1.0"},

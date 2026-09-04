@@ -114,6 +114,21 @@ class AssessmentActionsResponse(BaseModel):
     unavailable_reason: str | None
 
 
+class ReassessmentChangeResponse(BaseModel):
+    field: str
+    before: object | None
+    after: object | None
+
+
+class ReassessmentResponse(BaseModel):
+    trigger_type: str
+    triggered_at: datetime
+    basis_sha256: str
+    change_types: list[str]
+    changes: list[ReassessmentChangeResponse]
+    truncated_count: int
+
+
 class AssessmentDetailResponse(BaseModel):
     assessment_id: int
     revision_no: int
@@ -134,6 +149,7 @@ class AssessmentDetailResponse(BaseModel):
     return_reason: str | None
     reassess_reason: str | None
     reason_type: Literal["review_return", "manual_revision", "automatic_reassessment"] | None
+    reassessment: ReassessmentResponse | None = None
     product: AssessmentProductResponse
     product_version: AssessmentProductVersionResponse
     ots: AssessmentOtsResponse
@@ -175,6 +191,7 @@ class AssessmentRevisionSummaryResponse(BaseModel):
     return_reason: str | None
     reassess_reason: str | None
     reason_type: Literal["review_return", "manual_revision", "automatic_reassessment"] | None
+    reassessment: ReassessmentResponse | None = None
     created_at: datetime
     updated_at: datetime
 

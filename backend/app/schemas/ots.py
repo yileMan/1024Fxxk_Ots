@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OtsCreateRequest(BaseModel):
@@ -37,6 +37,8 @@ class ProductOtsCreateRequest(BaseModel):
 
 
 class ProductOtsStateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     row_version: int = Field(ge=1)
 
 

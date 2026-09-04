@@ -42,7 +42,13 @@ SCORING_FIELDS = (
     "calculator_version",
 )
 TEXT_FIELDS = set(DRAFT_FIELDS) - {"applicability", "treatment"}
-REVISION_COPY_FIELDS = (*DRAFT_FIELDS, *SCORING_FIELDS, "based_on_source_modified_at")
+REVISION_COPY_FIELDS = (
+    *DRAFT_FIELDS,
+    *SCORING_FIELDS,
+    "based_on_source_modified_at",
+    "assessment_basis_sha256",
+    "assessment_basis_json",
+)
 REVISION_EVENT_FIELDS = (
     "submitted_by", "submitted_at", "review_decision", "review_comment",
     "reviewer_id", "reviewed_at",
@@ -50,7 +56,7 @@ REVISION_EVENT_FIELDS = (
 REVISION_SYSTEM_FIELDS = (
     "id", "product_ots_id", "vulnerability_id", "revision_no",
     "parent_revision_id", "is_current", "status", "owner_id",
-    "reassess_reason", "row_version", "created_at", "updated_at",
+    "reassess_reason", "reassess_changes_json", "row_version", "created_at", "updated_at",
 )
 COMPARISON_BUSINESS_FIELDS = (*DRAFT_FIELDS, *SCORING_FIELDS)
 COMPARISON_EVENT_FIELDS = (
@@ -534,6 +540,13 @@ class AssessmentEditorService:
             **copied,
             **{field: None for field in REVISION_EVENT_FIELDS},
             reassess_reason=reassess_reason,
+            reassess_changes_json={
+                "trigger_type": "manual_revision",
+                "triggered_at": now.isoformat().replace("+00:00", "Z"),
+                "change_types": [],
+                "changes": [],
+                "truncated_count": 0,
+            } if action == "manual_create_revision" else None,
             row_version=1,
             created_at=now,
             updated_at=now,
@@ -670,6 +683,7 @@ class AssessmentEditorService:
             "return_reason": return_reason,
             "reassess_reason": assessment.reassess_reason if assessment.status == "reassess" else None,
             "reason_type": self._reason_type(session, assessment),
+            "reassessment": self._serialize_reassessment(assessment),
             "product": {"id": context["product_id"], "name": context["product_name"]},
             "product_version": {
                 "id": context["product_version_id"],
@@ -729,6 +743,11 @@ class AssessmentEditorService:
             return "review_return"
         if assessment.status != "reassess" or not assessment.reassess_reason:
             return None
+        changes = assessment.reassess_changes_json
+        if isinstance(changes, dict):
+            trigger_type = changes.get("trigger_type")
+            if trigger_type in {"automatic_reassessment", "manual_revision"}:
+                return str(trigger_type)
         audits = session.scalars(
             select(AuditLog).where(
                 AuditLog.object_type == "product_assessment",
@@ -766,8 +785,25 @@ class AssessmentEditorService:
             else assessment.review_comment if assessment.status == "returned" else None,
             "reassess_reason": assessment.reassess_reason,
             "reason_type": self._reason_type(session, assessment),
+            "reassessment": self._serialize_reassessment(assessment),
             "created_at": assessment.created_at,
             "updated_at": assessment.updated_at,
+        }
+
+    @staticmethod
+    def _serialize_reassessment(
+        assessment: ProductAssessment,
+    ) -> dict[str, object] | None:
+        changes = assessment.reassess_changes_json
+        if not isinstance(changes, dict) or not assessment.assessment_basis_sha256:
+            return None
+        return {
+            "trigger_type": changes.get("trigger_type", "automatic_reassessment"),
+            "triggered_at": changes.get("triggered_at"),
+            "basis_sha256": assessment.assessment_basis_sha256,
+            "change_types": changes.get("change_types", []),
+            "changes": changes.get("changes", []),
+            "truncated_count": changes.get("truncated_count", 0),
         }
 
     @staticmethod
