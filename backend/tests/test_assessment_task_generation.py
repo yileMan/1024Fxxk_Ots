@@ -12,7 +12,7 @@ from app.main import create_app
 from app.models.imports import ImportBatch, Vulnerability
 from app.models.user import AuditLog, Base
 from app.services.authentication import AuthenticationService
-from tests.package_fixtures import build_package
+from tests.package_fixtures import base_rows, build_package
 
 
 @pytest.fixture
@@ -90,6 +90,16 @@ def import_batch(client: TestClient) -> int:
         },
     ).json()
     assert client.post(f"/api/v1/import-packages/{validated['id']}/confirm").status_code == 200
+    return validated["id"]
+
+
+def import_package(client: TestClient, package: bytes, file_name: str) -> int:
+    validated = client.post(
+        "/api/v1/import-packages/validate",
+        files={"file": (file_name, package, "application/zip")},
+    ).json()
+    response = client.post(f"/api/v1/import-packages/{validated['id']}/confirm")
+    assert response.status_code == 200
     return validated["id"]
 
 
@@ -414,6 +424,36 @@ def test_submitted_assessment_merges_candidate_change_without_overwrite(
     assert rows[0]["analysis_summary"] == "待审核内容"
     assert rows[0]["row_version"] == 2
     assert "candidate" in rows[0]["reassess_changes_json"]["change_types"]
+
+
+def test_source_import_creates_reassessment_before_candidate_recalculation(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text(
+            "UPDATE product_assessment SET status='completed', applicability='affected', analysis_summary='保留结论'"
+        ))
+    rows = base_rows()
+    rows["nvd_cves.csv"][0]["vuln_status"] = "Rejected"
+    rows["nvd_cves.csv"][0]["last_modified_at"] = "2026-08-03T00:00:00Z"
+    import_package(
+        client,
+        build_package(
+            rows=rows,
+            batch_no="BATCH-20260823-001",
+            source_release="fkie-cad/nvd-json-data-feeds@2026-08-23",
+        ),
+        "ots_intelligence_20260823_010203.zip",
+    )
+
+    assessments = assessment_rows(client)
+    assert len(assessments) == 2
+    assert assessments[0]["status"] == "completed"
+    assert assessments[1]["status"] == "reassess"
+    assert assessments[1]["analysis_summary"] == "保留结论"
+    assert "source" in assessments[1]["reassess_changes_json"]["change_types"]
 
 
 def test_old_matching_result_is_exposed_as_pending_task_generation(
