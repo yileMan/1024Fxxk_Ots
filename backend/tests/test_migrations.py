@@ -8,7 +8,7 @@ from app.migrations import apply_migrations, discover_migrations
 def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> None:
     migrations = discover_migrations(Path(__file__).parents[1] / "migrations")
 
-    assert [migration.version for migration in migrations] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert [migration.version for migration in migrations] == list(range(1, 14))
     assert "app_user" in migrations[1].sql
     assert "audit_log" not in migrations[1].sql
     assert "audit_log" in migrations[2].sql
@@ -43,6 +43,11 @@ def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> N
     assert "idx_assessment_current_owner" in migrations[11].sql
     assert "idx_assessment_current_review" in migrations[11].sql
     assert "idx_assessment_cross_product" in migrations[11].sql
+    assert "assessment_basis_sha256" in migrations[12].sql
+    assert "assessment_basis_json" in migrations[12].sql
+    assert "reassess_changes_json" in migrations[12].sql
+    assert "ck_product_ots_status" in migrations[12].sql
+    assert "row_version" in migrations[12].sql
 
     rollback = (Path(__file__).parents[1] / "migrations" / "008_user_product_scope.rollback.md").read_text(encoding="utf-8")
     assert "备份" in rollback
@@ -70,6 +75,12 @@ def test_migrations_are_numbered_and_create_only_baseline_business_tables() -> N
     assert "系统待办" in assessment_rollback
     assert "审核" in assessment_rollback
     assert "DROP TABLE product_assessment" in assessment_rollback
+
+    automatic_rollback = (Path(__file__).parents[1] / "migrations" / "013_automatic_reassessment.rollback.md").read_text(encoding="utf-8")
+    assert "备份" in automatic_rollback
+    assert "自动复评" in automatic_rollback
+    assert "不得" in automatic_rollback
+    assert "DROP COLUMN reassess_changes_json" in automatic_rollback
 
 
 def test_migrations_apply_once(tmp_path) -> None:
