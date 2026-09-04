@@ -454,6 +454,13 @@ def test_source_import_creates_reassessment_before_candidate_recalculation(
     assert assessments[1]["status"] == "reassess"
     assert assessments[1]["analysis_summary"] == "保留结论"
     assert "source" in assessments[1]["reassess_changes_json"]["change_types"]
+    detail = client.get(f"/api/v1/assessments/{assessments[1]['id']}")
+    assert detail.status_code == 200
+    reassessment = detail.json()["reassessment"]
+    assert reassessment["trigger_type"] == "automatic_reassessment"
+    assert reassessment["basis_sha256"] == assessments[1]["assessment_basis_sha256"]
+    assert reassessment["change_types"] == ["source"]
+    assert reassessment["changes"][0]["field"].startswith("source.")
 
 
 def test_new_product_relation_creates_missing_task_from_existing_candidate(
