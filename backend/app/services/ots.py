@@ -43,6 +43,10 @@ class ProductOtsConflictError(OtsManagementError):
     code = "PRODUCT_OTS_CONFLICT"
 
 
+class ProductOtsDisabledConflictError(OtsManagementError):
+    code = "PRODUCT_OTS_DISABLED_CONFLICT"
+
+
 class ProductOtsHistoryConflictError(OtsManagementError):
     code = "PRODUCT_OTS_HISTORY_CONFLICT"
 
@@ -170,6 +174,11 @@ class OtsManagementService:
             with self._session_factory.begin() as session:
                 self._version(session, version_id)
                 ots = self._ots(session, ots_component_id)
+                existing = self._repository.find_relation(session, version_id, ots_component_id)
+                if existing is not None:
+                    if existing.status == "disabled":
+                        raise ProductOtsDisabledConflictError()
+                    raise ProductOtsConflictError()
                 relation = ProductOts(product_version_id=version_id, ots_component_id=ots_component_id, created_by=actor_id, status="active", row_version=1)
                 session.add(relation)
                 session.flush()
@@ -288,7 +297,10 @@ class OtsManagementService:
                         session.flush()
                         by_key[key] = item
                         created_ots += 1
-                    if self._repository.find_relation(session, version_id, item.id) is not None:
+                    relation = self._repository.find_relation(session, version_id, item.id)
+                    if relation is not None and relation.status == "disabled":
+                        raise ProductOtsDisabledConflictError()
+                    if relation is not None:
                         existing_relations += 1
                         continue
                     session.add(ProductOts(product_version_id=version_id, ots_component_id=item.id, created_by=actor_id))

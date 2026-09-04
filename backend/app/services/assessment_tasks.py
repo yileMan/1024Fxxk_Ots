@@ -211,6 +211,11 @@ class AssessmentTaskService:
                         "inserted", target.vulnerability_id, target.cve_id, context,
                         target.source_modified_at, basis=basis,
                     ))
+                elif current.assessment_basis_json is None or current.assessment_basis_sha256 is None:
+                    operations.append(TaskOperation(
+                        "updated", target.vulnerability_id, target.cve_id, context,
+                        target.source_modified_at, current=current, basis=basis,
+                    ))
                 elif current.status == "completed" and changes is not None:
                     operations.append(TaskOperation(
                         "reassess", target.vulnerability_id, target.cve_id, context,

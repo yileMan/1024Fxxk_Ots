@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Requ
 from app.api.authorization import require_admin, require_current_user
 from app.schemas.ots import CsvImportResultResponse, OtsCreateRequest, OtsPageResponse, OtsProductVersionResponse, OtsResponse, OtsUpdateRequest, ProductOtsCreateRequest, ProductOtsResponse, ProductOtsStateRequest
 from app.services.authentication import PublicUser
-from app.services.ots import OtsConflictError, OtsCsvInvalidError, OtsManagementError, OtsNotFoundError, OtsVersionConflictError, ProductOtsConflictError, ProductOtsHistoryConflictError, ProductOtsVersionConflictError
+from app.services.ots import OtsConflictError, OtsCsvInvalidError, OtsManagementError, OtsNotFoundError, OtsVersionConflictError, ProductOtsConflictError, ProductOtsDisabledConflictError, ProductOtsHistoryConflictError, ProductOtsVersionConflictError
 from app.services.scopes import ProductScopeForbiddenError, ScopeTargetNotFoundError
 
 router = APIRouter(tags=["ots-bom-management"])
@@ -24,6 +24,8 @@ def _error(error: OtsManagementError) -> None:
         raise HTTPException(409, detail={"code": error.code, "message": "关联已有下游历史，不能移除"}) from error
     if isinstance(error, ProductOtsVersionConflictError):
         raise HTTPException(409, detail={"code": error.code, "message": "产品 OTS 关联已被其他管理员更新"}) from error
+    if isinstance(error, ProductOtsDisabledConflictError):
+        raise HTTPException(409, detail={"code": error.code, "message": "该关联已停用，请使用恢复操作"}) from error
     if isinstance(error, (OtsConflictError, ProductOtsConflictError)):
         raise HTTPException(409, detail={"code": error.code, "message": "OTS 或产品清单关联已存在"}) from error
     raise error
