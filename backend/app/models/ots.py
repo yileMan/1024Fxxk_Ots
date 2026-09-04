@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.user import Base, identifier_type
@@ -24,11 +24,17 @@ class OtsComponent(Base):
 
 class ProductOts(Base):
     __tablename__ = "product_ots"
-    __table_args__ = (UniqueConstraint("product_version_id", "ots_component_id", name="uk_product_version_ots"),)
+    __table_args__ = (
+        UniqueConstraint("product_version_id", "ots_component_id", name="uk_product_version_ots"),
+        CheckConstraint("status IN ('active', 'disabled')", name="ck_product_ots_status"),
+        Index("idx_product_ots_status", "status", "product_version_id", "ots_component_id"),
+    )
 
     id: Mapped[int] = mapped_column(identifier_type, primary_key=True, autoincrement=True)
     product_version_id: Mapped[int] = mapped_column(ForeignKey("product_version.id"), index=True)
     ots_component_id: Mapped[int] = mapped_column(ForeignKey("ots_component.id"), index=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    row_version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now)

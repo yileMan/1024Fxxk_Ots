@@ -1088,7 +1088,7 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
         test_url = url.set(database=database_name)
         test_engine = create_engine(test_url)
         assert apply_migrations(test_engine, Path(__file__).parents[1] / "migrations") == list(
-            range(1, 13)
+            range(1, 14)
         )
         assert len(
             [

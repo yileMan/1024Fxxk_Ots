@@ -420,7 +420,7 @@ def test_mysql_import_batch_migration_and_collector_scope(monkeypatch) -> None:
             connection.execute(text(f"CREATE DATABASE `{database_name}` CHARACTER SET utf8mb4"))
         test_url = url.set(database=database_name)
         test_engine = create_engine(test_url)
-        assert apply_migrations(test_engine, Path(__file__).parents[1] / "migrations") == list(range(1, 13))
+        assert apply_migrations(test_engine, Path(__file__).parents[1] / "migrations") == list(range(1, 14))
         inspector = inspect(test_engine)
         assert {column["name"] for column in inspector.get_columns("import_batch")} >= {
             "batch_no", "scope_coverage_json", "manifest_json", "imported_by", "finished_at"
