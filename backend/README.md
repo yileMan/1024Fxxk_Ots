@@ -212,6 +212,20 @@ OTS-12 提供 `GET /api/v1/assessments/{assessment_id}` 聚合读取当前产品
 本能力不新增迁移或应用基础表。CVSS v3.1 环境指标和计算由 OTS-13 完成；提交、实际提交人留痕、审核和
 状态转换由 OTS-14/15 完成。
 
+## 产品评估修订与重新提交
+
+OTS-15 扩展退回动作：审核人退回当前 `submitted` 修订时，服务在同一事务保留带审核留痕的历史修订并创建
+下一条 `returned` 当前修订；新修订继承产品结论和环境评分，清空提交/审核事件，并通过 `parent_revision_id`
+连接父修订。退回响应同时包含 `current_revision` 和 `reviewed_revision`，调用方必须采用新当前 ID。
+
+当前负责人可编辑并重新提交 `returned/reassess` 修订，也可通过
+`POST /api/v1/assessments/{assessment_id}/revisions` 从当前 `completed` 修订显式创建带原因的人工复评修订。
+`GET /api/v1/assessments/{assessment_id}/revisions` 返回同链摘要，`GET .../revision-comparison` 返回同链字段级
+差异；历史详情始终只读，过期写请求的 `ASSESSMENT_NOT_EDITABLE` 响应携带 `current_revision_id` 供显式刷新。
+
+修订创建复用现有 `product_assessment` 字段和唯一键，不新增表、字段、索引或迁移。来源变化自动复评、跨产品
+参考和全局追溯仍分别属于 OTS-16、OTS-17 和 OTS-19。
+
 ## 测试
 
 ```powershell

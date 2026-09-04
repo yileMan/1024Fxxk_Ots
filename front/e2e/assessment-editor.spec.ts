@@ -299,6 +299,50 @@ test('审核人可退回且空意见不能发送请求', async ({ page }) => {
   expect(returnRequests).toBe(1)
 })
 
+test('负责人查看退回意见、修改当前修订并重新提交', async ({ page }) => {
+  await authenticate(page)
+  const server = {
+    ...assessmentDetail(true),
+    assessment_id: 10,
+    revision_no: 2,
+    parent_revision_id: 9,
+    current_revision_id: 10,
+    status: 'returned',
+    return_reason: '请补充影响依据',
+    reason_type: 'review_return',
+    actions: { can_submit: true, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: null },
+  }
+  await page.route('**/api/v1/assessments/10**', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
+    if (route.request().url().endsWith('/draft')) {
+      const payload = route.request().postDataJSON() as Draft & { row_version: number }
+      server.draft = { ...payload }
+      server.row_version += 1
+      return route.fulfill({ status: 200, json: server })
+    }
+    if (route.request().url().endsWith('/submit')) {
+      server.status = 'submitted'
+      server.editable = false
+      server.row_version += 1
+      server.submitted_by = 2
+      server.submitted_at = '2026-09-04T09:00:00Z'
+      server.actions = { can_submit: false, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: 'ASSESSMENT_ALREADY_SUBMITTED' }
+      return route.fulfill({ status: 200, json: server })
+    }
+    return route.fulfill({ status: 500 })
+  })
+
+  await page.goto('/system/assessments/10?from=returned')
+  await expect(page.getByText('请补充影响依据')).toBeVisible()
+  await page.getByLabel('分析摘要').fill('已补充产品影响依据')
+  await page.getByRole('button', { name: '保存草稿' }).click()
+  await expect(page.getByText('草稿已保存')).toBeVisible()
+  await page.getByRole('button', { name: '提交审核' }).click()
+  await page.getByRole('button', { name: '确认提交' }).click()
+  await expect(page.getByText('评估已提交审核')).toBeVisible()
+  await expect(page.getByText('REV 2 · 待审核')).toBeVisible()
+})
+
 test('审核人确认通过后直接完成评估', async ({ page }) => {
   await authenticate(page, reviewer)
   const server = assessmentDetail(false)

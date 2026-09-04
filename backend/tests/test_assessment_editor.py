@@ -20,13 +20,20 @@ from app.models.imports import Vulnerability
 from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
 from app.repositories.assessment_editor import AssessmentEditorRepository
+from app.schemas.assessment_editor import (
+    AssessmentActionRequest,
+    AssessmentDraftUpdateRequest,
+    AssessmentRevisionCreateRequest,
+    AssessmentReturnRequest,
+)
 from app.services.assessment_editor import (
     AssessmentActionConflictError,
+    AssessmentNotEditableError,
+    AssessmentVersionConflictError,
     REVISION_COPY_FIELDS,
     REVISION_EVENT_FIELDS,
     REVISION_SYSTEM_FIELDS,
 )
-from app.schemas.assessment_editor import AssessmentRevisionCreateRequest, AssessmentReturnRequest
 from app.services.authentication import AuthenticationService, PublicUser
 from tests.test_vulnerability_workbench import grant_version_scope, login, seed_catalog
 
@@ -1136,6 +1143,10 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
                 assert saved is not None
                 assert saved.analysis_summary == "第一个会话"
                 assert saved.row_version == 2
+            complete_assessment(mysql_client, target_id)
+            with application.state.database.session_factory() as session:
+                saved = session.get(ProductAssessment, target_id)
+                assert saved is not None
                 saved.status = "submitted"
                 saved.submitted_by = 2
                 saved.submitted_at = datetime.now(timezone.utc)
@@ -1197,6 +1208,51 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
                 create_results = list(executor.map(lambda _: create_revision_concurrently(), range(2)))
             assert sorted(create_results) == ["conflict", "created"]
 
+            with application.state.database.session_factory() as session:
+                completed = session.get(ProductAssessment, target_id)
+                assert completed is not None
+                current_id = repository.current_revision_id(
+                    session,
+                    product_ots_id=completed.product_ots_id,
+                    vulnerability_id=completed.vulnerability_id,
+                )
+                assert current_id is not None and current_id != target_id
+            write_barrier = Barrier(2)
+
+            def write_current_concurrently(action: str) -> str:
+                write_barrier.wait()
+                try:
+                    if action == "save":
+                        application.state.assessment_editor_service.save_draft(
+                            owner,
+                            current_id,
+                            AssessmentDraftUpdateRequest.model_validate(
+                                draft_payload(
+                                    row_version=1,
+                                    analysis_summary="并发保存后的结论",
+                                )
+                            ),
+                        )
+                    else:
+                        application.state.assessment_editor_service.submit(
+                            owner,
+                            current_id,
+                            AssessmentActionRequest(row_version=1),
+                        )
+                    return action
+                except (
+                    AssessmentActionConflictError,
+                    AssessmentNotEditableError,
+                    AssessmentVersionConflictError,
+                ):
+                    return "conflict"
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                write_results = list(
+                    executor.map(write_current_concurrently, ("save", "submit"))
+                )
+            assert write_results.count("conflict") == 1
+
             submitted_target_id = assessment_id(mysql_client, "submitted")
             reviewer = PublicUser(3, "reviewer", "审核人", ["reviewer"])
             return_barrier = Barrier(2)
@@ -1229,10 +1285,12 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
                             ProductAssessment.vulnerability_id == root.vulnerability_id,
                         )
                     ).all()
-                    assert sum(item.is_current for item in revisions) == 1
-                    assert [item.revision_no for item in sorted(revisions, key=lambda item: item.revision_no)] == list(
-                        range(1, max(item.revision_no for item in revisions) + 1)
+                    ordered = sorted(revisions, key=lambda item: item.revision_no)
+                    assert sum(item.is_current for item in ordered) == 1
+                    assert [item.revision_no for item in ordered] == list(
+                        range(1, max(item.revision_no for item in ordered) + 1)
                     )
+                    assert ordered[-1].parent_revision_id == business_id
     finally:
         if application is not None:
             application.state.database.engine.dispose()
