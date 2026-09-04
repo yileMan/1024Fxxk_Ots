@@ -6,13 +6,16 @@ from datetime import datetime
 from io import StringIO
 from urllib.parse import urlparse
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.models.imports import Vulnerability, VulnerabilityOtsMatch
 from app.models.ots import OtsComponent, ProductOts
 from app.models.products import ProductVersion
 from app.models.user import AuditLog
 from app.repositories.ots import OtsRepository
+from app.services.assessment_tasks import AssessmentTaskService
 
 
 CSV_FIELDS = ("ots_name", "ots_version", "official_website", "is_eol")
@@ -112,6 +115,7 @@ class OtsManagementService:
     def __init__(self, session_factory: sessionmaker) -> None:
         self._session_factory = session_factory
         self._repository = OtsRepository()
+        self._assessment_tasks = AssessmentTaskService()
 
     @staticmethod
     def _audit(session: Session, actor_id: int, action: str, object_type: str, object_id: int | None, detail: dict[str, object]) -> None:
@@ -169,7 +173,24 @@ class OtsManagementService:
                 relation = ProductOts(product_version_id=version_id, ots_component_id=ots_component_id, created_by=actor_id, status="active", row_version=1)
                 session.add(relation)
                 session.flush()
+                vulnerabilities = list(session.scalars(
+                    select(Vulnerability)
+                    .join(
+                        VulnerabilityOtsMatch,
+                        VulnerabilityOtsMatch.vulnerability_id == Vulnerability.id,
+                    )
+                    .where(VulnerabilityOtsMatch.ots_component_id == ots_component_id)
+                    .order_by(Vulnerability.cve_id)
+                ))
+                task_plan = self._assessment_tasks.plan_source_changes(
+                    session,
+                    vulnerabilities=vulnerabilities,
+                    status="succeeded",
+                    lock=True,
+                )
+                self._assessment_tasks.apply(session, task_plan)
                 self._audit(session, actor_id, "insert", "product_ots", relation.id, {"product_version_id": version_id, "ots_component_id": ots_component_id})
+                self._audit_task_result(session, actor_id, relation.id, task_plan.result)
                 return self._view(relation, ots)
         except IntegrityError as error:
             raise ProductOtsConflictError() from error
@@ -207,10 +228,19 @@ class OtsManagementService:
             previous_status = relation.status
             if not self._repository.update_relation_status_if_version(session, relation_id, row_version, target_status):
                 raise ProductOtsVersionConflictError()
+            task_plan = self._assessment_tasks.plan_relation_change(
+                session,
+                product_ots_id=relation_id,
+                target_status=target_status,
+                status="succeeded",
+                lock=True,
+            )
+            self._assessment_tasks.apply(session, task_plan)
             self._audit(session, actor_id, target_status, "product_ots", relation_id, {
                 "status": {"from": previous_status, "to": target_status},
                 "row_version": {"from": row_version, "to": row_version + 1},
             })
+            self._audit_task_result(session, actor_id, relation_id, task_plan.result)
             relation = self._repository.get_relation(session, relation_id)
             if relation is None:
                 raise OtsNotFoundError()
@@ -320,6 +350,27 @@ class OtsManagementService:
         if item is None:
             raise OtsNotFoundError()
         return item
+
+    @classmethod
+    def _audit_task_result(
+        cls,
+        session: Session,
+        actor_id: int,
+        relation_id: int,
+        result: dict[str, object],
+    ) -> None:
+        if not result["task_inserted_count"] and not result["task_reassess_count"] and not result["task_updated_count"]:
+            return
+        cls._audit(session, actor_id, "relation_reassessment", "product_assessment", relation_id, {
+            key: result[key] for key in (
+                "task_inserted_count",
+                "task_reassess_count",
+                "task_updated_count",
+                "task_unchanged_count",
+                "task_skipped_count",
+                "skip_reason_counts",
+            )
+        })
 
     @staticmethod
     def _version(session: Session, version_id: int) -> ProductVersion:

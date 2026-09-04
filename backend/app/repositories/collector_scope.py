@@ -15,7 +15,11 @@ class CollectorScopeRepository:
             .join(ProductOts, ProductOts.ots_component_id == OtsComponent.id)
             .join(ProductVersion, ProductVersion.id == ProductOts.product_version_id)
             .join(Product, Product.id == ProductVersion.product_id)
-            .where(Product.status == "active", ProductVersion.status == "active")
+            .where(
+                Product.status == "active",
+                ProductVersion.status == "active",
+                ProductOts.status == "active",
+            )
             .distinct()
             .order_by(OtsComponent.id)
         )

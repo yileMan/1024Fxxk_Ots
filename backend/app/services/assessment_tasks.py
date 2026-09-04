@@ -104,6 +104,53 @@ class AssessmentTaskService:
             lock=lock,
         )
 
+    def plan_relation_change(
+        self,
+        session: Session,
+        *,
+        product_ots_id: int,
+        target_status: str,
+        status: str,
+        lock: bool = False,
+    ) -> TaskPlan:
+        context = self._repository.get_product_context(session, product_ots_id)
+        if context is None:
+            raise RuntimeError("product OTS context not found")
+        operations: list[TaskOperation] = []
+        for current, vulnerability, candidate in self._repository.list_relation_current_facts(
+            session, product_ots_id, lock=lock
+        ):
+            basis = build_assessment_basis(
+                source=vulnerability,
+                candidate=candidate,
+                product_ots_id=product_ots_id,
+                product_ots_status=target_status,
+                kev_available=False,
+            )
+            changes = self._changes(current, basis)
+            if changes is None:
+                action: Literal["updated", "reassess", "unchanged"] = "unchanged"
+            elif current.status == "completed":
+                action = "reassess"
+            else:
+                action = "updated"
+            operations.append(TaskOperation(
+                action,
+                vulnerability.id,
+                vulnerability.cve_id,
+                context,
+                vulnerability.source_modified_at,
+                current=current,
+                reason=(
+                    "产品 OTS 关联已停用"
+                    if target_status == "disabled"
+                    else "产品 OTS 关联已恢复"
+                ),
+                basis=basis,
+                changes=changes,
+            ))
+        return TaskPlan(tuple(operations), self._result(operations, status=status))
+
     def plan(
         self,
         session: Session,
