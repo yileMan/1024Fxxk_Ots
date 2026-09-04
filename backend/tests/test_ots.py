@@ -185,6 +185,19 @@ def test_product_ots_response_and_history_listing_include_state(client: TestClie
     )
     assert history.status_code == 200
     assert history.json()[0]["status"] == "disabled"
+    duplicate = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots",
+        json={"ots_component_id": ots["id"]},
+    )
+    csv_duplicate = client.post(
+        f"/api/v1/product-versions/{version['id']}/ots/import",
+        content=b"ots_name,ots_version,official_website,is_eol\ncurl,8.0,https://curl.se,false\n",
+        headers={"content-type": "text/csv", "x-file-name": "disabled.csv"},
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["code"] == "PRODUCT_OTS_DISABLED_CONFLICT"
+    assert csv_duplicate.status_code == 409
+    assert csv_duplicate.json()["code"] == "PRODUCT_OTS_DISABLED_CONFLICT"
 
 
 def test_csv_rejects_bad_headers_duplicate_keys_and_extra_columns_without_writes(client: TestClient) -> None:
