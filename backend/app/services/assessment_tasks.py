@@ -299,15 +299,25 @@ class AssessmentTaskService:
                 context = operation.context
                 if current is None or context is None or operation.source_modified_at is None:
                     raise RuntimeError("invalid assessment update plan")
-                current.owner_id = context.owner_id
-                current.based_on_source_modified_at = operation.source_modified_at
+                values: dict[str, object] = {
+                    "based_on_source_modified_at": operation.source_modified_at,
+                    "reassess_changes_json": merge_reassessment_changes(
+                        current.reassess_changes_json, operation.changes
+                    ),
+                }
+                if current.status == "pending" and self._empty_pending(current):
+                    values["owner_id"] = context.owner_id
                 if operation.basis is not None:
-                    current.assessment_basis_sha256 = operation.basis.sha256
-                    current.assessment_basis_json = operation.basis.data
-                current.reassess_changes_json = merge_reassessment_changes(
-                    current.reassess_changes_json, operation.changes
-                )
-                current.row_version += 1
+                    values["assessment_basis_sha256"] = operation.basis.sha256
+                    values["assessment_basis_json"] = operation.basis.data
+                if not self._repository.update_current_if_version(
+                    session,
+                    assessment_id=current.id,
+                    expected_status=current.status,
+                    row_version=current.row_version,
+                    values=values,
+                ):
+                    raise RuntimeError("assessment task update conflict")
             elif operation.action == "reassess":
                 current = operation.current
                 context = operation.context

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models.assessments import ProductAssessment
@@ -53,6 +53,27 @@ class AssessmentTaskRepository:
                 VulnerabilityOtsMatch.ots_component_id,
             )
         ))
+
+    @staticmethod
+    def update_current_if_version(
+        session: Session,
+        *,
+        assessment_id: int,
+        expected_status: str,
+        row_version: int,
+        values: dict[str, object],
+    ) -> bool:
+        result = session.execute(
+            update(ProductAssessment)
+            .where(
+                ProductAssessment.id == assessment_id,
+                ProductAssessment.is_current.is_(True),
+                ProductAssessment.status == expected_status,
+                ProductAssessment.row_version == row_version,
+            )
+            .values(**values, row_version=ProductAssessment.row_version + 1)
+        )
+        return result.rowcount == 1
 
     def get_product_context(
         self, session: Session, product_ots_id: int
