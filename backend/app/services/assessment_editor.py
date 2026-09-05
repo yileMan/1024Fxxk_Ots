@@ -695,7 +695,7 @@ class AssessmentEditorService:
         return "ACTION_NOT_ALLOWED"
 
     @staticmethod
-    def _reason_type(session: Session, assessment: ProductAssessment) -> str | None:
+    def _reason_type(_session: Session, assessment: ProductAssessment) -> str | None:
         if assessment.status == "returned" and assessment.parent_revision_id is not None:
             return "review_return"
         if assessment.status != "reassess" or not assessment.reassess_reason:
@@ -705,18 +705,6 @@ class AssessmentEditorService:
             trigger_type = changes.get("trigger_type")
             if trigger_type in {"automatic_reassessment", "manual_revision"}:
                 return str(trigger_type)
-        audits = session.scalars(
-            select(AuditLog).where(
-                AuditLog.object_type == "product_assessment",
-                AuditLog.object_id == str(assessment.parent_revision_id),
-            )
-        ).all()
-        if any(
-            item.detail_json.get("child_assessment_id") == assessment.id
-            and item.detail_json.get("action") == "manual_create_revision"
-            for item in audits
-        ):
-            return "manual_revision"
         return "automatic_reassessment"
 
     def _serialize_revision_summary(
