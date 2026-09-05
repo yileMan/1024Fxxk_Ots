@@ -91,6 +91,29 @@ beforeEach(() => {
 })
 
 describe('AssessmentDetailPage', () => {
+  it('shows approved references as isolated read-only summaries', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        product_name: '产品 D', product_version: '4.0', applicability: 'affected',
+        analysis_summary: '<b>已确认受影响</b>', environmental_score: null,
+        treatment: 'patch_or_upgrade', reviewed_at: '2026-09-05T08:00:00',
+      }]), { status: 200 }))
+
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+
+    const references = wrapper.get('[data-approved-references]')
+    expect(references.text()).toContain('其他产品参考')
+    expect(references.text()).toContain('仅供参考')
+    expect(references.text()).toContain('产品 D · 4.0')
+    expect(references.text()).toContain('<b>已确认受影响</b>')
+    expect(references.text()).toContain('未提供')
+    expect(references.find('b').exists()).toBe(false)
+    expect(references.find('a').exists()).toBe(false)
+    expect(references.find('[data-action="copy-reference"]').exists()).toBe(false)
+  })
+
   it('shows bounded automatic reassessment changes and submitted warning as text', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail({
       status: 'submitted',

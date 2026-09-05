@@ -5,6 +5,7 @@ import {
   approveAssessment,
   compareAssessmentRevisions,
   createAssessmentRevision,
+  getApprovedReferences,
   getAssessmentDetail,
   getAssessmentRevisionHistory,
   returnAssessment,
@@ -117,5 +118,22 @@ describe('assessment editor API client', () => {
       '/api/v1/assessments/10/revisions',
       '/api/v1/assessments/10/revision-comparison?base_revision_id=9&target_revision_id=10',
     ])
+  })
+
+  it('reads approved references from the narrow assessment subresource', async () => {
+    const references = [{
+      product_name: '产品 D', product_version: '4.0', applicability: 'affected',
+      analysis_summary: '已确认受影响', environmental_score: null,
+      treatment: 'patch_or_upgrade', reviewed_at: '2026-09-05T08:00:00',
+    }]
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(references), { status: 200 }),
+    )
+
+    await expect(getApprovedReferences(9)).resolves.toEqual(references)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/assessments/9/approved-references',
+      { credentials: 'include' },
+    )
   })
 })
