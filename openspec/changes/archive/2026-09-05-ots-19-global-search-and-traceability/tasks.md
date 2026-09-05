@@ -47,4 +47,4 @@
 - [x] 6.4 更新 `doc/Task.md`：记录 OTS-18 因当前无 EOL 业务暂缓，移除 OTS-19 对 OTS-18 的实施依赖，明确本 change 不新增 EOL/KEV 工作，并修正 ADR-03、风险表及跨产品参考的 OTS 编号错位。
 - [x] 6.5 按 FR-WORK-003 的本次非 EOL/KEV 范围、FR-WORK-004、NFR 12.2、产品范围授权和 11 表数据基线完成双向需求追溯，明确 OTS-18、OTS-20、OTS-21 的剩余边界。
 - [x] 6.6 运行 `openspec validate ots-19-global-search-and-traceability --strict --no-interactive` 及 OpenSpec 全量严格校验，确保 proposal、spec、design、tasks 一致且无错误。
-- [ ] 6.7 更新 OTS-19 完成证据，记录实现提交、测试数量、覆盖率、MySQL 执行计划与性能结果、迁移结论及剩余风险；仅在全部验收通过后同步主规格、归档 change 并提交到当前主干，不执行 `git push`。
+- [x] 6.7 更新 OTS-19 完成证据，记录实现提交、测试数量、覆盖率、MySQL 执行计划与性能结果、迁移结论及剩余风险；仅在全部验收通过后同步主规格、归档 change 并提交到当前主干，不执行 `git push`。

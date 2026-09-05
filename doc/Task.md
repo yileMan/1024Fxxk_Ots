@@ -413,7 +413,7 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M4：查询、导出、审计与交付
 
-#### [ ] OTS-19 `ots-19-global-search-and-traceability`（复杂度：L，依赖：OTS-16/17）
+#### [x] OTS-19 `ots-19-global-search-and-traceability`（复杂度：L，依赖：OTS-16/17）
 
 **目标**：完成跨 CVE、OTS、产品、产品版本、状态、严重度和时间的组合查询及追溯链；本 change 不新增 EOL/KEV 数据、流程或验收，既有 KEV 字段与筛选仅保持兼容。
 
@@ -426,6 +426,8 @@ openspec validate <change-id> --strict --no-interactive
 **需求映射**：FR-WORK-003、FR-WORK-004，NFR 12.2。
 
 **范围与需求追溯**：FR-WORK-003 本次由 CVE、OTS、产品、产品版本、当前评估状态、CVSS v3.1 严重度、来源时间区间的交集筛选及白名单稳定排序覆盖；既有 KEV 字段和基础筛选只做兼容，不新增 KEV 数据或流程，EOL 查询仍归暂缓的 OTS-18。FR-WORK-004 由 CVE 到实际引用成功批次、OTS/CVE 候选、授权产品评估全部修订及提交/审核事件的只读追溯覆盖。NFR 12.2 由真实 MySQL 执行计划、正常规模和 10～20 并发用户 P95 验证覆盖；所有目录总数、候选和评估链先按有效产品版本范围裁剪，复用既有 11 张基础表且不写审计。评估导出和数据库变更记录查询分别保留给 OTS-20、OTS-21。
+
+**完成证据**：RED 基线提交 `fbc31d6`，核心实现提交 `1ce96fe`。扩展 `GET /api/v1/vulnerabilities` 的产品版本条件、四字段白名单排序、URL 可恢复分页和全部条件交集语义，新增 `GET /api/v1/vulnerabilities/{vulnerability_id}/traceability` 及分层只读页面；普通用户的目录、候选、产品评估链和数量均按有效版本范围在查询层裁剪，越权产品/版本组合不通过错误差异泄露关系。后端 pytest 216 项通过、总覆盖率 96%，OTS-19 专项 12 项覆盖完整修订事件、只读性和权限侧信道；前端 Vitest 138 项通过、语句覆盖率 96.74%、目录页 93.12%、追溯页 100%，类型检查和生产构建通过；系统 Chrome Playwright 34 项通过，覆盖组合查询分享/刷新/返回、空分层、长修订链、恶意标记文本和失败重试。OpenAPI/TypeScript 连续两次生成 SHA-256 一致且漂移检查通过。真实 MySQL 代表性数据验证 11 张基础表、双会话一致读取和混合读写；200 行目录顺序查询 0.049 秒、并发 P95 0.312 秒，执行计划使用既有漏洞修改时间、评估 current/review、评估修订和产品版本 OTS 索引，因此未新增表、字段、索引或迁移。主规格已同步，OpenSpec change 于 2026-09-05 归档为 `2026-09-05-ots-19-global-search-and-traceability`。剩余风险是追溯当前一次返回单个 CVE 的全部授权修订，十年数据增长下的分页或流式拆分留待 OTS-23 以生产规模复核；OTS-18 EOL、OTS-20 导出和 OTS-21 变更记录查询仍未启动，本任务未新增 EOL/KEV 工作。
 
 #### [ ] OTS-20 `ots-20-assessment-export`（复杂度：M，依赖：OTS-14/19）
 
