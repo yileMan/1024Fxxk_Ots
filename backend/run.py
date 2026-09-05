@@ -13,6 +13,7 @@ from app.infrastructure.settings import Settings
 from app.main import app
 from app.migrations import apply_migrations
 from app.services.authentication import AuthenticationService
+from app.services.assessment_basis_initialization import AssessmentBasisInitializer
 
 
 if __name__ == "__main__":
@@ -38,5 +39,25 @@ if __name__ == "__main__":
             raise SystemExit("数据库未配置")
         user = AuthenticationService(database.session_factory).initialize_admin(sys.argv[2], sys.argv[3], password)
         print("管理员已存在" if user is None else f"管理员已初始化：{user.login_name}")
+        raise SystemExit(0)
+    if len(sys.argv) >= 2 and sys.argv[1] == "initialize-assessment-bases":
+        settings = Settings.from_environment()
+        if not settings.database_url:
+            raise SystemExit("缺少 OTS_DATABASE_URL，无法初始化评估基线")
+        dry_run = "--dry-run" in sys.argv[2:]
+        batch_size = 500
+        if "--batch-size" in sys.argv[2:]:
+            index = sys.argv.index("--batch-size")
+            try:
+                batch_size = int(sys.argv[index + 1])
+            except (IndexError, ValueError) as error:
+                raise SystemExit("--batch-size 必须为正整数") from error
+        database = Database(settings.database_url)
+        if database.session_factory is None:
+            raise SystemExit("数据库未配置")
+        summary = AssessmentBasisInitializer(database.session_factory).run(
+            dry_run=dry_run, batch_size=batch_size
+        )
+        print(json.dumps(summary, ensure_ascii=False))
         raise SystemExit(0)
     uvicorn.run("app.main:app", host="localhost", port=5353, reload=True)
