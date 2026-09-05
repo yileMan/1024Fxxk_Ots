@@ -18,6 +18,8 @@ from app.infrastructure.settings import Settings
 from app.migrations import apply_migrations
 from app.models.assessments import ProductAssessment
 from app.models.imports import Vulnerability
+from app.models.ots import ProductOts
+from app.models.products import Product, ProductVersion
 from app.models.scopes import UserProductScope
 from app.models.user import AuditLog, Base
 from app.repositories.assessment_editor import AssessmentEditorRepository
@@ -150,6 +152,222 @@ def submit_assessment(client: TestClient, target_id: int, row_version: int = 1):
         f"/api/v1/assessments/{target_id}/submit",
         json={"row_version": row_version},
     )
+
+
+def seed_approved_references(client: TestClient) -> tuple[int, int]:
+    scope = seed_catalog(client)
+    target_id = assessment_id(client, "submitted")
+    now = datetime(2026, 9, 5, 8, 0, tzinfo=timezone.utc)
+    with client.app.state.database.session_factory.begin() as session:
+        target = session.get(ProductAssessment, target_id)
+        assert target is not None
+        target_relation = session.get(ProductOts, target.product_ots_id)
+        assert target_relation is not None
+        target_version = session.get(ProductVersion, target_relation.product_version_id)
+        assert target_version is not None
+
+        same_product_version = ProductVersion(
+            product_id=target_version.product_id,
+            version_no="2.0",
+            owner_id=int(scope["owner"]["id"]),
+            reviewer_id=int(scope["reviewer"]["id"]),
+            status="active",
+        )
+        other_product = Product(
+            product_code="P-C", product_name="产品 C", status="active"
+        )
+        session.add_all([same_product_version, other_product])
+        session.flush()
+        other_version = ProductVersion(
+            product_id=other_product.id,
+            version_no="3.0",
+            owner_id=int(scope["owner"]["id"]),
+            reviewer_id=int(scope["reviewer"]["id"]),
+            status="active",
+        )
+        session.add(other_version)
+        session.flush()
+        same_product_relation = ProductOts(
+            product_version_id=same_product_version.id,
+            ots_component_id=target_relation.ots_component_id,
+            created_by=1,
+            status="active",
+        )
+        other_relation = ProductOts(
+            product_version_id=other_version.id,
+            ots_component_id=target_relation.ots_component_id,
+            created_by=1,
+            status="active",
+        )
+        session.add_all([same_product_relation, other_relation])
+        session.flush()
+
+        common = {
+            "vulnerability_id": target.vulnerability_id,
+            "owner_id": int(scope["owner"]["id"]),
+            "applicability": "affected",
+            "analysis_summary": "其他产品已确认受影响",
+            "environmental_score": 7.4,
+            "treatment": "patch_or_upgrade",
+            "based_on_source_modified_at": now,
+            "row_version": 1,
+            "created_at": now,
+            "updated_at": now,
+        }
+        session.add(
+            ProductAssessment(
+                product_ots_id=same_product_relation.id,
+                revision_no=1,
+                is_current=True,
+                status="completed",
+                review_decision="approved",
+                reviewed_at=now,
+                evidence_text="同产品证据不得出现",
+                review_comment="同产品意见不得出现",
+                **common,
+            )
+        )
+        historical = ProductAssessment(
+            product_ots_id=other_relation.id,
+            revision_no=1,
+            is_current=False,
+            status="completed",
+            review_decision="approved",
+            reviewed_at=now,
+            evidence_text="历史内部证据",
+            review_comment="历史审核意见",
+            **common,
+        )
+        session.add(historical)
+        session.flush()
+        session.add(
+            ProductAssessment(
+                product_ots_id=other_relation.id,
+                vulnerability_id=target.vulnerability_id,
+                revision_no=2,
+                parent_revision_id=historical.id,
+                is_current=True,
+                status="reassess",
+                owner_id=int(scope["owner"]["id"]),
+                applicability="pending",
+                based_on_source_modified_at=now,
+                row_version=1,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+        approved_product = Product(
+            product_code="P-D", product_name="产品 D", status="active"
+        )
+        session.add(approved_product)
+        session.flush()
+        approved_version = ProductVersion(
+            product_id=approved_product.id,
+            version_no="4.0",
+            owner_id=int(scope["owner"]["id"]),
+            reviewer_id=int(scope["reviewer"]["id"]),
+            status="active",
+        )
+        session.add(approved_version)
+        session.flush()
+        approved_relation = ProductOts(
+            product_version_id=approved_version.id,
+            ots_component_id=target_relation.ots_component_id,
+            created_by=1,
+            status="active",
+        )
+        session.add(approved_relation)
+        session.flush()
+        approved = ProductAssessment(
+            product_ots_id=approved_relation.id,
+            revision_no=1,
+            is_current=True,
+            status="completed",
+            review_decision="approved",
+            reviewed_at=now,
+            evidence_text="内部证据不得出现",
+            review_comment="审核意见不得出现",
+            reviewer_id=int(scope["reviewer"]["id"]),
+            submitted_by=int(scope["owner"]["id"]),
+            **common,
+        )
+        session.add(approved)
+        session.flush()
+        return target_id, approved.id
+
+
+def test_approved_references_only_return_other_products_current_approved_summary(
+    client: TestClient,
+) -> None:
+    target_id, _approved_id = seed_approved_references(client)
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    response = client.get(f"/api/v1/assessments/{target_id}/approved-references")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "product_name": "产品 D",
+            "product_version": "4.0",
+            "applicability": "affected",
+            "analysis_summary": "其他产品已确认受影响",
+            "environmental_score": 7.4,
+            "treatment": "patch_or_upgrade",
+            "reviewed_at": "2026-09-05T08:00:00",
+        }
+    ]
+
+
+def test_approved_references_are_read_only_and_use_exact_field_allowlist(
+    client: TestClient,
+) -> None:
+    target_id, approved_id = seed_approved_references(client)
+    with client.app.state.database.session_factory() as session:
+        before = (
+            session.scalar(select(func.count(ProductAssessment.id))),
+            session.scalar(select(func.count(AuditLog.id))),
+            session.get(ProductAssessment, target_id).row_version,
+            session.get(ProductAssessment, approved_id).row_version,
+        )
+    client.cookies.clear()
+    login(client, "reviewer", "user-password")
+
+    response = client.get(f"/api/v1/assessments/{target_id}/approved-references")
+
+    assert response.status_code == 200
+    assert set(response.json()[0]) == {
+        "product_name", "product_version", "applicability", "analysis_summary",
+        "environmental_score", "treatment", "reviewed_at",
+    }
+    assert "内部证据不得出现" not in response.text
+    assert "审核意见不得出现" not in response.text
+    with client.app.state.database.session_factory() as session:
+        after = (
+            session.scalar(select(func.count(ProductAssessment.id))),
+            session.scalar(select(func.count(AuditLog.id))),
+            session.get(ProductAssessment, target_id).row_version,
+            session.get(ProductAssessment, approved_id).row_version,
+        )
+    assert after == before
+
+
+def test_approved_references_reject_invisible_anchor_without_leaking_context(
+    client: TestClient,
+) -> None:
+    target_id, _approved_id = seed_approved_references(client)
+    client.cookies.clear()
+    login(client, "replacement", "user-password")
+
+    response = client.get(f"/api/v1/assessments/{target_id}/approved-references")
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "code": "ASSESSMENT_FORBIDDEN",
+        "message": "无权访问或编辑该产品评估",
+    }
+    assert "产品" not in response.text
 
 
 def test_submit_requires_complete_persisted_snapshot_and_freezes_revision(
