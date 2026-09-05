@@ -427,6 +427,13 @@ def test_mysql_basis_initialization_recovers_after_committed_batch(
                 json={"row_version": first_relation["row_version"]},
             )
             assert disabled.status_code == 200
+            stale_restore = mysql_client.post(
+                f"/api/v1/product-versions/{first_version['id']}/ots/"
+                f"{first_relation['id']}/restore",
+                json={"row_version": first_relation["row_version"]},
+            )
+            assert stale_restore.status_code == 409
+            assert stale_restore.json()["code"] == "PRODUCT_OTS_VERSION_CONFLICT"
             revisions = assessment_rows(mysql_client)
             first_product = [
                 row for row in revisions
