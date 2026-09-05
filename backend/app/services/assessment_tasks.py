@@ -286,6 +286,11 @@ class AssessmentTaskService:
         return TaskPlan(tuple(operations), result)
 
     def apply(self, session: Session, plan: TaskPlan) -> None:
+        if any(
+            operation.action in {"inserted", "updated", "reassess"}
+            for operation in plan.operations
+        ) and not self._repository.current_bases_ready(session):
+            raise RuntimeError("assessment basis initialization is required")
         for operation in plan.operations:
             if operation.action == "inserted":
                 session.add(self._new_assessment(operation))

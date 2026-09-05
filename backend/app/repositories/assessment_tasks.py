@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.assessments import ProductAssessment
@@ -27,6 +27,19 @@ class ProductOtsContext:
 
 
 class AssessmentTaskRepository:
+    @staticmethod
+    def current_bases_ready(session: Session) -> bool:
+        missing = session.scalar(
+            select(func.count(ProductAssessment.id)).where(
+                ProductAssessment.is_current.is_(True),
+                or_(
+                    ProductAssessment.assessment_basis_sha256.is_(None),
+                    ProductAssessment.assessment_basis_json.is_(None),
+                ),
+            )
+        )
+        return int(missing or 0) == 0
+
     def list_candidates(
         self, session: Session, vulnerability_ids: set[int]
     ) -> list[VulnerabilityOtsMatch]:

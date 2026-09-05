@@ -243,7 +243,7 @@ def test_candidate_execution_is_blocked_until_current_bases_are_initialized(
     )
 
     assert blocked.status_code == 500
-    assert blocked.json()["detail"]["code"] == "MATCH_EXECUTION_FAILED"
+    assert blocked.json()["code"] == "MATCH_EXECUTION_FAILED"
     rows = assessment_rows(client)
     assert len(rows) == 1
     assert rows[0]["assessment_basis_sha256"] is None
