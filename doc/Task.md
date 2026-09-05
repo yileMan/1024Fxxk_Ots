@@ -367,7 +367,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：RED 测试提交 `317fae4`、`a0ff70a`，后端与前端实现提交 `3416dab`、`5291ea2`，并发、端到端及过期修订刷新验收提交 `fdabd03`。退回接口现原子保留已审核父修订并创建 `returned` 当前子修订；负责人可编辑/重提退回或复评修订，并可从 `completed` 显式创建人工复评修订；详情页提供历史时间线、历史只读和同链字段比较。后端 pytest 189 项通过、整体覆盖率 93%，评估服务 94%、repository 98%、schema 100%、路由 99%；前端 Vitest 123 项通过、整体语句覆盖率 96.83%、评估详情页 95.36%、评估 API 100%；类型检查、生产构建、OpenAPI/生成类型连续两次哈希一致、系统 Chrome Playwright 29 项及 OpenSpec 全量 18 项严格校验通过。MySQL 双会话覆盖并发退回、人工创建修订以及新当前修订保存/提交竞争且仅一个竞争写入成功；复用既有 11 张表，无需新增表、字段、索引或迁移。主规格已同步，OpenSpec change 于 2026-09-04 归档为 `2026-09-04-ots-15-return-revision-resubmit`。剩余风险是历史接口当前返回同链全部摘要且尚无分页，修订链规模增长时需按 OTS-19 查询设计补充分页。
 
-#### [x] OTS-16 `ots-16-automatic-reassessment`（复杂度：XL，依赖：OTS-10/15）
+#### [x] OTS-16 `ots-16-automatic-reassessment`（复杂度：XL，依赖：OTS-10/15，已于 2026-09-05 归档）
 
 **目标**：来源事实、候选依据或产品 OTS 上下文实质变化时生成待复评修订。
 
@@ -381,7 +381,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **需求追溯**：FR-VULN-005 由来源状态、CVSS v3.1 和规范化受影响范围的基线差异触发覆盖；FR-MATCH-005 由候选新增、更新、移除及跨入口指纹幂等覆盖；FR-REVIEW-004 由统一修订克隆原语、历史完成修订不可变、连续父子链和重新提交覆盖；FR-WORK-001 由 `reassess` 当前修订实时进入负责人工作台及待办覆盖。系统方案 5.5 的实质变化矩阵、纯文字零复评、产品独立性和关联停用/恢复均有后端、前端及 Chrome 场景证据。
 
-**完成证据**：迁移 `013_automatic_reassessment.sql` 在既有 11 张基础表上增加评估基线/变化摘要和产品 OTS 软状态，不新增表；`initialize-assessment-bases` 支持 dry-run、稳定分页、中断恢复和幂等重跑，初始化未完成时自动入口拒绝评估写入。来源确认、候选执行和关联状态变更统一比较规范基线，完成态创建单一 `reassess` 子修订，进行中状态合并变化并递增 `row_version`，审计仅保存入口、数量、变化类型、父子修订和指纹。后端 pytest 209 项通过、总覆盖率 93%，自动复评核心模块覆盖率 93%～100%；MySQL 8.0.39 验证迁移、初始化恢复、双会话竞争、两产品独立与连续修订链。10,000 条任务规划耗时 1.585 秒、峰值 18.83 MiB。前端 Vitest 125 项通过，语句覆盖率 96.87%、分支 80.66%、函数 83.68%，类型检查和生产构建通过；系统 Chrome Playwright 全量及新增纵向场景通过。OpenAPI/TypeScript 连续生成哈希一致，OpenSpec change 与全量规格严格校验通过。NVD `1.0` 未提供可信 KEV/EOL 输入，因此 V1 基线明确不把缺失 KEV 当作 `false`，EOL 仍由 OTS-18 处理。
+**完成证据**：迁移 `013_automatic_reassessment.sql` 在既有 11 张基础表上增加评估基线/变化摘要和产品 OTS 软状态，不新增表；`initialize-assessment-bases` 支持 dry-run、稳定分页、中断恢复和幂等重跑，初始化未完成时自动入口拒绝评估写入。来源确认、候选执行和关联状态变更统一比较规范基线，完成态创建单一 `reassess` 子修订，进行中状态合并变化并递增 `row_version`，审计仅保存入口、数量、变化类型、父子修订和指纹。后端 pytest 209 项通过、总覆盖率 93%，自动复评核心模块覆盖率 93%～100%；MySQL 8.0.39 验证迁移、初始化恢复、双会话竞争、两产品独立与连续修订链。10,000 条任务规划耗时 1.585 秒、峰值 18.83 MiB。前端 Vitest 125 项通过，语句覆盖率 96.87%、分支 80.66%、函数 83.68%，类型检查和生产构建通过；系统 Chrome Playwright 全量 31 项及新增纵向场景通过。OpenAPI/TypeScript 连续生成哈希一致，主规格同步后 OpenSpec 全量严格校验通过。OpenSpec change 于 2026-09-05 归档为 `2026-09-05-ots-16-automatic-reassessment`。NVD `1.0` 未提供可信 KEV/EOL 输入，因此 V1 基线明确不把缺失 KEV 当作 `false`，EOL 仍由 OTS-18 处理。
 
 #### [ ] OTS-17 `ots-17-cross-product-approved-reference`（复杂度：M，依赖：OTS-11/14）
 
