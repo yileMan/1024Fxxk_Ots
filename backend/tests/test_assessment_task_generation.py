@@ -3,12 +3,16 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 import json
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text, update
+from sqlalchemy import create_engine, func, select, text, update
+from sqlalchemy.engine import make_url
 
 from app.main import create_app
+from app.infrastructure.settings import Settings
+from app.migrations import apply_migrations
 from app.models.assessments import ProductAssessment
 from app.models.imports import ImportBatch, Vulnerability
 from app.models.user import AuditLog, Base
@@ -294,6 +298,89 @@ def test_basis_initializer_dry_run_and_repeated_batches_are_safe(
     }
     assert all(row["assessment_basis_sha256"] for row in rows)
     assert all(row["reassess_changes_json"] is None for row in rows)
+
+
+def test_mysql_basis_initialization_recovers_after_committed_batch(
+    monkeypatch, tmp_path: Path
+) -> None:
+    configured_url = Settings.from_environment().database_url
+    assert configured_url is not None
+    url = make_url(configured_url)
+    database_name = f"ots16_init_{uuid4().hex}"
+    admin_engine = create_engine(url.set(database="mysql"))
+    test_engine = None
+    application = None
+    try:
+        with admin_engine.begin() as connection:
+            connection.execute(
+                text(f"CREATE DATABASE `{database_name}` CHARACTER SET utf8mb4")
+            )
+        test_url = url.set(database=database_name)
+        test_engine = create_engine(test_url)
+        assert apply_migrations(
+            test_engine, Path(__file__).parents[1] / "migrations"
+        ) == list(range(1, 14))
+        monkeypatch.setenv(
+            "OTS_DATABASE_URL", test_url.render_as_string(hide_password=False)
+        )
+        monkeypatch.setenv("OTS_IMPORT_TEMP_DIR", str(tmp_path / "mysql-incoming"))
+        monkeypatch.setenv("OTS_IMPORT_ARCHIVE_DIR", str(tmp_path / "mysql-archive"))
+        application = create_app()
+        AuthenticationService(application.state.database.session_factory).initialize_admin(
+            "admin", "初始管理员", "admin-password"
+        )
+        with TestClient(application, raise_server_exceptions=False) as mysql_client:
+            scope = setup_scope(mysql_client, product_count=2)
+            mysql_client.post(
+                f"/api/v1/import-packages/{scope['batch_id']}/ots-matches"
+            )
+            with application.state.database.engine.begin() as connection:
+                connection.execute(text(
+                    "UPDATE product_assessment SET status='completed', row_version=7, "
+                    "assessment_basis_sha256=NULL, assessment_basis_json=NULL"
+                ))
+            initializer = AssessmentBasisInitializer(
+                application.state.database.session_factory
+            )
+            original_page = initializer._page
+            page_calls = 0
+
+            def interrupted_page(session, *, last_id: int, limit: int):
+                nonlocal page_calls
+                page_calls += 1
+                if page_calls == 2:
+                    raise RuntimeError("simulated interruption")
+                return original_page(session, last_id=last_id, limit=limit)
+
+            monkeypatch.setattr(initializer, "_page", interrupted_page)
+            with pytest.raises(RuntimeError, match="simulated interruption"):
+                initializer.run(dry_run=False, batch_size=1)
+            with application.state.database.engine.connect() as connection:
+                assert connection.scalar(text(
+                    "SELECT COUNT(*) FROM product_assessment "
+                    "WHERE assessment_basis_sha256 IS NOT NULL"
+                )) == 1
+
+            resumed = AssessmentBasisInitializer(
+                application.state.database.session_factory
+            ).run(dry_run=False, batch_size=1)
+            repeated = AssessmentBasisInitializer(
+                application.state.database.session_factory
+            ).run(dry_run=False, batch_size=1)
+            assert resumed["remaining_count"] == 0
+            assert repeated["initialized_count"] == 0
+            rows = assessment_rows(mysql_client)
+            assert {(row["status"], row["row_version"]) for row in rows} == {
+                ("completed", 7)
+            }
+    finally:
+        if application is not None:
+            application.state.database.engine.dispose()
+        if test_engine is not None:
+            test_engine.dispose()
+        with admin_engine.begin() as connection:
+            connection.execute(text(f"DROP DATABASE IF EXISTS `{database_name}`"))
+        admin_engine.dispose()
 
 
 def test_stale_task_plan_cannot_overwrite_newer_assessment_basis(
