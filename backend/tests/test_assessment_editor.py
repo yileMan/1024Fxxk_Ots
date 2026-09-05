@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Barrier
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -28,6 +29,7 @@ from app.schemas.assessment_editor import (
 )
 from app.services.assessment_editor import (
     AssessmentActionConflictError,
+    AssessmentEditorService,
     AssessmentNotEditableError,
     AssessmentVersionConflictError,
     REVISION_COPY_FIELDS,
@@ -36,6 +38,30 @@ from app.services.assessment_editor import (
 )
 from app.services.authentication import AuthenticationService, PublicUser
 from tests.test_vulnerability_workbench import grant_version_scope, login, seed_catalog
+
+
+def test_reason_type_uses_persisted_metadata_without_audit_scan() -> None:
+    class NoAuditSession:
+        def scalars(self, *_args, **_kwargs):
+            raise AssertionError("reason type must not scan audit_log")
+
+    manual = SimpleNamespace(
+        status="reassess",
+        parent_revision_id=1,
+        reassess_reason="人工复核",
+        reassess_changes_json={"trigger_type": "manual_revision"},
+    )
+    legacy_automatic = SimpleNamespace(
+        status="reassess",
+        parent_revision_id=1,
+        reassess_reason="依据发生变化",
+        reassess_changes_json=None,
+    )
+
+    assert AssessmentEditorService._reason_type(NoAuditSession(), manual) == "manual_revision"
+    assert AssessmentEditorService._reason_type(
+        NoAuditSession(), legacy_automatic
+    ) == "automatic_reassessment"
 
 
 @pytest.fixture
