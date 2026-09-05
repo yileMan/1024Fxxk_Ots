@@ -160,6 +160,18 @@ class AssessmentDetailResponse(BaseModel):
     environmental_scoring: EnvironmentalScoringResponse
 
 
+class ApprovedReferenceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_name: str
+    product_version: str
+    applicability: Applicability
+    analysis_summary: str | None
+    environmental_score: float | None
+    treatment: Treatment | None
+    reviewed_at: datetime
+
+
 class AssessmentReviewedRevisionResponse(BaseModel):
     assessment_id: int
     revision_no: int

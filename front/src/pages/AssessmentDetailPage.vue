@@ -97,6 +97,29 @@
         </section>
       </div>
 
+      <section class="approved-references" data-approved-references aria-labelledby="approved-references-title">
+        <header>
+          <div><small>CROSS-PRODUCT / 仅供参考</small><h2 id="approved-references-title">其他产品参考</h2></div>
+          <button type="button" data-action="refresh-approved-references" :disabled="referencesLoading" @click="loadApprovedReferences">
+            {{ referencesLoading ? '正在加载…' : '刷新参考' }}
+          </button>
+        </header>
+        <p class="reference-notice">仅展示相同 OTS/CVE 在其他产品中的当前已审核通过摘要，仅供参考，不会填充或改变当前产品结论。</p>
+        <p v-if="referencesError" class="feedback error" role="alert">{{ referencesError }}</p>
+        <p v-else-if="!referencesLoading && approvedReferences.length === 0" class="reference-empty">暂无其他产品的当前已审核参考。</p>
+        <div v-else class="reference-grid">
+          <article v-for="reference in approvedReferences" :key="`${reference.product_name}:${reference.product_version}:${reference.reviewed_at}`">
+            <header><strong>{{ reference.product_name }} · {{ reference.product_version }}</strong><time>{{ formatTime(reference.reviewed_at) }}</time></header>
+            <p>{{ reference.analysis_summary ?? '未提供' }}</p>
+            <dl>
+              <div><dt>适用性</dt><dd>{{ applicabilityLabels[reference.applicability] }}</dd></div>
+              <div><dt>环境分数</dt><dd>{{ reference.environmental_score ?? '未提供' }}</dd></div>
+              <div><dt>处置方式</dt><dd>{{ reference.treatment ? treatmentLabels[reference.treatment] : '未提供' }}</dd></div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
       <section class="editor-section">
         <header>
           <div><small>CURRENT PRODUCT CONCLUSION</small><h2>当前产品结论</h2></div>
@@ -209,7 +232,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, nextTick, onMounted, reactive, ref, type PropType } from 'vue'
 
-import { AssessmentApiError, approveAssessment, compareAssessmentRevisions, createAssessmentRevision, getAssessmentDetail, getAssessmentRevisionHistory, returnAssessment, saveAssessmentDraft, submitAssessment, type AssessmentDetail, type AssessmentDraftUpdate, type AssessmentRevisionComparison, type AssessmentRevisionHistory } from '../api/assessmentEditor'
+import { AssessmentApiError, approveAssessment, compareAssessmentRevisions, createAssessmentRevision, getApprovedReferences, getAssessmentDetail, getAssessmentRevisionHistory, returnAssessment, saveAssessmentDraft, submitAssessment, type ApprovedReference, type AssessmentDetail, type AssessmentDraftUpdate, type AssessmentRevisionComparison, type AssessmentRevisionHistory } from '../api/assessmentEditor'
 import { calculateEnvironmental, defaultEnvironmentalMetrics, type EnvironmentalMetric, type EnvironmentalMetrics } from '../utils/cvss31'
 
 type TextKey = 'analysis_summary' | 'trigger_conditions' | 'affected_functions' | 'applicability_basis' | 'product_impact' | 'existing_controls' | 'treatment_detail' | 'evidence_text'
@@ -234,6 +257,9 @@ const revisions = ref<AssessmentRevisionHistory['items']>([])
 const historyLoading = ref(false)
 const historyLoaded = ref(false)
 const historyError = ref('')
+const approvedReferences = ref<ApprovedReference[]>([])
+const referencesLoading = ref(false)
+const referencesError = ref('')
 const comparison = ref<AssessmentRevisionComparison | null>(null)
 const comparisonLoading = ref(false)
 const cvssMetrics = reactive<EnvironmentalMetrics>(defaultEnvironmentalMetrics())
@@ -261,6 +287,8 @@ const lastFields: FieldDefinition[] = [
   { key: 'evidence_text', label: '证据说明或内网引用位置', wide: true },
 ]
 const statusLabels: Record<string, string> = { pending: '待产品评估', returned: '已退回', reassess: '待复评', submitted: '待审核', completed: '已完成' }
+const applicabilityLabels: Record<string, string> = { pending: '待确认', affected: '受影响', not_affected: '不受影响', partly_affected: '部分受影响' }
+const treatmentLabels: Record<string, string> = { patch_or_upgrade: '升级 / 补丁', configuration_mitigation: '配置缓解', isolation_or_compensating_control: '隔离 / 补偿控制', accept_risk: '接受风险', no_action: '无需处置', further_investigation: '进一步调查' }
 const changeTypeLabels: Record<string, string> = { source: '来源变化', candidate: '候选变化', product_context: '产品上下文变化' }
 const returnQueue = new URL(window.location.href).searchParams.get('from') ?? 'pending'
 const returnUrl = `/system/assessments/tasks?queue=${encodeURIComponent(returnQueue)}&page=1`
@@ -341,6 +369,7 @@ async function load(): Promise<void> {
   clearFieldErrors()
   try {
     applyDetail(await getAssessmentDetail(activeAssessmentId.value))
+    void loadApprovedReferences()
   } catch (reason) {
     detail.value = null
     loadError.value = reason instanceof AssessmentApiError && reason.status === 403
@@ -350,6 +379,26 @@ async function load(): Promise<void> {
         : '评估详情暂时不可用，请稍后重试。'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadApprovedReferences(): Promise<void> {
+  if (!detail.value || referencesLoading.value) return
+  const assessmentId = detail.value.assessment_id
+  referencesLoading.value = true
+  referencesError.value = ''
+  approvedReferences.value = []
+  try {
+    const response = await getApprovedReferences(assessmentId)
+    if (detail.value?.assessment_id === assessmentId) approvedReferences.value = response
+  } catch (reason) {
+    if (detail.value?.assessment_id === assessmentId) {
+      referencesError.value = reason instanceof AssessmentApiError
+        ? reason.message
+        : '其他产品参考暂时不可用，请重试。'
+    }
+  } finally {
+    if (detail.value?.assessment_id === assessmentId) referencesLoading.value = false
   }
 }
 
@@ -372,6 +421,7 @@ async function openRevision(assessmentId: number): Promise<void> {
   if (assessmentId === detail.value?.assessment_id) return
   try {
     applyDetail(await getAssessmentDetail(assessmentId))
+    void loadApprovedReferences()
     comparison.value = null
   } catch (reason) {
     historyError.value = reason instanceof AssessmentApiError ? reason.message : '修订详情暂时不可用。'
@@ -517,4 +567,5 @@ function clearFieldErrors(): void {
 .source-vector{display:grid;gap:5px;overflow-wrap:anywhere}.source-vector strong{color:var(--ink);font-size:10px}.cvss-panel{grid-column:1/-1;border:1px solid var(--line-strong);border-left:7px solid var(--brand-red);padding:22px;background:var(--paper-warm)}.cvss-panel>header{display:flex;align-items:center;justify-content:space-between}.cvss-panel h3{margin:5px 0 0;color:var(--ink);font:750 24px var(--font-display)}.score-chip{display:grid;place-items:center;min-width:68px;min-height:54px;color:#fff;background:var(--ink);font:800 25px var(--font-display)}.cvss-state{margin:12px 0;color:var(--brand-red-deep);font-size:11px;font-weight:900}.cvss-unavailable{margin:16px 0 0;padding:14px;border-left:4px solid var(--brand-red);background:#fff}.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric-grid label{display:grid;gap:6px}.metric-grid span{font-size:11px;font-weight:800}.metric-grid b{float:right;color:var(--brand-red)}.metric-grid select{min-height:40px;border:1px solid var(--line-strong);padding:8px;background:#fff}.metric-grid em{color:var(--danger);font-size:10px;font-style:normal}.metric-readonly{display:flex;flex-wrap:wrap;gap:8px}.metric-readonly span{display:flex;gap:8px;border:1px solid var(--line);padding:7px 9px;background:#fff;font-size:11px}.score-result{display:grid;grid-template-columns:140px 1fr;gap:12px;margin:18px 0 0}.score-result div{padding:12px;background:#fff}.score-result .vector{grid-column:1/-1}.score-result dt{font-size:9px;font-weight:900}.score-result dd{margin:5px 0 0;overflow-wrap:anywhere;font:12px/1.5 Consolas,monospace}@media(max-width:780px){.metric-grid{grid-template-columns:1fr}.cvss-panel{grid-column:auto}.score-result{grid-template-columns:1fr}.score-result .vector{grid-column:auto}}
 .action-panel{display:flex;justify-content:space-between;gap:20px;margin:0 30px 30px;padding:22px;border-left:7px solid var(--brand-red);background:var(--paper-warm)}.action-panel h3{margin:5px 0;font:750 24px var(--font-display)}.action-panel p{margin:7px 0;font-size:12px}.action-buttons{display:flex;align-items:center;gap:8px}.action-buttons button,.action-dialog button{border:0;padding:12px 16px;color:#fff;background:var(--brand-red);font-weight:900;cursor:pointer}.action-buttons button:disabled,.action-dialog button:disabled{opacity:.6}.dialog-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgb(20 25 29 / .68)}.action-dialog{width:min(520px,100%);padding:28px;border-top:7px solid var(--brand-red);background:#fff;box-shadow:var(--shadow-card)}.action-dialog h3{margin:0;font:750 28px var(--font-display)}.action-dialog label{display:block;margin:18px 0 7px;font-weight:900}.action-dialog textarea{width:100%;box-sizing:border-box;padding:12px}.action-dialog footer{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}.action-dialog footer button:first-child{color:var(--ink);background:#dfe3e6}
 .revision-panel{margin-top:12px;padding:22px;border:1px solid var(--line-strong);background:#fff}.revision-panel>header{display:flex;align-items:center;justify-content:space-between;gap:16px}.revision-panel h2{margin:5px 0 0;font:750 24px var(--font-display)}.revision-panel small{color:var(--brand-red);font-size:9px;font-weight:900;letter-spacing:.14em}.revision-panel button{border:1px solid var(--line-strong);padding:9px 12px;background:#fff;cursor:pointer}.revision-list{display:flex;gap:8px;margin:18px 0;padding:0;list-style:none;overflow-x:auto}.revision-list button{display:grid;gap:4px;min-width:120px;text-align:left}.revision-list button.selected{border-color:var(--brand-red);box-shadow:inset 0 -4px 0 var(--brand-red)}.revision-list span,.history-notice{color:var(--text-muted);font-size:11px}.revision-diff{display:grid;gap:8px;margin:18px 0 0}.revision-diff div{display:grid;grid-template-columns:180px 1fr;gap:12px;padding:10px;background:var(--paper-warm)}.revision-diff dd{display:grid;gap:5px;margin:0;overflow-wrap:anywhere}.revision-diff del{color:var(--danger)}.revision-diff ins{color:var(--success);text-decoration:none}
+.approved-references{margin-top:12px;padding:24px;border:1px solid var(--line-strong);border-left:7px solid var(--ink);background:#fff}.approved-references>header{display:flex;align-items:center;justify-content:space-between;gap:16px}.approved-references h2{margin:5px 0 0;font:750 27px var(--font-display)}.approved-references small{color:var(--brand-red);font-size:9px;font-weight:900;letter-spacing:.14em}.approved-references>header button{border:1px solid var(--line-strong);padding:9px 12px;background:#fff;cursor:pointer}.reference-notice,.reference-empty{color:var(--text-muted);font-size:12px;line-height:1.6}.reference-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.reference-grid article{padding:18px;border:1px solid var(--line);background:var(--paper-warm)}.reference-grid article>header{display:flex;justify-content:space-between;gap:12px}.reference-grid time{color:var(--text-muted);font-size:10px}.reference-grid article>p{min-height:42px;overflow-wrap:anywhere;font-size:12px;line-height:1.6}.reference-grid dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 0}.reference-grid dl div{padding:8px;background:#fff}.reference-grid dt{color:var(--text-muted);font-size:9px}.reference-grid dd{margin:5px 0 0;font-size:11px;font-weight:800}@media(max-width:780px){.approved-references>header,.reference-grid article>header{align-items:flex-start;flex-direction:column}.reference-grid,.reference-grid dl{grid-template-columns:1fr}}
 </style>

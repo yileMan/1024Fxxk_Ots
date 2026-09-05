@@ -762,6 +762,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assessments/{assessment_id}/approved-references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Approved Assessment References */
+        get: operations["approved_assessment_references_api_v1_assessments__assessment_id__approved_references_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assessments/{assessment_id}/draft": {
         parameters: {
             query?: never;
@@ -869,6 +886,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ApprovedReferenceResponse */
+        ApprovedReferenceResponse: {
+            /** Product Name */
+            product_name: string;
+            /** Product Version */
+            product_version: string;
+            /**
+             * Applicability
+             * @enum {string}
+             */
+            applicability: "affected" | "not_affected" | "partly_affected" | "pending";
+            /** Analysis Summary */
+            analysis_summary: string | null;
+            /** Environmental Score */
+            environmental_score: number | null;
+            /** Treatment */
+            treatment: ("patch_or_upgrade" | "configuration_mitigation" | "isolation_or_compensating_control" | "accept_risk" | "no_action" | "further_investigation") | null;
+            /**
+             * Reviewed At
+             * Format: date-time
+             */
+            reviewed_at: string;
+        };
         /** AssessmentActionRequest */
         AssessmentActionRequest: {
             /** Row Version */
@@ -3921,6 +3961,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssessmentDetailResponse"];
+                };
+            };
+            /** @description 无权访问或编辑 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 评估不可编辑或版本冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 草稿字段校验失败 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approved_assessment_references_api_v1_assessments__assessment_id__approved_references_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovedReferenceResponse"][];
                 };
             };
             /** @description 无权访问或编辑 */

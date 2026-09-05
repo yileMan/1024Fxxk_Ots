@@ -5,6 +5,7 @@ import AssessmentDetailPage from './AssessmentDetailPage.vue'
 
 
 const fetchMock = vi.fn()
+const approvedReferencesFetchMock = vi.fn()
 
 function detail(overrides: Record<string, unknown> = {}) {
   return {
@@ -86,15 +87,19 @@ function detail(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   fetchMock.mockReset()
-  vi.stubGlobal('fetch', fetchMock)
+  approvedReferencesFetchMock.mockReset()
+  approvedReferencesFetchMock.mockResolvedValue(new Response('[]', { status: 200 }))
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).endsWith('/approved-references')
+      ? approvedReferencesFetchMock(input, init)
+      : fetchMock(input, init))
   window.history.replaceState({}, '', '/system/assessments/9?from=returned')
 })
 
 describe('AssessmentDetailPage', () => {
   it('shows approved references as isolated read-only summaries', async () => {
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([{
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+    approvedReferencesFetchMock.mockResolvedValueOnce(new Response(JSON.stringify([{
         product_name: '产品 D', product_version: '4.0', applicability: 'affected',
         analysis_summary: '<b>已确认受影响</b>', environmental_score: null,
         treatment: 'patch_or_upgrade', reviewed_at: '2026-09-05T08:00:00',
@@ -112,6 +117,27 @@ describe('AssessmentDetailPage', () => {
     expect(references.find('b').exists()).toBe(false)
     expect(references.find('a').exists()).toBe(false)
     expect(references.find('[data-action="copy-reference"]').exists()).toBe(false)
+  })
+
+  it('isolates approved reference failures and retries without changing the draft', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+    approvedReferencesFetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 'REFERENCE_UNAVAILABLE', message: '参考服务暂时不可用',
+      }), { status: 503 }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+    await wrapper.get('[name="analysis_summary"]').setValue('未保存的当前产品分析')
+
+    expect(wrapper.get('[data-approved-references]').text()).toContain('参考服务暂时不可用')
+    expect(wrapper.find('[data-action="submit-assessment"]').exists()).toBe(true)
+    await wrapper.get('[data-action="refresh-approved-references"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-approved-references]').text()).toContain('暂无其他产品的当前已审核参考')
+    expect((wrapper.get('[name="analysis_summary"]').element as HTMLTextAreaElement).value).toBe('未保存的当前产品分析')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('shows bounded automatic reassessment changes and submitted warning as text', async () => {

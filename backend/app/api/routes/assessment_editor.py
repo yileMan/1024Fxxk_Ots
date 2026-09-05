@@ -10,6 +10,7 @@ from app.schemas.assessment_editor import (
     AssessmentRevisionHistoryResponse,
     AssessmentReturnRequest,
     AssessmentReturnResponse,
+    ApprovedReferenceResponse,
 )
 from app.services.assessment_editor import (
     AssessmentEditorError,
@@ -90,6 +91,25 @@ def assessment_detail(
         return AssessmentDetailResponse.model_validate(
             _service(request).detail(user, assessment_id)
         )
+    except AssessmentEditorError as error:
+        _raise_error(error)
+
+
+@router.get(
+    "/assessments/{assessment_id}/approved-references",
+    response_model=list[ApprovedReferenceResponse],
+    responses=ERROR_RESPONSES,
+)
+def approved_assessment_references(
+    assessment_id: int,
+    request: Request,
+    user: PublicUser = Depends(require_current_user),
+) -> list[ApprovedReferenceResponse]:
+    try:
+        return [
+            ApprovedReferenceResponse.model_validate(item)
+            for item in _service(request).approved_references(user, assessment_id)
+        ]
     except AssessmentEditorError as error:
         _raise_error(error)
 

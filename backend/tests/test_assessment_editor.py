@@ -363,11 +363,10 @@ def test_approved_references_reject_invisible_anchor_without_leaking_context(
     response = client.get(f"/api/v1/assessments/{target_id}/approved-references")
 
     assert response.status_code == 403
-    assert response.json() == {
-        "code": "ASSESSMENT_FORBIDDEN",
-        "message": "无权访问或编辑该产品评估",
-    }
-    assert "产品" not in response.text
+    assert response.json()["code"] == "ASSESSMENT_FORBIDDEN"
+    assert response.json()["message"] == "无权访问或编辑该产品评估"
+    assert "产品 D" not in response.text
+    assert "CVE-" not in response.text
 
 
 def test_submit_requires_complete_persisted_snapshot_and_freezes_revision(

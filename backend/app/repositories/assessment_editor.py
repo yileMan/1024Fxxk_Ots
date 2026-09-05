@@ -110,6 +110,44 @@ class AssessmentEditorRepository:
         )
 
     @staticmethod
+    def list_approved_references(
+        session: Session,
+        *,
+        product_id: int,
+        ots_component_id: int,
+        vulnerability_id: int,
+    ) -> list[dict[str, object]]:
+        statement = (
+            select(
+                Product.product_name,
+                ProductVersion.version_no.label("product_version"),
+                ProductAssessment.applicability,
+                ProductAssessment.analysis_summary,
+                ProductAssessment.environmental_score,
+                ProductAssessment.treatment,
+                ProductAssessment.reviewed_at,
+            )
+            .select_from(ProductAssessment)
+            .join(ProductOts, ProductOts.id == ProductAssessment.product_ots_id)
+            .join(ProductVersion, ProductVersion.id == ProductOts.product_version_id)
+            .join(Product, Product.id == ProductVersion.product_id)
+            .where(
+                ProductAssessment.vulnerability_id == vulnerability_id,
+                ProductOts.ots_component_id == ots_component_id,
+                Product.id != product_id,
+                ProductAssessment.is_current.is_(True),
+                ProductAssessment.status == "completed",
+                ProductAssessment.review_decision == "approved",
+            )
+            .order_by(
+                ProductAssessment.reviewed_at.desc(),
+                Product.product_name,
+                ProductVersion.version_no,
+            )
+        )
+        return [dict(row) for row in session.execute(statement).mappings().all()]
+
+    @staticmethod
     def update_draft_if_version(
         session: Session,
         *,

@@ -2662,6 +2662,54 @@
         }
       }
     },
+    "/api/v1/assessments/{assessment_id}/approved-references": {
+      "get": {
+        "tags": [
+          "assessment-editor-core"
+        ],
+        "summary": "Approved Assessment References",
+        "operationId": "approved_assessment_references_api_v1_assessments__assessment_id__approved_references_get",
+        "parameters": [
+          {
+            "name": "assessment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assessment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovedReferenceResponse"
+                  },
+                  "title": "Response Approved Assessment References Api V1 Assessments  Assessment Id  Approved References Get"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "无权访问或编辑"
+          },
+          "404": {
+            "description": "评估不存在"
+          },
+          "409": {
+            "description": "评估不可编辑或版本冲突"
+          },
+          "422": {
+            "description": "草稿字段校验失败"
+          }
+        }
+      }
+    },
     "/api/v1/assessments/{assessment_id}/draft": {
       "put": {
         "tags": [
@@ -3039,6 +3087,86 @@
   },
   "components": {
     "schemas": {
+      "ApprovedReferenceResponse": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "product_version": {
+            "type": "string",
+            "title": "Product Version"
+          },
+          "applicability": {
+            "type": "string",
+            "enum": [
+              "affected",
+              "not_affected",
+              "partly_affected",
+              "pending"
+            ],
+            "title": "Applicability"
+          },
+          "analysis_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Summary"
+          },
+          "environmental_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environmental Score"
+          },
+          "treatment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "patch_or_upgrade",
+                  "configuration_mitigation",
+                  "isolation_or_compensating_control",
+                  "accept_risk",
+                  "no_action",
+                  "further_investigation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treatment"
+          },
+          "reviewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Reviewed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_name",
+          "product_version",
+          "applicability",
+          "analysis_summary",
+          "environmental_score",
+          "treatment",
+          "reviewed_at"
+        ],
+        "title": "ApprovedReferenceResponse"
+      },
       "AssessmentActionRequest": {
         "properties": {
           "row_version": {

@@ -8,6 +8,7 @@ export type AssessmentReturnResponse = components['schemas']['AssessmentReturnRe
 export type AssessmentRevisionCreateRequest = components['schemas']['AssessmentRevisionCreateRequest']
 export type AssessmentRevisionHistory = components['schemas']['AssessmentRevisionHistoryResponse']
 export type AssessmentRevisionComparison = components['schemas']['AssessmentRevisionComparisonResponse']
+export type ApprovedReference = components['schemas']['ApprovedReferenceResponse']
 export type AssessmentFieldError = { path: string; message: string }
 
 export class AssessmentApiError extends Error {
@@ -44,6 +45,10 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function getAssessmentDetail(assessmentId: number): Promise<AssessmentDetail> {
   return request(`/api/v1/assessments/${assessmentId}`)
+}
+
+export function getApprovedReferences(assessmentId: number): Promise<ApprovedReference[]> {
+  return request(`/api/v1/assessments/${assessmentId}/approved-references`)
 }
 
 export function saveAssessmentDraft(

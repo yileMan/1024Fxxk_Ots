@@ -105,6 +105,18 @@ class AssessmentEditorService:
         with self._session_factory() as session:
             return self._detail(session, user, assessment_id)
 
+    def approved_references(
+        self, user: PublicUser, assessment_id: int
+    ) -> list[dict[str, object]]:
+        with self._session_factory() as session:
+            context = self._visible_context(session, user, assessment_id)
+            return self._repository.list_approved_references(
+                session,
+                product_id=int(context["product_id"]),
+                ots_component_id=int(context["ots_component_id"]),
+                vulnerability_id=int(context["vulnerability_id"]),
+            )
+
     def save_draft(
         self,
         user: PublicUser,
