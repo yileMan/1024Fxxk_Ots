@@ -220,7 +220,7 @@ class ImportPackageService:
                         status="succeeded",
                         lock=True,
                     )
-                    self._assessment_tasks.apply(session, task_plan)
+                    task_audit = self._assessment_tasks.apply(session, task_plan)
                     batch.status = "succeeded"
                     batch.finished_at = datetime.now(timezone.utc)
                     batch.result_json = {
@@ -255,13 +255,17 @@ class ImportPackageService:
                             action="source_reassessment",
                             object_type="product_assessment",
                             object_id=str(batch.id),
-                            detail_json={key: task_result[key] for key in (
-                                "task_reassess_count",
-                                "task_updated_count",
-                                "task_unchanged_count",
-                                "task_skipped_count",
-                                "skip_reason_counts",
-                            )},
+                            detail_json={
+                                "entrypoint": "source",
+                                **{key: task_result[key] for key in (
+                                    "task_reassess_count",
+                                    "task_updated_count",
+                                    "task_unchanged_count",
+                                    "task_skipped_count",
+                                    "skip_reason_counts",
+                                )},
+                                **task_audit,
+                            },
                         ))
                     session.flush()
                     response = self._response(batch, duplicate=False)

@@ -285,13 +285,33 @@ class AssessmentTaskService:
         result = self._result(operations, status=status)
         return TaskPlan(tuple(operations), result)
 
-    def apply(self, session: Session, plan: TaskPlan) -> None:
+    def apply(self, session: Session, plan: TaskPlan) -> dict[str, object]:
         if any(
             operation.action in {"inserted", "updated", "reassess"}
             for operation in plan.operations
         ) and not self._repository.current_bases_ready(session):
             raise RuntimeError("assessment basis initialization is required")
+        change_types: set[str] = set()
+        basis_fingerprints: list[dict[str, object]] = []
+        revision_links: list[dict[str, object]] = []
+        changed_count = 0
         for operation in plan.operations:
+            if operation.action in {"inserted", "updated", "reassess"}:
+                changed_count += 1
+                if operation.basis is not None and len(basis_fingerprints) < 100:
+                    basis_fingerprints.append({
+                        "product_ots_id": (
+                            operation.context.product_ots_id
+                            if operation.context is not None else None
+                        ),
+                        "vulnerability_id": operation.vulnerability_id,
+                        "basis_sha256": operation.basis.sha256,
+                    })
+                if isinstance(operation.changes, dict):
+                    change_types.update(
+                        str(item)
+                        for item in operation.changes.get("change_types", [])
+                    )
             if operation.action == "inserted":
                 session.add(self._new_assessment(operation))
             elif operation.action == "updated":
@@ -339,6 +359,19 @@ class AssessmentTaskService:
                 )
                 if child is None:
                     raise RuntimeError("assessment reassessment conflict")
+                if len(revision_links) < 100:
+                    revision_links.append({
+                        "parent_assessment_id": current.id,
+                        "parent_revision_no": current.revision_no,
+                        "child_assessment_id": child.id,
+                        "child_revision_no": child.revision_no,
+                    })
+        return {
+            "change_types": sorted(change_types),
+            "basis_fingerprints": basis_fingerprints,
+            "revision_links": revision_links,
+            "truncated_operation_count": max(0, changed_count - 100),
+        }
 
     @staticmethod
     def _context_skip_reason(context: ProductOtsContext) -> str | None:

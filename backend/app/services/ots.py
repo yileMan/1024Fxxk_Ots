@@ -197,9 +197,11 @@ class OtsManagementService:
                     status="succeeded",
                     lock=True,
                 )
-                self._assessment_tasks.apply(session, task_plan)
+                task_audit = self._assessment_tasks.apply(session, task_plan)
                 self._audit(session, actor_id, "insert", "product_ots", relation.id, {"product_version_id": version_id, "ots_component_id": ots_component_id})
-                self._audit_task_result(session, actor_id, relation.id, task_plan.result)
+                self._audit_task_result(
+                    session, actor_id, relation.id, task_plan.result, task_audit
+                )
                 return self._view(relation, ots)
         except IntegrityError as error:
             raise ProductOtsConflictError() from error
@@ -244,12 +246,14 @@ class OtsManagementService:
                 status="succeeded",
                 lock=True,
             )
-            self._assessment_tasks.apply(session, task_plan)
+            task_audit = self._assessment_tasks.apply(session, task_plan)
             self._audit(session, actor_id, target_status, "product_ots", relation_id, {
                 "status": {"from": previous_status, "to": target_status},
                 "row_version": {"from": row_version, "to": row_version + 1},
             })
-            self._audit_task_result(session, actor_id, relation_id, task_plan.result)
+            self._audit_task_result(
+                session, actor_id, relation_id, task_plan.result, task_audit
+            )
             relation = self._repository.get_relation(session, relation_id)
             if relation is None:
                 raise OtsNotFoundError()
@@ -370,18 +374,23 @@ class OtsManagementService:
         actor_id: int,
         relation_id: int,
         result: dict[str, object],
+        task_audit: dict[str, object],
     ) -> None:
         if not result["task_inserted_count"] and not result["task_reassess_count"] and not result["task_updated_count"]:
             return
         cls._audit(session, actor_id, "relation_reassessment", "product_assessment", relation_id, {
-            key: result[key] for key in (
-                "task_inserted_count",
-                "task_reassess_count",
-                "task_updated_count",
-                "task_unchanged_count",
-                "task_skipped_count",
-                "skip_reason_counts",
-            )
+            "entrypoint": "relation",
+            **{
+                key: result[key] for key in (
+                    "task_inserted_count",
+                    "task_reassess_count",
+                    "task_updated_count",
+                    "task_unchanged_count",
+                    "task_skipped_count",
+                    "skip_reason_counts",
+                )
+            },
+            **task_audit,
         })
 
     @staticmethod
