@@ -43,7 +43,7 @@
 
 - V1 不新增 EOL 候选表。
 - 候选、来源和确认结果保存在 `import_batch.manifest_json/result_json` 的版本化结构中，当前采用结论保存在 `ots_component.is_eol`，确认写入 `audit_log`。
-- `ots-19-eol-review` 必须在 design 中给出 JSON Schema、重复候选规则和历史追溯方式，确认该方案可以满足“待确认、确认、不采信、来源冲突”验收。
+- `ots-18-eol-review` 启动时必须在 design 中给出 JSON Schema、重复候选规则和历史追溯方式，确认该方案可以满足“待确认、确认、不采信、来源冲突”验收；当前没有 EOL 业务输入，因此暂缓且不阻塞非 EOL 查询与追溯。
 
 ### ADR-04：本地认证形式
 
@@ -399,7 +399,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：RED 提交 `f59f51b`、`d885c05`，核心实现提交 `ba1fba7`；新增 `GET /api/v1/assessments/{assessment_id}/approved-references`，后端在 SQL 投影前按相同 OTS/CVE、其他产品、`is_current=1/status=completed/review_decision=approved` 筛选，仅返回产品名称、产品版本、适用性、分析摘要、环境分数、处置方式和审核完成时间。前端评估详情增加独立加载、失败重试和空状态的只读参考区。后端 pytest 213 项通过、总覆盖率 93%，评估路由 99%、repository 98%、schema 100%、service 96%；MySQL 8 实际临时库验证 11 张基础表、同产品其他版本排除、历史批准不回退及七字段响应。前端 Vitest 129 项通过，整体语句/行覆盖率 96.92%、分支 80.70%、函数 83.79%，评估详情页 95.93%、评估 API 100%；类型检查、生产构建、OpenAPI/TypeScript 连续生成哈希一致、系统 Chrome Playwright 全量 32 项通过。未新增表、字段、索引或迁移。
 
-#### [ ] OTS-18 `ots-18-eol-review`（复杂度：L，依赖：OTS-02/09/11）
+#### [ ] OTS-18 `ots-18-eol-review`（暂缓：当前无 EOL 业务输入；不阻塞 OTS-19）
 
 **目标**：审核人确认或不采信 EOL 候选，并处理来源冲突。
 
@@ -413,9 +413,9 @@ openspec validate <change-id> --strict --no-interactive
 
 ### M4：查询、导出、审计与交付
 
-#### [ ] OTS-19 `ots-19-global-search-and-traceability`（复杂度：L，依赖：OTS-16/17/18）
+#### [ ] OTS-19 `ots-19-global-search-and-traceability`（复杂度：L，依赖：OTS-16/17）
 
-**目标**：完成跨 CVE、OTS、产品、状态、严重度、KEV 和时间的组合查询及追溯链。
+**目标**：完成跨 CVE、OTS、产品、产品版本、状态、严重度和时间的组合查询及追溯链；本 change 不新增 EOL/KEV 数据、流程或验收，既有 KEV 字段与筛选仅保持兼容。
 
 **后端**：统一分页/排序/筛选；CVE → 最近批次 → 候选匹配 → 产品评估/修订 → 审核的追溯接口；查询索引验证。
 
@@ -424,6 +424,8 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：产品范围裁剪正确；常用查询使用既定索引；正常规模 95% 请求小于 3 秒。
 
 **需求映射**：FR-WORK-003、FR-WORK-004，NFR 12.2。
+
+**范围与需求追溯**：FR-WORK-003 本次由 CVE、OTS、产品、产品版本、当前评估状态、CVSS v3.1 严重度、来源时间区间的交集筛选及白名单稳定排序覆盖；既有 KEV 字段和基础筛选只做兼容，不新增 KEV 数据或流程，EOL 查询仍归暂缓的 OTS-18。FR-WORK-004 由 CVE 到实际引用成功批次、OTS/CVE 候选、授权产品评估全部修订及提交/审核事件的只读追溯覆盖。NFR 12.2 由真实 MySQL 执行计划、正常规模和 10～20 并发用户 P95 验证覆盖；所有目录总数、候选和评估链先按有效产品版本范围裁剪，复用既有 11 张基础表且不写审计。评估导出和数据库变更记录查询分别保留给 OTS-20、OTS-21。
 
 #### [ ] OTS-20 `ots-20-assessment-export`（复杂度：M，依赖：OTS-14/19）
 
@@ -488,8 +490,8 @@ openspec validate <change-id> --strict --no-interactive
 | B6 | OTS-11 → OTS-12 | 顺序执行，先只读事实和待办，再开放编辑 |
 | B7 | OTS-13 | 单独完成 CVSS v3.1 计算器和回归测试 |
 | B8 | OTS-14 → OTS-15 → OTS-16 | 状态机和修订链强依赖，顺序执行 |
-| B9 | OTS-17 与 OTS-18 | 可并行，分别是跨产品只读和 EOL 流程 |
-| B10 | OTS-19、OTS-20、OTS-21 | OTS-19 先固定查询；OTS-20/21 可并行 |
+| B9 | OTS-17；OTS-18 条件启动 | OTS-17 完成跨产品只读；当前无 EOL 业务输入，OTS-18 暂缓 |
+| B10 | OTS-19、OTS-20、OTS-21 | OTS-19 不依赖暂缓的 OTS-18，先固定非 EOL/KEV 查询；OTS-20/21 可并行 |
 | B11 | OTS-22 → OTS-23 | 部署可用后再做完整验收 |
 
 ## 7. 需求追溯总表
@@ -522,10 +524,10 @@ openspec validate <change-id> --strict --no-interactive
 | 风险 | 等级 | 控制措施 |
 | --- | --- | --- |
 | 编号 SQL 脚本执行顺序或回滚失控 | 高 | OTS-00 固定 ADR-01；每个脚本必须有顺序、幂等检查、回滚说明和空库/升级库验证 |
-| EOL 待确认没有独立表 | 高 | OTS-19 先验证 JSON Schema、幂等和历史追溯；不能满足时先修订数据基线 |
+| EOL 待确认没有独立表 | 高 | OTS-18 启动时先验证 JSON Schema、幂等和历史追溯；不能满足时先修订数据基线 |
 | 漏洞事实导入、内部匹配和任务生成边界混淆 | 高 | 分别由 OTS-07、OTS-08、OTS-10 负责，并为每一步建立独立幂等键和集成测试 |
 | 自动匹配被误认为产品受影响 | 高 | API、页面和导出统一标记候选；禁止自动填充产品适用性 |
-| 跨产品参考泄露草稿或内部证据 | 高 | OTS-18 后端字段白名单和越权测试；前端只读摘要 |
+| 跨产品参考泄露草稿或内部证据 | 高 | OTS-17 后端字段白名单和越权测试；前端只读摘要 |
 | ZIP 路径穿越、压缩炸弹和恶意字段 | 高 | OTS-07 文件数/大小/路径/表头白名单，解压前后双重限制 |
 | 无任务表/消息队列导致后台状态复杂 | 中 | 仅使用单 worker + `import_batch` 状态；恢复动作必须幂等 |
 | 外部数据服务输出不符合离线契约 | 中 | OTS-07 固定 NVD `1.0` Schema、样例包和兼容性校验；KEV/EOL 启用时由 OTS-09 升级版本，不在本项目实现采集逻辑兜底 |

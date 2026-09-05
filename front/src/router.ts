@@ -17,6 +17,7 @@ import AssessmentTaskPage from './pages/AssessmentTaskPage.vue'
 import AssessmentDetailPage from './pages/AssessmentDetailPage.vue'
 import VulnerabilityCatalogPage from './pages/VulnerabilityCatalogPage.vue'
 import VulnerabilityDetailPage from './pages/VulnerabilityDetailPage.vue'
+import VulnerabilityTraceabilityPage from './pages/VulnerabilityTraceabilityPage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -42,6 +43,12 @@ export const router = createRouter({
     {
       path: '/system/vulnerabilities/:vulnerabilityId',
       component: VulnerabilityDetailPage,
+      props: route => ({ vulnerabilityId: Number(route.params.vulnerabilityId) }),
+      meta: { requiresAuthentication: true },
+    },
+    {
+      path: '/system/vulnerabilities/:vulnerabilityId/traceability',
+      component: VulnerabilityTraceabilityPage,
       props: route => ({ vulnerabilityId: Number(route.params.vulnerabilityId) }),
       meta: { requiresAuthentication: true },
     },

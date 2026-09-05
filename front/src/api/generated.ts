@@ -728,6 +728,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vulnerabilities/{vulnerability_id}/traceability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vulnerability Traceability */
+        get: operations["vulnerability_traceability_api_v1_vulnerabilities__vulnerability_id__traceability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vulnerabilities/{vulnerability_id}": {
         parameters: {
             query?: never;
@@ -2039,6 +2056,137 @@ export interface components {
             /** Reason */
             reason: string | null;
         };
+        /** TraceabilityAssessmentChainResponse */
+        TraceabilityAssessmentChainResponse: {
+            /** Product Id */
+            product_id: number;
+            /** Product Name */
+            product_name: string;
+            /** Product Version Id */
+            product_version_id: number;
+            /** Version No */
+            version_no: string;
+            /** Product Ots Id */
+            product_ots_id: number;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Current Assessment Id */
+            current_assessment_id: number;
+            /** Revisions */
+            revisions: components["schemas"]["TraceabilityRevisionResponse"][];
+        };
+        /** TraceabilityCandidateResponse */
+        TraceabilityCandidateResponse: {
+            /** Match Id */
+            match_id: number;
+            /** Ots Component Id */
+            ots_component_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Match Method */
+            match_method: string;
+            /** Match Basis */
+            match_basis: string;
+            /** First Seen Batch Id */
+            first_seen_batch_id: number;
+            /** First Seen Batch No */
+            first_seen_batch_no: string;
+            /** Last Seen Batch Id */
+            last_seen_batch_id: number;
+            /** Last Seen Batch No */
+            last_seen_batch_no: string;
+        };
+        /** TraceabilityImportResponse */
+        TraceabilityImportResponse: {
+            /** Id */
+            id: number;
+            /** Batch No */
+            batch_no: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "succeeded";
+            /** Source Identifier */
+            source_identifier: string;
+            /** Source Release Id */
+            source_release_id: string | null;
+            /** Covered From */
+            covered_from: string | null;
+            /** Covered To */
+            covered_to: string | null;
+            /** Package Sha256 */
+            package_sha256: string;
+            /** Finished At */
+            finished_at: string | null;
+        };
+        /** TraceabilityRevisionResponse */
+        TraceabilityRevisionResponse: {
+            /** Id */
+            id: number;
+            /** Parent Revision Id */
+            parent_revision_id: number | null;
+            /** Revision No */
+            revision_no: number;
+            /** Is Current */
+            is_current: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "returned" | "reassess" | "submitted" | "completed";
+            /** Owner Id */
+            owner_id: number;
+            /** Submitted By */
+            submitted_by: number | null;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Review Decision */
+            review_decision: ("approved" | "returned") | null;
+            /** Review Comment */
+            review_comment: string | null;
+            /** Reviewer Id */
+            reviewer_id: number | null;
+            /** Reviewed At */
+            reviewed_at: string | null;
+            /** Reassess Reason */
+            reassess_reason: string | null;
+            /** Reassess Changes */
+            reassess_changes: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TraceabilityVulnerabilityResponse */
+        TraceabilityVulnerabilityResponse: {
+            /** Id */
+            id: number;
+            /** Cve Id */
+            cve_id: string;
+            /** Source Status */
+            source_status: string;
+            /** Published At */
+            published_at: string | null;
+            /** Source Modified At */
+            source_modified_at: string | null;
+            /** Content Sha256 */
+            content_sha256: string;
+        };
         /** UserCreateRequest */
         UserCreateRequest: {
             /** Login Name */
@@ -2290,6 +2438,17 @@ export interface components {
             import_batch_id: number;
             /** Import Batch No */
             import_batch_no: string;
+        };
+        /** VulnerabilityTraceabilityResponse */
+        VulnerabilityTraceabilityResponse: {
+            vulnerability: components["schemas"]["TraceabilityVulnerabilityResponse"];
+            latest_import: components["schemas"]["TraceabilityImportResponse"] | null;
+            /** Candidates */
+            candidates: components["schemas"]["TraceabilityCandidateResponse"][];
+            /** Assessment Chains */
+            assessment_chains: components["schemas"]["TraceabilityAssessmentChainResponse"][];
+            /** Candidate Disclaimer */
+            candidate_disclaimer: string;
         };
         /** WorkbenchSummaryResponse */
         WorkbenchSummaryResponse: {
@@ -3876,6 +4035,7 @@ export interface operations {
                 cve?: string | null;
                 ots_id?: number | null;
                 product_id?: number | null;
+                product_version_id?: number | null;
                 severity?: ("NONE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL") | null;
                 is_kev?: boolean | null;
                 assessment_status?: ("pending" | "submitted" | "returned" | "completed" | "reassess") | null;
@@ -3885,6 +4045,8 @@ export interface operations {
                 modified_to?: string | null;
                 page?: number;
                 page_size?: number;
+                sort_by?: "cve_id" | "published_at" | "source_modified_at" | "cvss31_score";
+                sort_order?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -3899,6 +4061,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VulnerabilityPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vulnerability_traceability_api_v1_vulnerabilities__vulnerability_id__traceability_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vulnerability_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilityTraceabilityResponse"];
                 };
             };
             /** @description Validation Error */

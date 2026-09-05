@@ -2399,6 +2399,23 @@
             }
           },
           {
+            "name": "product_version_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Version Id"
+            }
+          },
+          {
             "name": "severity",
             "in": "query",
             "required": false,
@@ -2550,6 +2567,36 @@
               "default": 20,
               "title": "Page Size"
             }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cve_id",
+                "published_at",
+                "source_modified_at",
+                "cvss31_score"
+              ],
+              "type": "string",
+              "default": "source_modified_at",
+              "title": "Sort By"
+            }
+          },
+          {
+            "name": "sort_order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Sort Order"
+            }
           }
         ],
         "responses": {
@@ -2559,6 +2606,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VulnerabilityPageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vulnerabilities/{vulnerability_id}/traceability": {
+      "get": {
+        "tags": [
+          "vulnerability-catalog-and-workbench"
+        ],
+        "summary": "Vulnerability Traceability",
+        "operationId": "vulnerability_traceability_api_v1_vulnerabilities__vulnerability_id__traceability_get",
+        "parameters": [
+          {
+            "name": "vulnerability_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vulnerability Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VulnerabilityTraceabilityResponse"
                 }
               }
             }
@@ -6670,6 +6759,431 @@
         ],
         "title": "TaskSampleResponse"
       },
+      "TraceabilityAssessmentChainResponse": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "product_version_id": {
+            "type": "integer",
+            "title": "Product Version Id"
+          },
+          "version_no": {
+            "type": "string",
+            "title": "Version No"
+          },
+          "product_ots_id": {
+            "type": "integer",
+            "title": "Product Ots Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "current_assessment_id": {
+            "type": "integer",
+            "title": "Current Assessment Id"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/TraceabilityRevisionResponse"
+            },
+            "type": "array",
+            "title": "Revisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "product_name",
+          "product_version_id",
+          "version_no",
+          "product_ots_id",
+          "ots_component_id",
+          "ots_name",
+          "ots_version",
+          "current_assessment_id",
+          "revisions"
+        ],
+        "title": "TraceabilityAssessmentChainResponse"
+      },
+      "TraceabilityCandidateResponse": {
+        "properties": {
+          "match_id": {
+            "type": "integer",
+            "title": "Match Id"
+          },
+          "ots_component_id": {
+            "type": "integer",
+            "title": "Ots Component Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "match_method": {
+            "type": "string",
+            "title": "Match Method"
+          },
+          "match_basis": {
+            "type": "string",
+            "title": "Match Basis"
+          },
+          "first_seen_batch_id": {
+            "type": "integer",
+            "title": "First Seen Batch Id"
+          },
+          "first_seen_batch_no": {
+            "type": "string",
+            "title": "First Seen Batch No"
+          },
+          "last_seen_batch_id": {
+            "type": "integer",
+            "title": "Last Seen Batch Id"
+          },
+          "last_seen_batch_no": {
+            "type": "string",
+            "title": "Last Seen Batch No"
+          }
+        },
+        "type": "object",
+        "required": [
+          "match_id",
+          "ots_component_id",
+          "ots_name",
+          "ots_version",
+          "match_method",
+          "match_basis",
+          "first_seen_batch_id",
+          "first_seen_batch_no",
+          "last_seen_batch_id",
+          "last_seen_batch_no"
+        ],
+        "title": "TraceabilityCandidateResponse"
+      },
+      "TraceabilityImportResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "batch_no": {
+            "type": "string",
+            "title": "Batch No"
+          },
+          "status": {
+            "type": "string",
+            "const": "succeeded",
+            "title": "Status"
+          },
+          "source_identifier": {
+            "type": "string",
+            "title": "Source Identifier"
+          },
+          "source_release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Release Id"
+          },
+          "covered_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covered From"
+          },
+          "covered_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covered To"
+          },
+          "package_sha256": {
+            "type": "string",
+            "title": "Package Sha256"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "batch_no",
+          "status",
+          "source_identifier",
+          "source_release_id",
+          "covered_from",
+          "covered_to",
+          "package_sha256",
+          "finished_at"
+        ],
+        "title": "TraceabilityImportResponse"
+      },
+      "TraceabilityRevisionResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "parent_revision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Revision Id"
+          },
+          "revision_no": {
+            "type": "integer",
+            "title": "Revision No"
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "returned",
+              "reassess",
+              "submitted",
+              "completed"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "type": "integer",
+            "title": "Owner Id"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "review_decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approved",
+                  "returned"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Decision"
+          },
+          "review_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Comment"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "reassess_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reassess Reason"
+          },
+          "reassess_changes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reassess Changes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "parent_revision_id",
+          "revision_no",
+          "is_current",
+          "status",
+          "owner_id",
+          "submitted_by",
+          "submitted_at",
+          "review_decision",
+          "review_comment",
+          "reviewer_id",
+          "reviewed_at",
+          "reassess_reason",
+          "reassess_changes",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TraceabilityRevisionResponse"
+      },
+      "TraceabilityVulnerabilityResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "cve_id": {
+            "type": "string",
+            "title": "Cve Id"
+          },
+          "source_status": {
+            "type": "string",
+            "title": "Source Status"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source_modified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Modified At"
+          },
+          "content_sha256": {
+            "type": "string",
+            "title": "Content Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cve_id",
+          "source_status",
+          "published_at",
+          "source_modified_at",
+          "content_sha256"
+        ],
+        "title": "TraceabilityVulnerabilityResponse"
+      },
       "UserCreateRequest": {
         "properties": {
           "login_name": {
@@ -7474,6 +7988,50 @@
           "import_batch_no"
         ],
         "title": "VulnerabilitySourceResponse"
+      },
+      "VulnerabilityTraceabilityResponse": {
+        "properties": {
+          "vulnerability": {
+            "$ref": "#/components/schemas/TraceabilityVulnerabilityResponse"
+          },
+          "latest_import": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceabilityImportResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/TraceabilityCandidateResponse"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "assessment_chains": {
+            "items": {
+              "$ref": "#/components/schemas/TraceabilityAssessmentChainResponse"
+            },
+            "type": "array",
+            "title": "Assessment Chains"
+          },
+          "candidate_disclaimer": {
+            "type": "string",
+            "title": "Candidate Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vulnerability",
+          "latest_import",
+          "candidates",
+          "assessment_chains",
+          "candidate_disclaimer"
+        ],
+        "title": "VulnerabilityTraceabilityResponse"
       },
       "WorkbenchSummaryResponse": {
         "properties": {
