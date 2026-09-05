@@ -6,13 +6,16 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 
 from app.main import create_app
+from app.models.assessments import ProductAssessment
 from app.models.imports import ImportBatch, Vulnerability
 from app.models.user import AuditLog, Base
 from app.services.authentication import AuthenticationService
 from app.services.assessment_basis_initialization import AssessmentBasisInitializer
+from app.services.assessment_tasks import AssessmentTaskService, TaskOperation, TaskPlan
+from app.services.automatic_reassessment import AssessmentBasis
 from tests.package_fixtures import base_rows, build_package
 
 
@@ -291,6 +294,46 @@ def test_basis_initializer_dry_run_and_repeated_batches_are_safe(
     }
     assert all(row["assessment_basis_sha256"] for row in rows)
     assert all(row["reassess_changes_json"] is None for row in rows)
+
+
+def test_stale_task_plan_cannot_overwrite_newer_assessment_basis(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+    factory = client.app.state.database.session_factory
+    task_service = AssessmentTaskService()
+
+    with factory() as stale_session:
+        current = stale_session.scalar(select(ProductAssessment))
+        assert current is not None
+        context = task_service._repository.get_product_context(
+            stale_session, current.product_ots_id
+        )
+        assert context is not None
+        operation = TaskOperation(
+            action="updated",
+            vulnerability_id=current.vulnerability_id,
+            cve_id="CVE-2026-1001",
+            context=context,
+            source_modified_at=current.based_on_source_modified_at,
+            current=current,
+            basis=AssessmentBasis({"schema_version": "1.0"}, "f" * 64),
+            changes=None,
+        )
+        with factory.begin() as winning_session:
+            winning_session.execute(
+                update(ProductAssessment)
+                .where(ProductAssessment.id == current.id)
+                .values(row_version=ProductAssessment.row_version + 1)
+            )
+
+        with pytest.raises(RuntimeError, match="conflict"):
+            task_service.apply(stale_session, TaskPlan((operation,), {}))
+
+    rows = assessment_rows(client)
+    assert rows[0]["row_version"] == 2
+    assert rows[0]["assessment_basis_sha256"] != "f" * 64
 
 
 def test_disabled_product_version_and_unavailable_owner_are_reported(
