@@ -252,7 +252,7 @@ class ImportPackageService:
                     ):
                         session.add(AuditLog(
                             user_id=user_id,
-                            action="source_reassessment",
+                            action="batch_upsert",
                             object_type="product_assessment",
                             object_id=str(batch.id),
                             detail_json={

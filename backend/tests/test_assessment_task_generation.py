@@ -373,6 +373,69 @@ def test_mysql_basis_initialization_recovers_after_committed_batch(
             assert {(row["status"], row["row_version"]) for row in rows} == {
                 ("completed", 7)
             }
+
+            with application.state.database.session_factory.begin() as session:
+                vulnerability = session.scalar(select(Vulnerability))
+                assert vulnerability is not None
+                vulnerability.source_status = "Rejected"
+            rejected = mysql_client.post(
+                f"/api/v1/import-packages/{scope['batch_id']}/ots-matches"
+            )
+            assert rejected.status_code == 200
+            assert rejected.json()["task_generation"]["task_reassess_count"] == 2
+            revisions = assessment_rows(mysql_client)
+            assert [row["revision_no"] for row in revisions] == [1, 2, 1, 2]
+            assert len([row for row in revisions if row["is_current"]]) == 2
+            assert {row["owner_id"] for row in revisions if row["is_current"]} == {
+                owner["id"] for owner in scope["owners"]
+            }
+
+            with application.state.database.engine.begin() as connection:
+                connection.execute(text(
+                    "UPDATE product_assessment SET status='completed' "
+                    "WHERE is_current=1"
+                ))
+            with application.state.database.session_factory.begin() as session:
+                vulnerability = session.scalar(select(Vulnerability))
+                assert vulnerability is not None
+                vulnerability.source_status = "Analyzed"
+                vulnerability.cvss31_score = 8.8
+                vulnerability.cvss31_vector = (
+                    "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H"
+                )
+                ranges = [dict(item) for item in vulnerability.affected_ranges_json]
+                ranges[0]["versionEndExcluding"] = "3.0.9"
+                vulnerability.affected_ranges_json = ranges
+            source_matrix = mysql_client.post(
+                f"/api/v1/import-packages/{scope['batch_id']}/ots-matches"
+            )
+            assert source_matrix.status_code == 200
+            assert source_matrix.json()["task_generation"]["task_reassess_count"] == 2
+            revisions = assessment_rows(mysql_client)
+            assert [row["revision_no"] for row in revisions] == [1, 2, 3, 1, 2, 3]
+
+            with application.state.database.engine.begin() as connection:
+                connection.execute(text(
+                    "UPDATE product_assessment SET status='completed' "
+                    "WHERE is_current=1"
+                ))
+            first_relation = scope["scopes"][0][2]
+            first_version = scope["scopes"][0][1]
+            disabled = mysql_client.post(
+                f"/api/v1/product-versions/{first_version['id']}/ots/"
+                f"{first_relation['id']}/disable",
+                json={"row_version": first_relation["row_version"]},
+            )
+            assert disabled.status_code == 200
+            revisions = assessment_rows(mysql_client)
+            first_product = [
+                row for row in revisions
+                if row["product_ots_id"] == first_relation["id"]
+            ]
+            assert [row["revision_no"] for row in first_product] == [1, 2, 3, 4]
+            assert sum(bool(row["is_current"]) for row in first_product) == 1
+            assert first_product[-1]["parent_revision_id"] == first_product[-2]["id"]
+            assert "product_context" in first_product[-1]["reassess_changes_json"]["change_types"]
     finally:
         if application is not None:
             application.state.database.engine.dispose()

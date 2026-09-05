@@ -247,7 +247,7 @@ class OtsManagementService:
                 lock=True,
             )
             task_audit = self._assessment_tasks.apply(session, task_plan)
-            self._audit(session, actor_id, target_status, "product_ots", relation_id, {
+            self._audit(session, actor_id, "update", "product_ots", relation_id, {
                 "status": {"from": previous_status, "to": target_status},
                 "row_version": {"from": row_version, "to": row_version + 1},
             })
@@ -378,7 +378,7 @@ class OtsManagementService:
     ) -> None:
         if not result["task_inserted_count"] and not result["task_reassess_count"] and not result["task_updated_count"]:
             return
-        cls._audit(session, actor_id, "relation_reassessment", "product_assessment", relation_id, {
+        cls._audit(session, actor_id, "update", "product_assessment", relation_id, {
             "entrypoint": "relation",
             **{
                 key: result[key] for key in (
