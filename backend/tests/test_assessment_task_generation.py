@@ -535,6 +535,41 @@ def test_submitted_assessment_merges_candidate_change_without_overwrite(
     assert "candidate" in rows[0]["reassess_changes_json"]["change_types"]
 
 
+@pytest.mark.parametrize("status", ["pending", "returned", "reassess", "submitted"])
+def test_in_progress_assessment_merges_change_without_revising_or_overwriting(
+    client: TestClient, status: str
+) -> None:
+    scope = setup_scope(client)
+    batch_id = scope["batch_id"]
+    client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE product_assessment "
+                "SET status=:status, analysis_summary='用户已填写内容', row_version=5"
+            ),
+            {"status": status},
+        )
+    with client.app.state.database.session_factory.begin() as session:
+        vulnerability = session.scalar(select(Vulnerability))
+        assert vulnerability is not None
+        changed = [dict(item) for item in vulnerability.affected_ranges_json]
+        changed[0]["cpe"] = None
+        vulnerability.affected_ranges_json = changed
+        vulnerability.content_sha256 = status * 16
+
+    result = client.post(f"/api/v1/import-packages/{batch_id}/ots-matches")
+
+    assert result.status_code == 200
+    rows = assessment_rows(client)
+    assert len(rows) == 1
+    assert rows[0]["revision_no"] == 1
+    assert rows[0]["status"] == status
+    assert rows[0]["analysis_summary"] == "用户已填写内容"
+    assert rows[0]["row_version"] == 6
+    assert "candidate" in rows[0]["reassess_changes_json"]["change_types"]
+
+
 def test_source_import_creates_reassessment_before_candidate_recalculation(
     client: TestClient,
 ) -> None:
