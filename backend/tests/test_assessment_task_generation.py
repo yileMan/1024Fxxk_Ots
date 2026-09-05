@@ -607,6 +607,41 @@ def test_source_import_creates_reassessment_before_candidate_recalculation(
     assert reassessment["changes"][0]["field"].startswith("source.")
 
 
+def test_source_import_preview_reports_reassessment_without_writes(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client)
+    client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text("UPDATE product_assessment SET status='completed'"))
+    before = assessment_rows(client)
+    rows = base_rows()
+    rows["nvd_cves.csv"][0]["vuln_status"] = "Rejected"
+    rows["nvd_cves.csv"][0]["last_modified_at"] = "2026-08-04T00:00:00Z"
+
+    preview = client.post(
+        "/api/v1/import-packages/validate",
+        files={
+            "file": (
+                "ots_intelligence_20260824_010203.zip",
+                build_package(
+                    rows=rows,
+                    batch_no="BATCH-20260824-001",
+                    source_release="fkie-cad/nvd-json-data-feeds@2026-08-24",
+                ),
+                "application/zip",
+            )
+        },
+    )
+
+    assert preview.status_code == 201
+    task_preview = preview.json()["source_reassessment"]
+    assert task_preview["status"] == "pending"
+    assert task_preview["task_reassess_count"] == 1
+    assert task_preview["task_updated_count"] == 0
+    assert assessment_rows(client) == before
+
+
 def test_new_product_relation_creates_missing_task_from_existing_candidate(
     client: TestClient,
 ) -> None:
