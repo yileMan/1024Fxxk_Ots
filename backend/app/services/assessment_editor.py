@@ -19,45 +19,18 @@ from app.schemas.assessment_editor import (
 )
 from app.services.authentication import PublicUser
 from app.services.cvss31 import Cvss31Error, calculate_environmental, parse_base_vector
+from app.services.assessment_revisions import (
+    DRAFT_FIELDS,
+    REVISION_COPY_FIELDS,
+    REVISION_EVENT_FIELDS,
+    REVISION_SYSTEM_FIELDS,
+    SCORING_FIELDS,
+    clone_assessment_revision,
+)
 from app.services.vulnerability_matching import CANDIDATE_DISCLAIMER
 
 
-DRAFT_FIELDS = (
-    "analysis_summary",
-    "trigger_conditions",
-    "affected_functions",
-    "applicability",
-    "applicability_basis",
-    "product_impact",
-    "existing_controls",
-    "treatment",
-    "treatment_detail",
-    "evidence_text",
-)
-SCORING_FIELDS = (
-    "cvss_version",
-    "environmental_score",
-    "environmental_vector",
-    "cvss_metrics_json",
-    "calculator_version",
-)
 TEXT_FIELDS = set(DRAFT_FIELDS) - {"applicability", "treatment"}
-REVISION_COPY_FIELDS = (
-    *DRAFT_FIELDS,
-    *SCORING_FIELDS,
-    "based_on_source_modified_at",
-    "assessment_basis_sha256",
-    "assessment_basis_json",
-)
-REVISION_EVENT_FIELDS = (
-    "submitted_by", "submitted_at", "review_decision", "review_comment",
-    "reviewer_id", "reviewed_at",
-)
-REVISION_SYSTEM_FIELDS = (
-    "id", "product_ots_id", "vulnerability_id", "revision_no",
-    "parent_revision_id", "is_current", "status", "owner_id",
-    "reassess_reason", "reassess_changes_json", "row_version", "created_at", "updated_at",
-)
 COMPARISON_BUSINESS_FIELDS = (*DRAFT_FIELDS, *SCORING_FIELDS)
 COMPARISON_EVENT_FIELDS = (
     "status", "owner_id", "submitted_by", "submitted_at", "review_decision",
@@ -515,44 +488,28 @@ class AssessmentEditorService:
         action: str,
         now: datetime,
     ) -> ProductAssessment:
-        copied = {field: getattr(assessment, field) for field in REVISION_COPY_FIELDS}
-        if not self._repository.transition_if_version(
+        changes = {
+            "trigger_type": "manual_revision",
+            "triggered_at": now.isoformat().replace("+00:00", "Z"),
+            "change_types": [],
+            "changes": [],
+            "truncated_count": 0,
+        } if action == "manual_create_revision" else None
+        child = clone_assessment_revision(
             session,
-            assessment_id=assessment.id,
+            self._repository,
+            assessment=assessment,
             expected_status=expected_status,
             row_version=row_version,
-            values=parent_values,
-            updated_at=now,
-        ):
-            raise AssessmentActionConflictError()
-        child = ProductAssessment(
-            product_ots_id=assessment.product_ots_id,
-            vulnerability_id=assessment.vulnerability_id,
-            revision_no=self._repository.next_revision_no(
-                session,
-                product_ots_id=assessment.product_ots_id,
-                vulnerability_id=assessment.vulnerability_id,
-            ),
-            parent_revision_id=assessment.id,
-            is_current=True,
-            status=child_status,
+            parent_values=parent_values,
+            child_status=child_status,
             owner_id=assessment.owner_id,
-            **copied,
-            **{field: None for field in REVISION_EVENT_FIELDS},
             reassess_reason=reassess_reason,
-            reassess_changes_json={
-                "trigger_type": "manual_revision",
-                "triggered_at": now.isoformat().replace("+00:00", "Z"),
-                "change_types": [],
-                "changes": [],
-                "truncated_count": 0,
-            } if action == "manual_create_revision" else None,
-            row_version=1,
-            created_at=now,
-            updated_at=now,
+            reassess_changes_json=changes,
+            now=now,
         )
-        session.add(child)
-        session.flush()
+        if child is None:
+            raise AssessmentActionConflictError()
         session.add(AuditLog(
             user_id=actor_id,
             action="update",

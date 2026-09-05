@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.models.assessments import ProductAssessment
 from app.models.imports import Vulnerability, VulnerabilityOtsMatch
 from app.repositories.assessment_tasks import AssessmentTaskRepository, ProductOtsContext
+from app.repositories.assessment_editor import AssessmentEditorRepository
+from app.services.assessment_revisions import clone_assessment_revision
 from app.services.automatic_reassessment import (
     AssessmentBasis,
     build_assessment_basis,
@@ -64,6 +66,7 @@ class TaskPlan:
 class AssessmentTaskService:
     def __init__(self) -> None:
         self._repository = AssessmentTaskRepository()
+        self._revision_repository = AssessmentEditorRepository()
 
     def plan_source_changes(
         self,
@@ -302,10 +305,25 @@ class AssessmentTaskService:
                 current.row_version += 1
             elif operation.action == "reassess":
                 current = operation.current
-                if current is None:
+                context = operation.context
+                if current is None or context is None:
                     raise RuntimeError("invalid reassessment plan")
-                current.is_current = False
-                session.add(self._reassessment(operation, current))
+                child = clone_assessment_revision(
+                    session,
+                    self._revision_repository,
+                    assessment=current,
+                    expected_status="completed",
+                    row_version=current.row_version,
+                    parent_values={"is_current": False},
+                    child_status="reassess",
+                    owner_id=context.owner_id,
+                    reassess_reason=operation.reason,
+                    reassess_changes_json=operation.changes,
+                    now=datetime.now(timezone.utc),
+                    basis=operation.basis,
+                )
+                if child is None:
+                    raise RuntimeError("assessment reassessment conflict")
 
     @staticmethod
     def _context_skip_reason(context: ProductOtsContext) -> str | None:
@@ -387,44 +405,6 @@ class AssessmentTaskService:
             based_on_source_modified_at=operation.source_modified_at,
             assessment_basis_sha256=operation.basis.sha256 if operation.basis else None,
             assessment_basis_json=operation.basis.data if operation.basis else None,
-            row_version=1,
-        )
-
-    @staticmethod
-    def _reassessment(
-        operation: TaskOperation, current: ProductAssessment
-    ) -> ProductAssessment:
-        context = operation.context
-        if context is None or operation.source_modified_at is None:
-            raise RuntimeError("reassessment source modified time is required")
-        return ProductAssessment(
-            product_ots_id=current.product_ots_id,
-            vulnerability_id=current.vulnerability_id,
-            revision_no=current.revision_no + 1,
-            parent_revision_id=current.id,
-            is_current=True,
-            status="reassess",
-            owner_id=context.owner_id,
-            analysis_summary=current.analysis_summary,
-            trigger_conditions=current.trigger_conditions,
-            affected_functions=current.affected_functions,
-            applicability=current.applicability,
-            applicability_basis=current.applicability_basis,
-            product_impact=current.product_impact,
-            existing_controls=current.existing_controls,
-            treatment=current.treatment,
-            treatment_detail=current.treatment_detail,
-            evidence_text=current.evidence_text,
-            cvss_version=current.cvss_version,
-            environmental_score=current.environmental_score,
-            environmental_vector=current.environmental_vector,
-            cvss_metrics_json=current.cvss_metrics_json,
-            calculator_version=current.calculator_version,
-            based_on_source_modified_at=operation.source_modified_at,
-            reassess_reason=operation.reason,
-            assessment_basis_sha256=operation.basis.sha256 if operation.basis else None,
-            assessment_basis_json=operation.basis.data if operation.basis else None,
-            reassess_changes_json=operation.changes,
             row_version=1,
         )
 
