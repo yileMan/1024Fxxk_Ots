@@ -341,25 +341,7 @@ class ImportPackageService:
             vulnerability = current.get(record.cve_id)
             if vulnerability is not None and vulnerability.content_sha256 == record.content_sha256:
                 continue
-            score, severity, vector, source = select_cvss31(record.cvss)
-            values = {
-                "source_identifier": record.source_identifier,
-                "source_status": record.vuln_status,
-                "description": record.description,
-                "published_at": record.published_at,
-                "source_modified_at": record.last_modified_at,
-                "cwe_json": record.cwes,
-                "affected_ranges_json": record.affected_software,
-                "references_json": record.references,
-                "cvss_json": record.cvss,
-                "configurations_json": record.configurations,
-                "cvss31_score": score,
-                "cvss31_severity": severity,
-                "cvss31_vector": vector,
-                "cvss31_source": source,
-                "import_batch_id": batch_id,
-                "content_sha256": record.content_sha256,
-            }
+            values = self._record_values(record, batch_id=batch_id)
             if vulnerability is None:
                 vulnerability = Vulnerability(
                     cve_id=record.cve_id,
@@ -372,6 +354,53 @@ class ImportPackageService:
                     setattr(vulnerability, name, value)
                 changed.append(vulnerability)
         return changed
+
+    def _preview_source_changes(
+        self, session: Session, records: list[VulnerabilityRecord]
+    ) -> dict[str, object]:
+        current = self._repository.list_vulnerabilities(
+            session, {record.cve_id for record in records}
+        )
+        incoming: list[Vulnerability] = []
+        for record in records:
+            existing = current.get(record.cve_id)
+            if existing is None or existing.content_sha256 == record.content_sha256:
+                continue
+            incoming.append(Vulnerability(
+                id=existing.id,
+                cve_id=record.cve_id,
+                is_kev=existing.is_kev,
+                **self._record_values(record, batch_id=existing.import_batch_id),
+            ))
+        return self._assessment_tasks.plan_source_changes(
+            session,
+            vulnerabilities=incoming,
+            status="pending",
+        ).result
+
+    @staticmethod
+    def _record_values(
+        record: VulnerabilityRecord, *, batch_id: int
+    ) -> dict[str, object]:
+        score, severity, vector, source = select_cvss31(record.cvss)
+        return {
+            "source_identifier": record.source_identifier,
+            "source_status": record.vuln_status,
+            "description": record.description,
+            "published_at": record.published_at,
+            "source_modified_at": record.last_modified_at,
+            "cwe_json": record.cwes,
+            "affected_ranges_json": record.affected_software,
+            "references_json": record.references,
+            "cvss_json": record.cvss,
+            "configurations_json": record.configurations,
+            "cvss31_score": score,
+            "cvss31_severity": severity,
+            "cvss31_vector": vector,
+            "cvss31_source": source,
+            "import_batch_id": batch_id,
+            "content_sha256": record.content_sha256,
+        }
 
     def _existing_by_sha(self, package_sha256: str) -> ImportBatch | None:
         with self._session_factory() as session:
@@ -427,7 +456,15 @@ class ImportPackageService:
             batch.covered_to = result.window_end
             batch.manifest_json = result.manifest
             batch.scope_coverage_json = None
-            batch.result_json = self._result_json(result, final_import_diff=False)
+            source_reassessment = (
+                self._preview_source_changes(session, result.records)
+                if result.is_valid else None
+            )
+            batch.result_json = self._result_json(
+                result,
+                final_import_diff=False,
+                source_reassessment=source_reassessment,
+            )
             batch.error_json = (
                 {
                     "items": [asdict(item) for item in result.errors],
@@ -442,7 +479,10 @@ class ImportPackageService:
 
     @staticmethod
     def _result_json(
-        result: PackageValidationResult, *, final_import_diff: bool
+        result: PackageValidationResult,
+        *,
+        final_import_diff: bool,
+        source_reassessment: dict[str, object] | None = None,
     ) -> dict[str, object]:
         return {
             "source_name": result.source_name,
@@ -453,6 +493,7 @@ class ImportPackageService:
             "final_import_diff": final_import_diff,
             "can_import": result.is_valid and not final_import_diff,
             "internal_matching_pending": final_import_diff and result.is_valid,
+            "source_reassessment": source_reassessment,
             "summary": asdict(result.summary),
             "file_stats": {
                 name: asdict(item) for name, item in result.file_stats.items()
@@ -547,6 +588,7 @@ class ImportPackageService:
             "internal_matching_pending": result.get(
                 "internal_matching_pending", batch.status == "succeeded"
             ),
+            "source_reassessment": result.get("source_reassessment"),
             "summary": result.get(
                 "summary", asdict(PackageSummary(0, 0, 0, 0, 0, 0))
             ),

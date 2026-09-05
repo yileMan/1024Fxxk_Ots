@@ -1487,6 +1487,7 @@ export interface components {
             can_import: boolean;
             /** Internal Matching Pending */
             internal_matching_pending: boolean;
+            source_reassessment?: components["schemas"]["TaskGenerationResponse"] | null;
             summary: components["schemas"]["PackageSummaryResponse"];
             /** File Stats */
             file_stats: {

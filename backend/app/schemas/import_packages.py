@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.schemas.vulnerability_matching import TaskGenerationResponse
+
 
 class PackageValidationIssueResponse(BaseModel):
     error_code: str
@@ -46,6 +48,7 @@ class ImportPackageResponse(BaseModel):
     final_import_diff: bool
     can_import: bool
     internal_matching_pending: bool
+    source_reassessment: TaskGenerationResponse | None = None
     summary: PackageSummaryResponse
     file_stats: dict[str, PackageFileStatsResponse]
     errors: list[PackageValidationIssueResponse]

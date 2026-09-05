@@ -5068,6 +5068,16 @@
             "type": "boolean",
             "title": "Internal Matching Pending"
           },
+          "source_reassessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskGenerationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "summary": {
             "$ref": "#/components/schemas/PackageSummaryResponse"
           },
