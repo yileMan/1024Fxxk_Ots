@@ -186,6 +186,8 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 | `product_version_id` | BIGINT UNSIGNED | 是 | 产品版本 ID |
 | `ots_component_id` | BIGINT UNSIGNED | 是 | OTS ID |
 | `created_by` | BIGINT UNSIGNED | 是 | 关联创建人 ID |
+| `status` | VARCHAR(16) | 是 | `active` 或 `disabled`；默认 `active` |
+| `row_version` | INT UNSIGNED | 是 | 关联状态乐观锁版本号 |
 | `created_at` | DATETIME(3) | 是 | 创建时间 |
 | `updated_at` | DATETIME(3) | 是 | 更新时间 |
 
@@ -196,9 +198,10 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 - 外键：`ots_component_id` → 第 5 张表 `id`；
 - 外键：`created_by` → 第 1 张表 `id`；
 - 唯一键：`uk_product_version_ots(product_version_id, ots_component_id)`；
-- 普通索引：`idx_product_ots_component(ots_component_id, product_version_id)`；
+- 普通索引：`idx_product_ots_component(ots_component_id, product_version_id)`、`idx_product_ots_version_status(product_version_id, status)`、`idx_product_ots_component_status(ots_component_id, status)`；
 - 本表是产品版本与 OTS 的多对多关联桥梁；
-- 已生成产品评估后不得直接删除关联，应先完成影响确认并保留历史记录。
+- 默认清单和采集范围只读取 `active`；历史管理查询可显式包含 `disabled`；
+- 已生成产品评估后不得直接删除关联，必须使用带 `row_version` 的停用动作保留历史；恢复复用同一唯一关联，不新建重复记录。
 
 ## 7. `import_batch`
 
@@ -362,6 +365,9 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 | `reviewer_id` | BIGINT UNSIGNED | 否 | 审核人 ID |
 | `reviewed_at` | DATETIME(3) | 否 | 审核时间 |
 | `reassess_reason` | VARCHAR(500) | 否 | 待复评原因 |
+| `assessment_basis_sha256` | CHAR(64) | 否 | 当前修订规范评估基线的 SHA-256；迁移初始化完成后当前修订必须具备 |
+| `assessment_basis_json` | JSON | 否 | 来源、候选和产品 OTS 上下文的 V1 规范基线 |
+| `reassess_changes_json` | JSON | 否 | 持久化触发类型、时间、稳定变化类型及有界字段变化摘要 |
 | `row_version` | INT UNSIGNED | 是 | 乐观锁版本号 |
 | `created_at` | DATETIME(3) | 是 | 创建时间 |
 | `updated_at` | DATETIME(3) | 是 | 更新时间 |
@@ -380,6 +386,8 @@ OTS 的核心业务信息只包含名称、版本、官方网站和是否 EOL，
 - 新建任务的 `owner_id` 必须等于第 4 张表为该产品版本指定的当前负责人；负责人调整时可转交未提交或已退回的当前任务，已提交和已完成修订不改写；
 - 审核人必须是第 4 张表为该产品版本指定的当前审核人，且不得等于提交人；实际审核完成时将其写入 `reviewer_id`；
 - 退回、复评或修改已完成结论时必须新增修订；
+- 自动复评只比较规范基线中的 CVE 状态、CVSS v3.1、受影响范围、候选存在性/方式/规范证据、条件启用的 KEV 和产品 OTS 状态；描述、CWE、引用、批次时间、CVSS v4.0 与 EOL 不进入 V1 指纹；
+- `completed` 发生实质变化时保留父修订并创建 `reassess` 子修订；进行中状态仅更新基线、合并变化摘要并递增 `row_version`，不得覆盖用户正文或提交审核事件；
 - 产品评估通过 `product_ots_id` → 第 6 张表取得 `ots_component_id`，再使用 `(ots_component_id, vulnerability_id)` 唯一定位第 9 张表的候选匹配，无需增加可产生不一致的重复外键；
 - 产品负责人必须能查看第 8 张表的来源事实和 AI 通用建议，以及第 9 张表的匹配方式、匹配依据和可选置信度；这些信息不能自动形成表 10 结论；
 - 其他产品只能读取已审核通过的当前修订摘要，不能读取草稿、证据、审核意见或可编辑字段。

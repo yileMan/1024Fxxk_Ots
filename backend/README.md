@@ -223,8 +223,24 @@ OTS-15 扩展退回动作：审核人退回当前 `submitted` 修订时，服务
 `GET /api/v1/assessments/{assessment_id}/revisions` 返回同链摘要，`GET .../revision-comparison` 返回同链字段级
 差异；历史详情始终只读，过期写请求的 `ASSESSMENT_NOT_EDITABLE` 响应携带 `current_revision_id` 供显式刷新。
 
-修订创建复用现有 `product_assessment` 字段和唯一键，不新增表、字段、索引或迁移。来源变化自动复评、跨产品
-参考和全局追溯仍分别属于 OTS-16、OTS-17 和 OTS-19。
+修订创建复用现有 `product_assessment` 修订链和唯一键。跨产品参考和全局追溯仍分别属于 OTS-17 和 OTS-19。
+
+## 自动复评与基线初始化
+
+OTS-16 通过 `013_automatic_reassessment.sql` 在现有表上保存规范评估基线、指纹、变化摘要，以及产品 OTS 的
+`active/disabled` 状态和乐观锁。来源确认、候选匹配、关联停用/恢复共用同一基线差异和修订克隆语义；
+`completed` 创建待复评子修订，进行中状态仅合并变化并递增 `row_version`。
+
+迁移后必须先初始化所有当前评估基线：
+
+```powershell
+.\.venv\Scripts\python.exe run.py initialize-assessment-bases --dry-run
+.\.venv\Scripts\python.exe run.py initialize-assessment-bases --batch-size 500
+```
+
+只有输出 `remaining_count` 为 `0` 才可开放自动入口。命令按 ID 稳定分页、每批独立提交，可在中断后安全重跑，
+且不创建修订、不改变结论、状态或行版本。NVD `1.0` 没有启用可信 KEV/EOL 输入，V1 不把缺失 KEV 当作
+`false`，也不把 CVSS v4.0 或 EOL 纳入自动复评指纹。
 
 ## 测试
 

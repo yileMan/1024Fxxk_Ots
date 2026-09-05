@@ -59,6 +59,46 @@ test('非管理员不能进入产品管理', async ({ page }) => {
   await expect(page.locator('aside nav')).not.toContainText('产品管理')
 })
 
+test('管理员在浏览器停用并从历史恢复产品 OTS 关联', async ({ page }) => {
+  const product = { id: 10, product_code: 'P-001', product_name: '监护仪', description: null, status: 'active', row_version: 1, created_at: '', updated_at: '' }
+  const version = { id: 11, product_id: 10, version_no: '2.0', description: null, primary_cvss_version: '3.1', owner_id: 2, reviewer_id: 3, status: 'active', row_version: 1, created_at: '', updated_at: '' }
+  const ots = { id: 5, ots_name: 'OpenSSL', ots_version: '3.0', official_website: 'https://openssl.org', is_eol: false, row_version: 1, created_at: '', updated_at: '' }
+  const relation = { ...ots, id: 7, product_version_id: 11, ots_component_id: 5, created_by: 1, status: 'active', row_version: 1 }
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ status: 200, json: { id: 1, login_name: 'admin', display_name: '管理员', roles: ['admin'] } }))
+  await page.route('**/api/v1/users**', route => route.fulfill({ status: 200, json: { items: [], total: 0, page: 1, page_size: 20 } }))
+  await page.route('**/api/v1/products?**', route => route.fulfill({ status: 200, json: { items: [product], total: 1, page: 1, page_size: 20 } }))
+  await page.route('**/api/v1/products/10/versions', route => route.fulfill({ status: 200, json: [version] }))
+  await page.route('**/api/v1/ots-components**', route => route.fulfill({ status: 200, json: { items: [ots], total: 1, page: 1, page_size: 100 } }))
+  await page.route('**/api/v1/product-versions/11/ots**', route => {
+    const url = new URL(route.request().url())
+    if (route.request().method() === 'GET') {
+      const includeDisabled = url.searchParams.get('include_disabled') === 'true'
+      return route.fulfill({ status: 200, json: relation.status === 'active' || includeDisabled ? [relation] : [] })
+    }
+    if (url.pathname.endsWith('/disable')) {
+      relation.status = 'disabled'; relation.row_version += 1
+      return route.fulfill({ status: 200, json: relation })
+    }
+    if (url.pathname.endsWith('/restore')) {
+      relation.status = 'active'; relation.row_version += 1
+      return route.fulfill({ status: 200, json: relation })
+    }
+    return route.fulfill({ status: 500 })
+  })
+  page.on('dialog', dialog => dialog.accept())
+
+  await page.goto('/system/products')
+  await page.getByRole('button', { name: '维护监护仪版本' }).click()
+  await page.getByRole('button', { name: '维护版本2.0 OTS清单' }).click()
+  await page.getByRole('button', { name: '停用', exact: true }).click()
+  await expect(page.getByText('当前版本尚未关联 OTS')).toBeVisible()
+  await page.getByRole('button', { name: '查看历史关联' }).click()
+  const otsDialog = page.getByRole('dialog', { name: 'OTS 清单维护' })
+  await expect(otsDialog.getByText('已停用')).toBeVisible()
+  await page.getByRole('button', { name: '恢复', exact: true }).click()
+  await expect(otsDialog.getByText('当前', { exact: true })).toBeVisible()
+})
+
 test('授权普通用户可从我的产品只读查看版本和 OTS', async ({ page }) => {
   const product = { id: 10, product_code: 'P-001', product_name: '监护仪', description: null, status: 'active', row_version: 1, created_at: '', updated_at: '' }
   const version = { id: 11, product_id: 10, version_no: '2.0', description: null, primary_cvss_version: '3.1', owner_id: 2, reviewer_id: 3, status: 'active', row_version: 1, created_at: '', updated_at: '' }

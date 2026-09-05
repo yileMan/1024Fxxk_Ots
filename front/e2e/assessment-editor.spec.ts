@@ -442,6 +442,75 @@ test('负责人从已完成评估创建新修订并查看历史与差异', async
   await expect(page.locator('.revision-diff')).toContainText('更新后结论')
 })
 
+test('自动复评从待办展示变化摘要并可修改后重新提交', async ({ page }) => {
+  await authenticate(page)
+  const server = assessmentDetail(true)
+  server.assessment_id = 10
+  server.current_revision_id = 10
+  server.revision_no = 2
+  server.parent_revision_id = 9
+  server.status = 'reassess'
+  server.reassess_reason = '自动复评依据已变化'
+  server.reason_type = 'automatic_reassessment'
+  server.draft = {
+    analysis_summary: '原审核结论',
+    trigger_conditions: '远程可达',
+    affected_functions: 'TLS 服务',
+    applicability: 'affected',
+    applicability_basis: '使用受影响版本',
+    product_impact: '服务中断',
+    existing_controls: '网络隔离',
+    treatment: 'patch_or_upgrade',
+    treatment_detail: '升级到修复版本',
+    evidence_text: '内部验证记录',
+    cvss_metrics: null,
+  }
+  Object.assign(server, {
+    reassessment: {
+      trigger_type: 'automatic_reassessment',
+      triggered_at: '2026-09-05T01:02:03Z',
+      basis_sha256: 'a'.repeat(64),
+      change_types: ['source', 'candidate'],
+      changes: [{ field: 'source.status', before: 'Analyzed', after: 'Rejected' }],
+      truncated_count: 0,
+    },
+  })
+  await page.route('**/api/v1/assessments/tasks**', route => route.fulfill({
+    status: 200,
+    json: {
+      items: [{
+        assessment_id: 10, vulnerability_id: 8, revision_no: 2, status: 'reassess', cve_id: 'CVE-2026-0900',
+        product_id: 10, product_name: '监护仪', product_version_id: 11, version_no: '3.0',
+        product_ots_id: 12, ots_component_id: 13, ots_name: 'OpenSSL', ots_version: '3.0.0',
+        owner_id: 2, reviewer_id: 3, source_severity: 'HIGH', updated_at: '2026-09-05T01:02:03Z',
+      }], total: 1, page: 1, page_size: 20,
+    },
+  }))
+  await page.route('**/api/v1/assessments/10**', async route => {
+    const method = route.request().method()
+    if (method === 'GET') return route.fulfill({ status: 200, json: server })
+    if (route.request().url().endsWith('/submit')) {
+      server.status = 'submitted'
+      server.editable = false
+      server.actions = { can_submit: false, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: 'ASSESSMENT_ALREADY_SUBMITTED' }
+      return route.fulfill({ status: 200, json: server })
+    }
+    server.draft.analysis_summary = route.request().postDataJSON().analysis_summary
+    server.row_version += 1
+    return route.fulfill({ status: 200, json: server })
+  })
+
+  await page.goto('/system/assessments/tasks?queue=reassess&page=1')
+  await page.getByRole('link', { name: /填写评估/ }).click()
+  await expect(page.locator('[data-reassessment]')).toContainText('来源变化')
+  await expect(page.locator('[data-reassessment]')).toContainText('Rejected')
+  await page.getByLabel('分析摘要').fill('复评后的新结论')
+  await page.getByRole('button', { name: '保存草稿' }).click()
+  await page.getByRole('button', { name: '提交审核' }).click()
+  await page.getByRole('button', { name: '确认提交' }).click()
+  await expect(page.getByText('评估已提交审核')).toBeVisible()
+})
+
 test('自审分配提示重新指定且直接越权审核被服务端拒绝', async ({ page }) => {
   await authenticate(page)
   const server = assessmentDetail()
