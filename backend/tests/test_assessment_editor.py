@@ -154,11 +154,21 @@ def submit_assessment(client: TestClient, target_id: int, row_version: int = 1):
     )
 
 
-def seed_approved_references(client: TestClient) -> tuple[int, int]:
-    scope = seed_catalog(client)
-    target_id = assessment_id(client, "submitted")
+def seed_approved_references(
+    client: TestClient, scope: dict[str, object] | None = None
+) -> tuple[int, int]:
+    scope = scope or seed_catalog(client)
     now = datetime(2026, 9, 5, 8, 0, tzinfo=timezone.utc)
     with client.app.state.database.session_factory.begin() as session:
+        target_id = int(session.scalar(
+            select(ProductAssessment.id)
+            .join(ProductOts, ProductOts.id == ProductAssessment.product_ots_id)
+            .where(
+                ProductOts.product_version_id == int(scope["version_a"]["id"]),
+                ProductAssessment.is_current.is_(True),
+            )
+            .limit(1)
+        ))
         target = session.get(ProductAssessment, target_id)
         assert target is not None
         target_relation = session.get(ProductOts, target.product_ots_id)
@@ -367,6 +377,38 @@ def test_approved_references_reject_invisible_anchor_without_leaking_context(
     assert response.json()["message"] == "无权访问或编辑该产品评估"
     assert "产品 D" not in response.text
     assert "CVE-" not in response.text
+
+
+def test_approved_reference_service_failure_does_not_write(
+    client: TestClient, monkeypatch
+) -> None:
+    target_id, _approved_id = seed_approved_references(client)
+    with client.app.state.database.session_factory() as session:
+        before = (
+            session.scalar(select(func.count(ProductAssessment.id))),
+            session.scalar(select(func.count(AuditLog.id))),
+        )
+
+    def fail_query(*_args, **_kwargs):
+        raise RuntimeError("reference query failed")
+
+    monkeypatch.setattr(
+        client.app.state.assessment_editor_service._repository,
+        "list_approved_references",
+        fail_query,
+    )
+    client.cookies.clear()
+    login(client, "owner", "user-password")
+
+    response = client.get(f"/api/v1/assessments/{target_id}/approved-references")
+
+    assert response.status_code == 500
+    with client.app.state.database.session_factory() as session:
+        after = (
+            session.scalar(select(func.count(ProductAssessment.id))),
+            session.scalar(select(func.count(AuditLog.id))),
+        )
+    assert after == before
 
 
 def test_submit_requires_complete_persisted_snapshot_and_freezes_revision(
@@ -1350,7 +1392,7 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
             "admin", "初始管理员", "admin-password"
         )
         with TestClient(application, raise_server_exceptions=False) as mysql_client:
-            seed_catalog(mysql_client)
+            scope = seed_catalog(mysql_client)
             target_id = assessment_id(mysql_client, "pending")
             repository = AssessmentEditorRepository()
             first_session = application.state.database.session_factory()
@@ -1535,6 +1577,19 @@ def test_mysql_two_sessions_prevent_lost_update_and_keep_eleven_tables(
                         range(1, max(item.revision_no for item in ordered) + 1)
                     )
                     assert ordered[-1].parent_revision_id == business_id
+
+            reference_target_id, _ = seed_approved_references(mysql_client, scope)
+            mysql_client.cookies.clear()
+            login(mysql_client, "owner", "user-password")
+            references = mysql_client.get(
+                f"/api/v1/assessments/{reference_target_id}/approved-references"
+            )
+            assert references.status_code == 200
+            assert [item["product_name"] for item in references.json()] == ["产品 D"]
+            assert set(references.json()[0]) == {
+                "product_name", "product_version", "applicability",
+                "analysis_summary", "environmental_score", "treatment", "reviewed_at",
+            }
     finally:
         if application is not None:
             application.state.database.engine.dispose()

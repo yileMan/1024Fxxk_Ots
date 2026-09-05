@@ -98,6 +98,59 @@ async function fulfillValidation(route: Route, path: string, message: string): P
   })
 }
 
+test('负责人和审核人只读查看其他产品当前已审核参考且不改变任务', async ({ browser }) => {
+  const reference = {
+    product_name: '输注泵',
+    product_version: '4.0',
+    applicability: 'affected',
+    analysis_summary: '其他产品已确认受影响',
+    environmental_score: null,
+    treatment: 'patch_or_upgrade',
+    reviewed_at: '2026-09-05T08:00:00Z',
+  }
+  const server = assessmentDetail()
+  let referenceReads = 0
+  let assessmentWrites = 0
+
+  for (const user of [owner, reviewer]) {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    await authenticate(page, user)
+    await page.route('**/api/v1/assessments/9', route => route.fulfill({ status: 200, json: server }))
+    await page.route('**/api/v1/assessments/9/approved-references', async route => {
+      referenceReads += 1
+      expect(route.request().method()).toBe('GET')
+      expect(route.request().postData()).toBeNull()
+      const keys = Object.keys(reference).sort()
+      expect(keys).toEqual([
+        'analysis_summary', 'applicability', 'environmental_score', 'product_name',
+        'product_version', 'reviewed_at', 'treatment',
+      ])
+      await route.fulfill({ status: 200, json: [reference] })
+    })
+    page.on('request', request => {
+      if (request.url().includes('/api/v1/assessments/9') && request.method() !== 'GET') {
+        assessmentWrites += 1
+      }
+    })
+
+    await page.goto('/system/assessments/9?from=pending')
+    const references = page.locator('[data-approved-references]')
+    await expect(references).toContainText('其他产品参考')
+    await expect(references).toContainText('仅供参考')
+    await expect(references).toContainText('输注泵 · 4.0')
+    await expect(references).toContainText('未提供')
+    await expect(references.getByRole('link')).toHaveCount(0)
+    await expect(references.getByRole('button', { name: /复制|套用/ })).toHaveCount(0)
+    await context.close()
+  }
+
+  expect(referenceReads).toBe(2)
+  expect(assessmentWrites).toBe(0)
+  expect(server.status).toBe('pending')
+  expect(server.row_version).toBe(1)
+})
+
 test('负责人从待办进入、保存部分草稿并看到条件校验', async ({ page }) => {
   await authenticate(page)
   const detail = assessmentDetail()
@@ -116,6 +169,7 @@ test('负责人从待办进入、保存部分草稿并看到条件校验', async
     },
   }))
   await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
     if (route.request().method() === 'GET') {
       await route.fulfill({ status: 200, json: detail })
       return
@@ -176,6 +230,7 @@ test('两个客户端使用旧版本保存时不覆盖先成功的草稿', async
   const setupPage = async (page: Page) => {
     await authenticate(page)
     await page.route('**/api/v1/assessments/9**', async route => {
+      if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
       if (route.request().method() === 'GET') {
         await route.fulfill({ status: 200, json: server })
         return
@@ -220,6 +275,7 @@ test('负责人确认提交后采用服务端待审核只读状态', async ({ pa
   await authenticate(page)
   const server = assessmentDetail()
   await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
     if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/submit')) {
       server.status = 'submitted'
@@ -251,6 +307,7 @@ test('审核人可退回且空意见不能发送请求', async ({ page }) => {
   server.actions = { can_submit: false, can_approve: true, can_return: true, can_create_revision: false, unavailable_reason: null }
   let returnRequests = 0
   await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
     if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/return')) {
       returnRequests += 1
@@ -313,6 +370,7 @@ test('负责人查看退回意见、修改当前修订并重新提交', async ({
     actions: { can_submit: true, can_approve: false, can_return: false, can_create_revision: false, unavailable_reason: null },
   }
   await page.route('**/api/v1/assessments/10**', async route => {
+    if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
     if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/draft')) {
       const payload = route.request().postDataJSON() as Draft & { row_version: number }
@@ -351,6 +409,7 @@ test('审核人确认通过后直接完成评估', async ({ page }) => {
   server.submitted_at = '2026-09-03T10:00:00Z'
   server.actions = { can_submit: false, can_approve: true, can_return: true, can_create_revision: false, unavailable_reason: null }
   await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
     if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/approve')) {
       server.status = 'completed'
@@ -403,6 +462,9 @@ test('负责人从已完成评估创建新修订并查看历史与差异', async
   await page.route('**/api/v1/assessments/**', async route => {
     const url = new URL(route.request().url())
     const method = route.request().method()
+    if (method === 'GET' && url.pathname.endsWith('/approved-references')) {
+      return route.fulfill({ status: 200, json: [] })
+    }
     if (method === 'GET' && url.pathname.endsWith('/revision-comparison')) {
       return route.fulfill({ status: 200, json: {
         base_revision_id: 9,
@@ -488,6 +550,7 @@ test('自动复评从待办展示变化摘要并可修改后重新提交', async
   }))
   await page.route('**/api/v1/assessments/10**', async route => {
     const method = route.request().method()
+    if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
     if (method === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/submit')) {
       server.status = 'submitted'
@@ -515,6 +578,7 @@ test('自审分配提示重新指定且直接越权审核被服务端拒绝', as
   await authenticate(page)
   const server = assessmentDetail()
   await page.route('**/api/v1/assessments/9**', async route => {
+    if (route.request().url().endsWith('/approved-references')) return route.fulfill({ status: 200, json: [] })
     if (route.request().method() === 'GET') return route.fulfill({ status: 200, json: server })
     if (route.request().url().endsWith('/submit')) {
       return route.fulfill({ status: 409, json: { code: 'REVIEWER_REASSIGNMENT_REQUIRED', message: '提交人与当前审核人相同，请先重新分配审核人' } })

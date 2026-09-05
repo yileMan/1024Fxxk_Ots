@@ -140,6 +140,39 @@ describe('AssessmentDetailPage', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('clears approved references when opening another revision', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [
+          { assessment_id: 9, revision_no: 2, is_current: true, status: 'pending' },
+          { assessment_id: 8, revision_no: 1, is_current: false, status: 'completed' },
+        ],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(detail({
+        assessment_id: 8, revision_no: 1, is_current: false, current_revision_id: 9,
+        editable: false,
+      })), { status: 200 }))
+    approvedReferencesFetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        product_name: '产品 D', product_version: '4.0', applicability: 'affected',
+        analysis_summary: '旧参考', environmental_score: 7.4,
+        treatment: 'patch_or_upgrade', reviewed_at: '2026-09-05T08:00:00',
+      }]), { status: 200 }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+    const wrapper = mount(AssessmentDetailPage, { props: { assessmentId: 9 } })
+    await flushPromises()
+    expect(wrapper.get('[data-approved-references]').text()).toContain('产品 D')
+
+    await wrapper.get('[data-action="load-revisions"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-revision-id="8"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-approved-references]').text()).not.toContain('产品 D')
+    expect(wrapper.get('[data-approved-references]').text()).toContain('暂无其他产品的当前已审核参考')
+  })
+
   it('shows bounded automatic reassessment changes and submitted warning as text', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(detail({
       status: 'submitted',

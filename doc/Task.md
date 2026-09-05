@@ -383,7 +383,7 @@ openspec validate <change-id> --strict --no-interactive
 
 **完成证据**：迁移 `013_automatic_reassessment.sql` 在既有 11 张基础表上增加评估基线/变化摘要和产品 OTS 软状态，不新增表；`initialize-assessment-bases` 支持 dry-run、稳定分页、中断恢复和幂等重跑，初始化未完成时自动入口拒绝评估写入。来源确认、候选执行和关联状态变更统一比较规范基线，完成态创建单一 `reassess` 子修订，进行中状态合并变化并递增 `row_version`，审计仅保存入口、数量、变化类型、父子修订和指纹。后端 pytest 209 项通过、总覆盖率 93%，自动复评核心模块覆盖率 93%～100%；MySQL 8.0.39 验证迁移、初始化恢复、双会话竞争、两产品独立与连续修订链。10,000 条任务规划耗时 1.585 秒、峰值 18.83 MiB。前端 Vitest 125 项通过，语句覆盖率 96.87%、分支 80.66%、函数 83.68%，类型检查和生产构建通过；系统 Chrome Playwright 全量 31 项及新增纵向场景通过。OpenAPI/TypeScript 连续生成哈希一致，主规格同步后 OpenSpec 全量严格校验通过。OpenSpec change 于 2026-09-05 归档为 `2026-09-05-ots-16-automatic-reassessment`。NVD `1.0` 未提供可信 KEV/EOL 输入，因此 V1 基线明确不把缺失 KEV 当作 `false`，EOL 仍由 OTS-18 处理。
 
-#### [ ] OTS-17 `ots-17-cross-product-approved-reference`（复杂度：M，依赖：OTS-11/14）
+#### [x] OTS-17 `ots-17-cross-product-approved-reference`（复杂度：M，依赖：OTS-11/14，已于 2026-09-05 完成）
 
 **目标**：评估时只展示相同 OTS/CVE 在其他产品已审核通过的当前摘要。
 
@@ -394,6 +394,10 @@ openspec validate <change-id> --strict --no-interactive
 **验收**：未完成/已退回/非当前修订不可见；敏感字段不出现在 API；查看参考不改变当前任务状态。
 
 **需求映射**：FR-ASSESS-011、FR-REVIEW-001，关键业务规则 17。
+
+**需求追溯**：FR-ASSESS-011 由目标评估授权入口、相同 OTS/CVE 跨产品查询、当前 `completed/approved` 三重筛选、七类摘要字段白名单和禁止复制/自动填充覆盖；FR-REVIEW-001 由负责人及当前指定审核人在同一评估详情页读取“其他产品参考”覆盖。关键业务规则 17 由排除同产品全部版本、历史批准不回退、草稿/证据/审核意见不进入响应以及查询不改变状态、行版本、修订、待办或审计覆盖。全局查询与分页仍属 OTS-19，评估导出仍属 OTS-20，跨产品复制仍为 V1 后置能力。
+
+**完成证据**：RED 提交 `f59f51b`、`d885c05`，核心实现提交 `ba1fba7`；新增 `GET /api/v1/assessments/{assessment_id}/approved-references`，后端在 SQL 投影前按相同 OTS/CVE、其他产品、`is_current=1/status=completed/review_decision=approved` 筛选，仅返回产品名称、产品版本、适用性、分析摘要、环境分数、处置方式和审核完成时间。前端评估详情增加独立加载、失败重试和空状态的只读参考区。后端 pytest 213 项通过、总覆盖率 93%，评估路由 99%、repository 98%、schema 100%、service 96%；MySQL 8 实际临时库验证 11 张基础表、同产品其他版本排除、历史批准不回退及七字段响应。前端 Vitest 129 项通过，整体语句/行覆盖率 96.92%、分支 80.70%、函数 83.79%，评估详情页 95.93%、评估 API 100%；类型检查、生产构建、OpenAPI/TypeScript 连续生成哈希一致、系统 Chrome Playwright 全量 32 项通过。未新增表、字段、索引或迁移。
 
 #### [ ] OTS-18 `ots-18-eol-review`（复杂度：L，依赖：OTS-02/09/11）
 
