@@ -744,7 +744,11 @@ def test_task_changes_write_one_bounded_audit_summary(client: TestClient) -> Non
         assert len(audits) == 1
         assert audits[0].action == "batch_upsert"
         assert audits[0].detail_json["task_inserted_count"] == 2
+        assert audits[0].detail_json["entrypoint"] == "candidate"
+        assert len(audits[0].detail_json["basis_fingerprints"]) == 2
+        assert audits[0].detail_json["revision_links"] == []
         assert "analysis_summary" not in audits[0].detail_json
+        assert "assessment_basis_json" not in audits[0].detail_json
         assert session.scalar(
             select(func.count(AuditLog.id)).where(
                 AuditLog.object_type == "product_assessment"
