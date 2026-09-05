@@ -12,6 +12,7 @@ from app.main import create_app
 from app.models.imports import ImportBatch, Vulnerability
 from app.models.user import AuditLog, Base
 from app.services.authentication import AuthenticationService
+from app.services.assessment_basis_initialization import AssessmentBasisInitializer
 from tests.package_fixtures import base_rows, build_package
 
 
@@ -246,6 +247,41 @@ def test_candidate_execution_backfills_missing_current_basis_without_revision(
     rows = assessment_rows(client)
     assert len(rows) == 1
     assert rows[0]["assessment_basis_sha256"]
+
+
+def test_basis_initializer_dry_run_and_repeated_batches_are_safe(
+    client: TestClient,
+) -> None:
+    scope = setup_scope(client, product_count=2)
+    client.post(f"/api/v1/import-packages/{scope['batch_id']}/ots-matches")
+    with client.app.state.database.engine.begin() as connection:
+        connection.execute(text(
+            "UPDATE product_assessment SET status='completed', row_version=7, assessment_basis_sha256=NULL, assessment_basis_json=NULL"
+        ))
+    initializer = AssessmentBasisInitializer(client.app.state.database.session_factory)
+
+    preview = initializer.run(dry_run=True, batch_size=1)
+    untouched = assessment_rows(client)
+    applied = initializer.run(dry_run=False, batch_size=1)
+    repeated = initializer.run(dry_run=False, batch_size=1)
+    rows = assessment_rows(client)
+
+    assert preview == {
+        "dry_run": True,
+        "scanned_count": 2,
+        "eligible_count": 2,
+        "initialized_count": 0,
+        "remaining_count": 2,
+    }
+    assert all(row["assessment_basis_sha256"] is None for row in untouched)
+    assert applied["initialized_count"] == 2
+    assert applied["remaining_count"] == 0
+    assert repeated["initialized_count"] == 0
+    assert {(row["status"], row["row_version"], row["revision_no"]) for row in rows} == {
+        ("completed", 7, 1)
+    }
+    assert all(row["assessment_basis_sha256"] for row in rows)
+    assert all(row["reassess_changes_json"] is None for row in rows)
 
 
 def test_disabled_product_version_and_unavailable_owner_are_reported(
