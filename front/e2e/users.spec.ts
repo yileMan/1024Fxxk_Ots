@@ -87,7 +87,8 @@ test('管理员可以进入用户管理并创建多角色用户', async ({ page 
     '数据包导入',
     '评估导出',
     '用户与角色',
-    '运行状态',
+    '变更记录',
+    '系统运行',
   ])
   const layout = await page.evaluate(() => {
     const sidebar = document.querySelector('aside.app-sidebar')?.getBoundingClientRect()

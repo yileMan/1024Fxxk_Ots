@@ -54,6 +54,16 @@ def test_import_package_limits_reject_non_positive_values(tmp_path, monkeypatch)
         Settings.from_environment(config)
 
 
+def test_disk_thresholds_must_be_ordered_percentages(tmp_path, monkeypatch) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("OTS_DISK_WARNING_PERCENT", "95")
+    monkeypatch.setenv("OTS_DISK_ERROR_PERCENT", "90")
+
+    with pytest.raises(RuntimeError, match="OTS_DISK_WARNING_PERCENT"):
+        Settings.from_environment(config)
+
+
 def test_production_requires_database_but_not_authentication_secret(tmp_path, monkeypatch) -> None:
     config = tmp_path / "config.yaml"
     config.write_text("database:\n  url: mysql+pymysql://database\n", encoding="utf-8")

@@ -32,3 +32,13 @@ describe('OTS-20 routes', () => {
     expect(route?.meta.requiresAdmin).not.toBe(true)
   })
 })
+
+describe('OTS-21 routes', () => {
+  it('keeps audit and detailed operations pages administrator-only', () => {
+    for (const path of ['/system/audit-logs', '/system/operations']) {
+      const route = router.getRoutes().find(item => item.path === path)
+      expect(route?.meta.requiresAuthentication).toBe(true)
+      expect(route?.meta.requiresAdmin).toBe(true)
+    }
+  })
+})

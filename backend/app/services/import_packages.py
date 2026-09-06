@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.infrastructure.settings import Settings
 from app.models.imports import ImportBatch, Vulnerability
-from app.models.user import AuditLog
+from app.services.audit import record_audit
 from app.repositories.import_packages import ImportPackageRepository
 from app.services.assessment_tasks import AssessmentTaskService
 from app.services.package_validation import (
@@ -228,34 +228,28 @@ class ImportPackageService:
                         "source_reassessment": task_plan.result,
                     }
                     batch.error_json = None
-                    session.add(
-                        AuditLog(
-                            user_id=user_id,
-                            action="batch_upsert",
-                            object_type="vulnerability",
-                            object_id=str(batch.id),
-                            detail_json={
-                                "batch_no": batch.batch_no,
-                                "new": result.summary.new,
-                                "update": result.summary.update,
-                                "duplicate": result.summary.duplicate,
-                                "rejected": sum(
-                                    1 for item in result.records if item.vuln_status.lower() == "rejected"
-                                ),
-                            },
-                        )
+                    record_audit(
+                        session, user_id=user_id,
+                        action="batch_upsert", object_type="vulnerability",
+                        object_id=batch.id, detail={
+                            "batch_no": batch.batch_no,
+                            "new": result.summary.new,
+                            "update": result.summary.update,
+                            "duplicate": result.summary.duplicate,
+                            "rejected": sum(
+                                1 for item in result.records if item.vuln_status.lower() == "rejected"
+                            ),
+                        },
                     )
                     task_result = task_plan.result
                     if (
                         task_result["task_reassess_count"]
                         or task_result["task_updated_count"]
                     ):
-                        session.add(AuditLog(
-                            user_id=user_id,
-                            action="batch_upsert",
-                            object_type="product_assessment",
-                            object_id=str(batch.id),
-                            detail_json={
+                        record_audit(
+                            session, user_id=user_id, action="batch_upsert",
+                            object_type="product_assessment", object_id=batch.id,
+                            detail={
                                 "entrypoint": "source",
                                 **{key: task_result[key] for key in (
                                     "task_reassess_count",
@@ -266,7 +260,7 @@ class ImportPackageService:
                                 )},
                                 **task_audit,
                             },
-                        ))
+                        )
                     session.flush()
                     response = self._response(batch, duplicate=False)
         except (ImportPackageNotFoundError, ImportPackageStateError):

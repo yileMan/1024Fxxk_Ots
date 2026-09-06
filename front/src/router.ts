@@ -19,6 +19,8 @@ import VulnerabilityCatalogPage from './pages/VulnerabilityCatalogPage.vue'
 import VulnerabilityDetailPage from './pages/VulnerabilityDetailPage.vue'
 import VulnerabilityTraceabilityPage from './pages/VulnerabilityTraceabilityPage.vue'
 import AssessmentExportPage from './pages/AssessmentExportPage.vue'
+import AuditLogPage from './pages/AuditLogPage.vue'
+import SystemOperationsPage from './pages/SystemOperationsPage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -34,6 +36,8 @@ export const router = createRouter({
     { path: '/system/data-exchange/collector-scope', component: CollectorScopePage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/data-exchange/import-packages', component: ImportPackagePage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/data-exchange/assessment-export', component: AssessmentExportPage, meta: { requiresAuthentication: true } },
+    { path: '/system/audit-logs', component: AuditLogPage, meta: { requiresAuthentication: true, requiresAdmin: true } },
+    { path: '/system/operations', component: SystemOperationsPage, meta: { requiresAuthentication: true, requiresAdmin: true } },
     { path: '/system/assessments/tasks', component: AssessmentTaskPage, meta: { requiresAuthentication: true } },
     {
       path: '/system/assessments/:assessmentId',

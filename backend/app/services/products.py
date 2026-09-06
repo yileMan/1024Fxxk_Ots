@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.products import Product, ProductVersion
-from app.models.user import AppUser, AuditLog
+from app.models.user import AppUser
+from app.services.audit import record_audit
 from app.repositories.products import ProductRepository
 from app.repositories.scopes import ScopeRepository
 from app.services.scopes import ProductScopeForbiddenError
@@ -49,7 +50,7 @@ class ProductManagementService:
 
     @staticmethod
     def _audit(session: Session, actor_id: int, action: str, object_type: str, object_id: int, detail: dict[str, object]) -> None:
-        session.add(AuditLog(user_id=actor_id, action=action, object_type=object_type, object_id=str(object_id), detail_json=detail))
+        record_audit(session, user_id=actor_id, action=action, object_type=object_type, object_id=object_id, detail=detail)
 
     def list_products(self, *, query: str | None, status: str | None, page: int, page_size: int, viewer_id: int | None = None) -> ProductPage:
         with self._session_factory() as session:

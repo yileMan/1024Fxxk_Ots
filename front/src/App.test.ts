@@ -120,7 +120,8 @@ describe('App', () => {
       '数据包导入',
       '评估导出',
       '用户与角色',
-      '运行状态',
+      '变更记录',
+      '系统运行',
     ])
     expect(sidebar.get('a[aria-current="page"]').text()).toBe('工作台')
   })

@@ -18,6 +18,7 @@ from app.api.routes.vulnerability_matching import router as vulnerability_matchi
 from app.api.routes.vulnerability_catalog import router as vulnerability_catalog_router
 from app.api.routes.assessment_editor import router as assessment_editor_router
 from app.api.routes.assessment_export import router as assessment_export_router
+from app.api.routes.audit_operations import router as audit_operations_router
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.services.authentication import AuthenticationService
@@ -31,6 +32,7 @@ from app.services.vulnerability_matching import VulnerabilityMatchingService
 from app.services.vulnerability_catalog import VulnerabilityCatalogService
 from app.services.assessment_editor import AssessmentEditorService
 from app.services.assessment_export import AssessmentExportService
+from app.services.audit_operations import AuditOperationsService, SystemOperationsService
 
 logger = logging.getLogger("ots")
 
@@ -75,6 +77,12 @@ def create_app() -> FastAPI:
         )
         application.state.assessment_export_service = AssessmentExportService(
             application.state.database.session_factory,
+        )
+        application.state.audit_operations_service = AuditOperationsService(
+            application.state.database.session_factory,
+        )
+        application.state.system_operations_service = SystemOperationsService(
+            application.state.database.session_factory, settings,
         )
 
     @application.middleware("http")
@@ -152,6 +160,7 @@ def create_app() -> FastAPI:
     application.include_router(vulnerability_catalog_router, prefix="/api/v1")
     application.include_router(assessment_editor_router, prefix="/api/v1")
     application.include_router(assessment_export_router, prefix="/api/v1")
+    application.include_router(audit_operations_router, prefix="/api/v1")
 
     return application
 

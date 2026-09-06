@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.models.imports import Vulnerability, VulnerabilityOtsMatch
 from app.models.ots import OtsComponent, ProductOts
 from app.models.products import ProductVersion
-from app.models.user import AuditLog
+from app.services.audit import record_audit
 from app.repositories.ots import OtsRepository
 from app.services.assessment_tasks import AssessmentTaskService
 
@@ -123,7 +123,7 @@ class OtsManagementService:
 
     @staticmethod
     def _audit(session: Session, actor_id: int, action: str, object_type: str, object_id: int | None, detail: dict[str, object]) -> None:
-        session.add(AuditLog(user_id=actor_id, action=action, object_type=object_type, object_id=str(object_id) if object_id is not None else None, detail_json=detail))
+        record_audit(session, user_id=actor_id, action=action, object_type=object_type, object_id=object_id, detail=detail)
 
     def list_ots(self, *, query: str | None, is_eol: bool | None, page: int, page_size: int) -> OtsPage:
         with self._session_factory() as session:

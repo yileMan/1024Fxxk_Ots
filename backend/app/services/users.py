@@ -6,7 +6,8 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.models.user import AppUser, AuditLog
+from app.models.user import AppUser
+from app.services.audit import record_audit
 from app.repositories.users import UserRepository
 from app.services.authentication import AuthenticationService
 
@@ -81,14 +82,9 @@ class UserManagementService:
         object_id: int,
         detail: dict[str, object],
     ) -> None:
-        session.add(
-            AuditLog(
-                user_id=actor_id,
-                action=action,
-                object_type="app_user",
-                object_id=str(object_id),
-                detail_json=detail,
-            )
+        record_audit(
+            session, user_id=actor_id, action=action, object_type="app_user",
+            object_id=object_id, detail=detail,
         )
 
     def list_users(

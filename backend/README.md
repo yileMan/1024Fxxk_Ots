@@ -244,6 +244,34 @@ OTS-16 通过 `013_automatic_reassessment.sql` 在现有表上保存规范评估
 
 ## 测试
 
+## 数据库变更记录与运行状态
+
+OTS-21 将现有写路径统一到不自行提交的审计构造器。用户、授权、产品、产品版本、OTS、产品 OTS、
+漏洞导入/匹配和产品评估的实际变化与 `audit_log` 处于同一事务；失败、乐观锁冲突、幂等无变化、
+登录、纯查询、导出及运行探测不记录。动作仅允许 `insert/update/delete/batch_upsert`，详情带
+`schema_version` 并递归脱敏密码、Cookie、令牌和长文本；历史详情保持原样兼容读取。
+
+写路径矩阵：
+
+| 入口 | 审计对象 | 动作与粒度 | 操作者 |
+| --- | --- | --- | --- |
+| 用户及角色维护 | `app_user` | 单对象新增/更新 | 当前管理员 |
+| 产品范围授权 | `user_product_scope` | 单对象新增/删除 | 当前管理员 |
+| 产品、版本、OTS、版本 OTS | 对应业务表名 | 单对象新增/更新/删除，CSV 按批次汇总 | 当前管理员 |
+| 漏洞包导入与候选匹配 | `vulnerability`、`vulnerability_ots_match` | 每批次 `batch_upsert` 汇总 | 当前操作用户 |
+| 任务生成、草稿、提交、审核和修订 | `product_assessment` | 批量生成汇总或单评估更新 | 当前用户或系统任务 |
+
+管理员只读 API 为 `GET /api/v1/audit-logs`、`GET /api/v1/audit-logs/{id}` 和
+`GET /api/v1/system/operations`。审计列表按 `created_at DESC, id DESC` 使用 keyset 游标，支持对象、
+用户、动作和带时区闭区间筛选。运行信息分为应用、数据库、磁盘、最近备份、最近导入和最近失败；
+分项失败不会掩盖其他结果。公开 `GET /api/v1/health` 仍保持最小响应。
+
+备份状态生产者写入 `OTS_BACKUP_STATUS_FILE` 指向的 UTF-8 JSON，最大尺寸由
+`OTS_BACKUP_STATUS_MAX_BYTES` 限制。契约 `schema_version` 固定为 `1.0`，必填字段为 `status`
+（`success` 或 `failed`）、`started_at`、`finished_at`、不含路径分隔符的 `file_name` 和非负
+`size_bytes`；失败时可增加安全 `error_code`。生产者必须先写同目录临时文件再原子替换，不能写绝对路径、
+凭据或错误正文。OTS-21 不创建、枚举或执行备份。
+
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```

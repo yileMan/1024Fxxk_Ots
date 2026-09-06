@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.products import Product, ProductVersion
 from app.models.scopes import UserProductScope
-from app.models.user import AppUser, AuditLog
+from app.models.user import AppUser
+from app.services.audit import record_audit
 from app.repositories.scopes import ScopeRepository
 from app.services.authentication import PublicUser
 
@@ -212,17 +213,12 @@ class ScopeAuthorizationService:
 
     @staticmethod
     def _audit(session: Session, actor_id: int, action: str, scope: UserProductScope, user_id: int) -> None:
-        session.add(
-            AuditLog(
-                user_id=actor_id,
-                action=action,
-                object_type="user_product_scope",
-                object_id=str(scope.id),
-                detail_json={
-                    "target_user_id": user_id,
-                    "scope_type": scope.scope_type,
-                    "product_id": scope.product_id,
-                    "product_version_id": scope.product_version_id,
-                },
-            )
+        record_audit(
+            session, user_id=actor_id, action=action,
+            object_type="user_product_scope", object_id=scope.id,
+            detail={
+                "target_user_id": user_id, "scope_type": scope.scope_type,
+                "product_id": scope.product_id,
+                "product_version_id": scope.product_version_id,
+            },
         )

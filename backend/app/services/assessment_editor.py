@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.assessments import ProductAssessment
-from app.models.user import AuditLog
+from app.services.audit import record_audit
 from app.repositories.assessment_editor import EDITABLE_STATUSES, AssessmentEditorRepository
 from app.repositories.vulnerability_catalog import VulnerabilityCatalogRepository
 from app.schemas.assessment_editor import (
@@ -192,16 +192,12 @@ class AssessmentEditorService:
                     raise AssessmentVersionConflictError()
                 raise AssessmentNotEditableError()
 
-            session.add(
-                AuditLog(
-                    user_id=user.id,
-                    action="update",
-                    object_type="product_assessment",
-                    object_id=str(assessment_id),
-                    detail_json=self._audit_detail(
-                        assessment.revision_no, request.row_version, changes
-                    ),
-                )
+            record_audit(
+                session, user_id=user.id, action="update",
+                object_type="product_assessment", object_id=assessment_id,
+                detail=self._audit_detail(
+                    assessment.revision_no, request.row_version, changes
+                ),
             )
             session.flush()
             session.expire_all()
@@ -472,18 +468,16 @@ class AssessmentEditorService:
             row_version=row_version, values=values, updated_at=now,
         ):
             raise AssessmentActionConflictError()
-        session.add(AuditLog(
-            user_id=actor_id,
-            action="update",
-            object_type="product_assessment",
-            object_id=str(assessment.id),
-            detail_json={
+        record_audit(
+            session, user_id=actor_id, action="update",
+            object_type="product_assessment", object_id=assessment.id,
+            detail={
                 "action": action,
                 "revision_no": assessment.revision_no,
                 "status": {"from": expected_status, "to": values["status"]},
                 "row_version": {"from": row_version, "to": row_version + 1},
             },
-        ))
+        )
         session.flush()
 
     def _create_child_revision(
@@ -522,12 +516,10 @@ class AssessmentEditorService:
         )
         if child is None:
             raise AssessmentActionConflictError()
-        session.add(AuditLog(
-            user_id=actor_id,
-            action="update",
-            object_type="product_assessment",
-            object_id=str(assessment.id),
-            detail_json={
+        record_audit(
+            session, user_id=actor_id, action="update",
+            object_type="product_assessment", object_id=assessment.id,
+            detail={
                 "action": action,
                 "parent_assessment_id": assessment.id,
                 "parent_revision_no": assessment.revision_no,
@@ -536,7 +528,7 @@ class AssessmentEditorService:
                 "status": {"from": expected_status, "to": child_status},
                 "current": {"parent": False, "child": True},
             },
-        ))
+        )
         session.flush()
         return child
 
