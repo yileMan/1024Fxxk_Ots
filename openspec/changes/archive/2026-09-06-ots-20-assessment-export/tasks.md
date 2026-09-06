@@ -46,4 +46,4 @@
 - [x] 6.3 验证数据库仍为 11 张应用基础表，未新增迁移、后台任务、临时文件、持久化导出记录、消息队列或新依赖；记录部署与无数据迁移回滚检查结果。
 - [x] 6.4 更新 `doc/Task.md` 的 OTS-20 状态、范围、完成证据和需求追溯，按 FR-EXPORT-001、FR-EXPORT-002、FR-AUDIT-003 及关键验收规则 17 建立双向证据。
 - [x] 6.5 运行 `openspec validate ots-20-assessment-export --strict --no-interactive` 及 OpenSpec 全量严格校验，确保 proposal、spec、design、tasks 一致且无错误。
-- [ ] 6.6 仅在全部验收通过后同步主规格、归档 change 并提交到当前主干，使用中文提交说明且不执行 `git push`。
+- [x] 6.6 仅在全部验收通过后同步主规格、归档 change 并提交到当前主干，使用中文提交说明且不执行 `git push`。
