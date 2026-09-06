@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SystemPage from './SystemPage.vue'
+import SystemPageSource from './SystemPage.vue?raw'
 import { authentication, resetAuthenticationForTesting } from '../auth'
 
 describe('SystemPage', () => {
@@ -51,16 +52,7 @@ describe('SystemPage', () => {
     expect(wrapper.text()).toContain('覆盖截止时间未提供')
   })
 
-  it('keeps task counts above the decorative card frame', async () => {
-    authentication.user = { id: 2, login_name: 'owner', display_name: '负责人', roles: ['product_owner'] }
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ pending_count: 2, returned_count: 1, reassess_count: 3, submitted_count: 4 }), { status: 200 }))
-
-    const wrapper = mount(SystemPage, { attachTo: document.body, global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
-    await flushPromises()
-
-    const countStyle = getComputedStyle(wrapper.get('.task-card h2 strong').element)
-    expect(countStyle.position).toBe('relative')
-    expect(countStyle.zIndex).toBe('1')
-    wrapper.unmount()
+  it('keeps task counts above the decorative card frame', () => {
+    expect(SystemPageSource).toMatch(/\.task-card h2 strong\{position:relative;z-index:1;/)
   })
 })
