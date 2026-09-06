@@ -3172,6 +3172,113 @@
           }
         }
       }
+    },
+    "/api/v1/assessment-exports/preview": {
+      "get": {
+        "tags": [
+          "assessment-export"
+        ],
+        "summary": "Preview Export",
+        "operationId": "preview_export_api_v1_assessment_exports_preview_get",
+        "parameters": [
+          {
+            "name": "product_version_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Product Version Id"
+            }
+          },
+          {
+            "name": "ots_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Ots Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentExportPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assessment-exports/csv": {
+      "get": {
+        "tags": [
+          "assessment-export"
+        ],
+        "summary": "Download Export",
+        "operationId": "download_export_api_v1_assessment_exports_csv_get",
+        "parameters": [
+          {
+            "name": "product_version_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Product Version Id"
+            }
+          },
+          {
+            "name": "ots_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Ots Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3846,6 +3953,55 @@
           "row_version"
         ],
         "title": "AssessmentDraftUpdateRequest"
+      },
+      "AssessmentExportPreviewResponse": {
+        "properties": {
+          "product_version_id": {
+            "type": "integer",
+            "title": "Product Version Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "version_no": {
+            "type": "string",
+            "title": "Version No"
+          },
+          "ots_id": {
+            "type": "integer",
+            "title": "Ots Id"
+          },
+          "ots_name": {
+            "type": "string",
+            "title": "Ots Name"
+          },
+          "ots_version": {
+            "type": "string",
+            "title": "Ots Version"
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "previewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Previewed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_version_id",
+          "product_name",
+          "version_no",
+          "ots_id",
+          "ots_name",
+          "ots_version",
+          "row_count",
+          "previewed_at"
+        ],
+        "title": "AssessmentExportPreviewResponse"
       },
       "AssessmentOtsResponse": {
         "properties": {

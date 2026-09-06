@@ -14,6 +14,7 @@
         <RouterLink v-if="isAdmin" to="/system/ots"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.8 8 12 11.7 5.2 8 12 4.3ZM5 9.7l6 3.3v6.4l-6-3.3V9.7Zm8 9.7V13l6-3.3v6.4l-6 3.3Z" /></svg><span>OTS</span></RouterLink>
         <RouterLink v-if="isAdmin" to="/system/data-exchange/collector-scope"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v4H4V4Zm0 6h16v10H4V10Zm3 3v2h6v-2H7Zm0 4v1h10v-1H7Z" /></svg><span>采集范围</span></RouterLink>
         <RouterLink v-if="isAdmin" to="/system/data-exchange/import-packages"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 3 6v12l9 4 9-4V6l-9-4Zm0 2.2L17.4 6 12 7.8 6.6 6 12 4.2ZM5 8.1l6 2v9.2l-6-2.7V8.1Zm8 11.2v-9.2l6-2v8.5l-6 2.7Zm-1-7.8 3-1v2.2l-2 .7v3l-2 .7v-5.3l1-.3Z" /></svg><span>数据包导入</span></RouterLink>
+        <RouterLink to="/system/data-exchange/assessment-export"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h14v18H5V3Zm3 4v2h8V7H8Zm0 4v2h8v-2H8Zm3 4H8v2h3v3l5-4-5-4v3Z" /></svg><span>评估导出</span></RouterLink>
         <RouterLink v-if="isAdmin" to="/system/users"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3Zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z" /></svg><span>用户与角色</span></RouterLink>
         <RouterLink to="/health"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 13h4l2-6 4 12 2-6h6v-2h-4.56L13 21.32 9 9.32 8.44 11H3v2Z" /></svg><span>运行状态</span></RouterLink>
       </nav>
@@ -108,7 +109,7 @@ a { color: inherit; }
 .brand-lockup strong, .brand-lockup small { display: block; }
 .brand-lockup strong { font-size: 21px; font-weight: 800; line-height: 1; letter-spacing: .08em; }
 .brand-lockup small { margin-top: 5px; color: rgba(255,255,255,.56); font-size: 10px; letter-spacing: .14em; }
-.app-sidebar nav { display: grid; gap: 6px; padding: 24px 14px; }
+.app-sidebar nav { min-height: 0; display: grid; gap: 6px; padding: 24px 14px; overflow-y: auto; }
 .app-sidebar nav a { min-height: 48px; display: flex; align-items: center; gap: 13px; padding: 0 14px; border-radius: 5px; color: rgba(255,255,255,.68); font-size: 13px; font-weight: 700; text-decoration: none; transition: color .18s, background .18s, transform .18s; }
 .app-sidebar nav a:hover { color: #fff; background: rgba(255,255,255,.07); transform: translateX(2px); }
 .app-sidebar nav a.router-link-active { color: #fff; background: var(--brand-red); box-shadow: 0 7px 18px rgba(215,25,32,.24); }

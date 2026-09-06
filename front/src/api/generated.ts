@@ -899,6 +899,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assessment-exports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Export */
+        get: operations["preview_export_api_v1_assessment_exports_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessment-exports/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Export */
+        get: operations["download_export_api_v1_assessment_exports_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1052,6 +1086,28 @@ export interface components {
             cvss_metrics?: components["schemas"]["Cvss31EnvironmentalMetrics"] | null;
             /** Row Version */
             row_version: number;
+        };
+        /** AssessmentExportPreviewResponse */
+        AssessmentExportPreviewResponse: {
+            /** Product Version Id */
+            product_version_id: number;
+            /** Product Name */
+            product_name: string;
+            /** Version No */
+            version_no: string;
+            /** Ots Id */
+            ots_id: number;
+            /** Ots Name */
+            ots_name: string;
+            /** Ots Version */
+            ots_version: string;
+            /** Row Count */
+            row_count: number;
+            /**
+             * Previewed At
+             * Format: date-time
+             */
+            previewed_at: string;
         };
         /** AssessmentOtsResponse */
         AssessmentOtsResponse: {
@@ -4606,6 +4662,70 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    preview_export_api_v1_assessment_exports_preview_get: {
+        parameters: {
+            query: {
+                product_version_id: number;
+                ots_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentExportPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_export_api_v1_assessment_exports_csv_get: {
+        parameters: {
+            query: {
+                product_version_id: number;
+                ots_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

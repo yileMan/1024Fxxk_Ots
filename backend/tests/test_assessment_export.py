@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 
 from app.models.assessments import ProductAssessment
 from app.models.user import AuditLog
+from app.services.assessment_export import AssessmentExportService, CSV_HEADERS
 from test_vulnerability_workbench import client, login, seed_catalog  # noqa: F401
 
 
@@ -88,6 +89,17 @@ def test_csv_rejects_empty_export(client: TestClient) -> None:
     )
     assert response.status_code == 409
     assert response.json()["code"] == "ASSESSMENT_EXPORT_EMPTY"
+
+
+def test_csv_formatter_escapes_special_text_and_formula_prefixes() -> None:
+    values = list(CSV_HEADERS)
+    values[0] = '=HYPERLINK("https://bad")'
+    values[10] = '中文,双引号"与\n换行'
+    line = AssessmentExportService._csv_line(tuple(values)).decode("utf-8")
+    parsed = next(csv.reader(StringIO(line, newline="")))
+    assert parsed[0].startswith("'=")
+    assert parsed[10] == '中文,双引号"与\n换行'
+    assert line.endswith("\r\n")
 
 
 def _audit_count(client: TestClient) -> int:

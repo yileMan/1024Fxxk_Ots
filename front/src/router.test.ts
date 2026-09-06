@@ -24,3 +24,11 @@ describe('OTS-11 routes', () => {
     expect(legacy?.meta.requiresAdmin).not.toBe(true)
   })
 })
+
+describe('OTS-20 routes', () => {
+  it('allows authenticated scoped users to open assessment export', () => {
+    const route = router.getRoutes().find(item => item.path === '/system/data-exchange/assessment-export')
+    expect(route?.meta.requiresAuthentication).toBe(true)
+    expect(route?.meta.requiresAdmin).not.toBe(true)
+  })
+})
